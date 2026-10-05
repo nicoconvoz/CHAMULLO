@@ -47,6 +47,11 @@ Pendiente de formalizar: formato de paquetes, descubrimiento, routing, Proof of 
 - [Discovery & Routing Specification v0.1](docs/specs/05-discovery-routing.md): zonas, tarjeta de contacto, brújula y río, búsqueda local y privacidad de ruta.
 - [Air Interface "El Grito" Specification v0.1](docs/specs/06-air-interface.md): modo de conexión propio sobre la radio de largo alcance del celular, con turnos y enlace inspirados en el sidelink de 3GPP.
 
+## App Android
+
+- **Descargar:** https://nicoconvoz.github.io/chamullo-web/ (Android 8+, 1,3 MB).
+- Código: [android/](android/). Publicar una versión nueva: subir `versionName` en `android/app/build.gradle.kts` y correr `scripts/publish-web.sh`; la app avisa sola.
+
 ## Simulador
 
 - [La maqueta](sim/README.md): modelo determinista de las reglas del protocolo, basado en el simulador P2P web de ICEBREAK. `cd sim && npm test`.

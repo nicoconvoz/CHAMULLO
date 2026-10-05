@@ -26,6 +26,7 @@ class MainActivity : Activity() {
     private lateinit var status: android.widget.TextView
     private lateinit var nearby: LinearLayout
     private lateinit var contacts: LinearLayout
+    private lateinit var update: LinearLayout
     private val listener: (NodeEvent?) -> Unit = { refresh() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,6 +36,7 @@ class MainActivity : Activity() {
 
         screen {
             addView(logo())
+            update = column(); addView(update)
             addView(card {
                 addView(text(vault.name(), 18f, bold = true))
                 addView(text("id " + (vault.identity()?.nodeId?.toHex()?.take(8) ?: "—"), 13f, Ui.MUTED))
@@ -61,6 +63,23 @@ class MainActivity : Activity() {
         Hub.listeners += listener
         refresh()
         offerPendingCards()
+        checkVersion()
+    }
+
+    // version.txt on the download page; a newer version lights a notice that opens the page.
+    private fun checkVersion() = Thread {
+        WebVersion.fetch()
+        runOnUiThread { showUpdate() }
+    }.start()
+
+    private fun showUpdate() {
+        update.removeAllViews()
+        if (!WebVersion.needsUpdate(this)) return
+        update.addView(card {
+            addView(text("Hay una versión nueva: ${WebVersion.latest}", 16f, Ui.GREEN, bold = true))
+            addView(text("Tenés la ${WebVersion.installed(this@MainActivity)}. Bajala de la página e instalala encima: tus contactos y cartas se mantienen.", 13f, Ui.MUTED))
+            addView(button("Descargar la nueva versión") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(WebVersion.DOWNLOAD_PAGE))) })
+        })
     }
 
     override fun onPause() {

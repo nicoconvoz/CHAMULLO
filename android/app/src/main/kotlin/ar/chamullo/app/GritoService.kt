@@ -42,6 +42,7 @@ class GritoService : Service() {
                 Hub.worker.postDelayed(this, TICK_MS)
             }
         })
+        Thread { while (running) { checkVersion(); Thread.sleep(WebVersion.CHECK_EVERY_MS) } }.apply { isDaemon = true }.start()
     }
 
     private fun handle(frame: ByteArray) {
@@ -59,6 +60,18 @@ class GritoService : Service() {
             }
             Hub.emit(event)
         }
+    }
+
+    private fun checkVersion() {
+        val web = WebVersion.fetch() ?: return
+        if (!WebVersion.needsUpdate(this)) return
+        val prefs = getSharedPreferences("updates", MODE_PRIVATE)
+        if (prefs.getString("notified", null) == web) return
+        prefs.edit().putString("notified", web).apply()
+        val open = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(WebVersion.DOWNLOAD_PAGE))
+        val pi = PendingIntent.getActivity(this, ID_UPDATE, open, PendingIntent.FLAG_IMMUTABLE)
+        notify(ID_UPDATE, Notification.Builder(this, CH_MSG).setSmallIcon(R.drawable.ic_launcher_fg)
+            .setContentTitle("Nueva versión de CHAMULLO: $web").setContentText("Tocá para descargarla.").setContentIntent(pi).setAutoCancel(true).build())
     }
 
     private fun notify(id: Int, n: Notification) = runCatching { getSystemService(NotificationManager::class.java).notify(id, n) }
@@ -82,6 +95,7 @@ class GritoService : Service() {
         const val CH_MSG = "msg"
         const val ID_RUN = 1
         const val ID_CARD = 2
+        const val ID_UPDATE = 3
         const val TICK_MS = 200L
     }
 }
