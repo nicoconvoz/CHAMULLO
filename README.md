@@ -45,6 +45,7 @@ Pendiente de formalizar: formato de paquetes, descubrimiento, routing, Proof of 
 - [Proof of Relay / Proof of Delivery Specification v0.2](docs/specs/03-proof-of-relay.md): cadena de saltos (semilla) cifrada, compromiso previo de firma, viaje sellado por destino y origen, cobro individual y diversidad.
 - [Economy & Governance Specification v0.1](docs/specs/04-economy-governance.md): ICE, escasez, carril gratis, pueblos, cuentas de operador, Rey y Nobleza, libretas y cámara compensadora.
 - [Discovery & Routing Specification v0.1](docs/specs/05-discovery-routing.md): zonas, tarjeta de contacto, brújula y río, búsqueda local y privacidad de ruta.
+- [Air Interface "El Grito" Specification v0.1](docs/specs/06-air-interface.md): modo de conexión propio sobre la radio de largo alcance del celular, con turnos y enlace inspirados en el sidelink de 3GPP.
 
 ## Simulador
 
