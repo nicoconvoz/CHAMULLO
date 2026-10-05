@@ -110,14 +110,15 @@ En ICEBREAK los enlaces se aceptan sin probar identidad y la confianza llega des
 Por eso, todo enlace CHAMULLO, sea de cualquier transporte, DEBE completar este handshake antes de intercambiar tráfico:
 
 ```text
-A → B : HELLO   { id_A, n_A }
-B → A : CHALLENGE { id_B, n_B, sig_B( "HS", id_A | id_B | n_A | n_B | cb ) }
-A → B : CONFIRM { sig_A( "HS", id_A | id_B | n_A | n_B | cb ) }
+A → B : HELLO     { id_A, n_A, caps_A }
+B → A : CHALLENGE { id_B, n_B, caps_B, sig_B( "HS", "R" | id_A | id_B | n_A | n_B | caps_A | caps_B | cb ) }
+A → B : CONFIRM   { sig_A( "HS", "I" | id_A | id_B | n_A | n_B | caps_A | caps_B | cb ) }
 ```
 
 - `n_A` y `n_B` son nonces aleatorios de 16 bytes, nuevos en cada handshake.
+- `caps_X` son las versiones y *features* que anuncia cada lado (Packet Format §7). Van firmados por ambos para que nadie en el medio pueda borrarlos y forzar una versión más débil.
+- `"I"` / `"R"` marcan el rol de quien firma (*initiator* / *responder*). Así una firma no se puede reflejar y hacerla pasar por la del otro rol.
 - `cb` (*channel binding*) son bytes que identifican el canal de transporte concreto. Por ejemplo, el fingerprint DTLS de ambos extremos en WebRTC. Si el transporte no ofrece ninguno, `cb` es vacío y se registra el enlace como *unbound*.
-- Ambas firmas cubren el mismo contenido en el mismo orden (iniciador primero) y se distinguen por la clave que firma.
 - Si la verificación falla, el enlace DEBE cerrarse.
 - El handshake autentica y **no** cifra el canal. La confidencialidad del contenido viaja de extremo a extremo (§9).
 

@@ -41,6 +41,7 @@ Pendiente de formalizar: formato de paquetes, descubrimiento, routing, Proof of 
 
 - [Documento maestro v0.1](docs/CHAMULLO_Documento_Maestro_v0.1.docx): concepto y arquitectura.
 - [Identity & Cryptography Specification v0.1](docs/specs/01-identity-cryptography.md): identidad de nodo, firmas, handshake, anti-replay, rotación y revocación.
+- [Packet Format Specification v0.1](docs/specs/02-packet-format.md): prefijo universal, campos TLV con regla par/impar, sobre firmado, handshake y fragmentación.
 
 ## Licencia
 
