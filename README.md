@@ -40,6 +40,7 @@ Pendiente de formalizar: formato de paquetes, descubrimiento, routing, Proof of 
 ## Documentación
 
 - [Documento maestro v0.1](docs/CHAMULLO_Documento_Maestro_v0.1.docx): concepto y arquitectura.
+- [Identity & Cryptography Specification v0.1](docs/specs/01-identity-cryptography.md): identidad de nodo, firmas, handshake, anti-replay, rotación y revocación.
 
 ## Licencia
 
