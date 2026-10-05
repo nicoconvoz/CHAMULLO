@@ -112,7 +112,7 @@ puntaje(R) = Σ  base_salto · escasez(salto)
 
 ### 5.3 Reparto por entrega
 
-La recompensa de una entrega se **reparte** entre los relays del camino. No se paga entera a cada uno. Alargar un camino con saltos inútiles no aumenta el total, solo lo divide (Proof of Relay §10.4).
+La recompensa de una entrega se **reparte** entre los relays del camino. No se paga entera a cada uno. Alargar un camino con saltos inútiles no aumenta el total, solo lo divide (Proof of Relay §10.2).
 
 ## 6. Prioridad y carril gratis
 

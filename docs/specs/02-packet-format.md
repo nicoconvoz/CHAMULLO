@@ -99,8 +99,8 @@ Quien define un campo nuevo elige la paridad según sea seguro ignorarlo o no. L
 ENVELOPE =
   prefix           bytes[4]   magic, version=1, kind=0x02
   ── sección de origen (inmutable, firmada por src) ──
-  src              NodeId
-  dst              NodeId
+  src              NodeId     clave efímera del origen (Discovery & Routing §7.1)
+  dst              bytes[32]  etiqueta de destino (Discovery & Routing §7.2)
   nonce            bytes[16]
   ts               u64
   exp              u64
@@ -116,7 +116,8 @@ ENVELOPE =
 ### 5.1 Sección de origen
 
 - `src`, `nonce`, `ts`, `exp` y el identificador del mensaje `H(src || nonce)` se definen y validan según Identity §8.2.
-- `dst` = `NodeId` del destinatario. El valor de 32 bytes en cero significa **difusión** dentro del alcance que indique el campo `scope` (§5.3). Su semántica la define la spec de Routing.
+- `src` es una clave Ed25519 **efímera**, nueva en cada mensaje. La identidad real del remitente viaja cifrada en el `payload`.
+- `dst` es la **etiqueta de destino** `dst_tag`, distinta en cada carta, que solo el destinatario reconoce (Discovery & Routing §7.2). No es su `NodeId`. El valor de 32 bytes en cero significa **difusión** dentro del alcance que indique el campo `scope` (§5.3).
 - **Firma de origen** (Identity §6, tag `ENV`):
 
   ```text
@@ -130,10 +131,10 @@ ENVELOPE =
 ### 5.2 Sección de tránsito
 
 - `hop_count`: el origen lo pone en `0` y cada relay lo incrementa en 1 antes de reenviar. Si `hop_count ≥ max_hops` (§5.3), el paquete NO DEBE reenviarse.
-- `transit_tlv`: aquí cada relay agrega su **atestación de retransmisión** (tag `HOP`), firmada con su propia clave. El formato de esa atestación lo define la spec de *Proof of Relay / Proof of Delivery*; los tipos reservados están en §5.4.
+- `transit_tlv`: aquí cada relay agrega su **renglón de viaje cifrado** (`blob_i`), que contiene su registro `HOP` firmado. El formato lo define Proof of Relay §4.3; los tipos reservados están en §5.4.
 - La sección de tránsito **no** está cubierta por `origin_sig`. Su integridad depende de las firmas individuales de cada relay.
 
-> **Nota de seguridad.** Un relay malicioso puede mentir en `hop_count` o borrar atestaciones previas. `max_hops` está firmado por el origen y pone un tope duro. La defensa contra el borrado de atestaciones corresponde a Proof of Relay; por ejemplo, encadenando cada atestación con el hash de la anterior.
+> **Nota de seguridad.** Un relay malicioso puede mentir en `hop_count` o borrar atestaciones previas. `max_hops` está firmado por el origen y pone un tope duro. El borrado o reordenamiento de renglones lo detecta el destino con la cadena de hashes (Proof of Relay §6.1).
 
 ### 5.3 TLV de origen del núcleo
 
@@ -143,17 +144,20 @@ ENVELOPE =
 | `4` | par | `max_hops` | `u8` | Límite de saltos fijado por el origen. Obligatorio. |
 | `6` | par | `payload` | `bytes` | Contenido; cifrado o en claro según `payload_type`. |
 | `7` | impar | `scope` | `bytes` | Alcance de una difusión (zona, radio). Lo define Routing. |
+| `8` | par | `journey_key` | `bytes[32]` | `J_pub`: llave del viaje para cifrar los renglones de cada salto (Proof of Relay §4.1). |
 | `9` | impar | `route_hint` | `bytes` | Pista de ruta opaca. La define Routing. |
+| `10` | par | `delivery_commit` | `bytes[32]` | `R = H(r)`: compromiso del secreto de entrega (Proof of Relay §4.1). |
 | `11` | impar | `content_hash` | `bytes[32]` | `H(contenido en claro)`, para deduplicar contenido idéntico. |
+| `12` | par | `dest_zone` | `bytes` | Zona destino, de nivel barrio o mayor, hacia la que apunta la brújula (Discovery & Routing §2, §6). |
 
 ### 5.4 TLV de tránsito reservados
 
 | Tipo | Paridad | Nombre | Definido en |
 |---|---|---|---|
-| `2` | par | `hop_attestation` | Proof of Relay / Delivery |
-| `3` | impar | `path_metrics` | Discovery & Routing |
+| `2` | par | `hop_attestation` | Proof of Relay / Delivery §4.3 |
+| `3` | impar | Reservado (antes `path_metrics`, que ahora viaja cifrado dentro de cada renglón) | — |
 
-Como un flujo TLV no admite tipos duplicados (§4.2), las múltiples atestaciones de una ruta van **todas dentro** de un único registro `hop_attestation`, cuyo formato interno es una lista definida por Proof of Relay.
+Como un flujo TLV no admite tipos duplicados (§4.2), los renglones de la ruta van **todos dentro** de un único registro `hop_attestation`, como una lista de `blob_i` cifrados (Proof of Relay §4.3).
 
 ### 5.5 Tipos de payload
 
@@ -161,7 +165,7 @@ Como un flujo TLV no admite tipos duplicados (§4.2), las múltiples atestacione
 |---|---|---|
 | `1` | `SEALED` | `box(src_sk, dst_pk)` según Identity §9: `nonce[24] || ciphertext` |
 | `2` | `PLAIN` | Bytes en claro, autenticados solo por `origin_sig`. Para difusiones públicas. |
-| `3` | `RECEIPT` | Recibo de entrega firmado por el receptor (tag `RCPT`). Lo define Proof of Delivery. |
+| `3` | `DELIVERY` | Viaje sellado por el destino (`JOURNEY` + `DELIVERY`), enviado al origen. Lo define Proof of Relay §6.2. |
 | `4`+ | — | Reservados para specs futuras. |
 
 ## 6. `LINK`: mensajes entre vecinos

@@ -42,8 +42,9 @@ Pendiente de formalizar: formato de paquetes, descubrimiento, routing, Proof of 
 - [Documento maestro v0.1](docs/CHAMULLO_Documento_Maestro_v0.1.docx): concepto y arquitectura.
 - [Identity & Cryptography Specification v0.1](docs/specs/01-identity-cryptography.md): identidad de nodo, firmas, handshake, anti-replay, rotación y revocación.
 - [Packet Format Specification v0.1](docs/specs/02-packet-format.md): prefijo universal, campos TLV con regla par/impar, sobre firmado, handshake y fragmentación.
-- [Proof of Relay / Proof of Delivery Specification v0.1](docs/specs/03-proof-of-relay.md): cadena de saltos (semilla), compromiso previo de firma, recibo de entrega y principios de diversidad.
+- [Proof of Relay / Proof of Delivery Specification v0.2](docs/specs/03-proof-of-relay.md): cadena de saltos (semilla) cifrada, compromiso previo de firma, viaje sellado por destino y origen, cobro individual y diversidad.
 - [Economy & Governance Specification v0.1](docs/specs/04-economy-governance.md): ICE, escasez, carril gratis, pueblos, cuentas de operador, Rey y Nobleza, libretas y cámara compensadora.
+- [Discovery & Routing Specification v0.1](docs/specs/05-discovery-routing.md): zonas, tarjeta de contacto, brújula y río, búsqueda local y privacidad de ruta.
 
 ## Licencia
 

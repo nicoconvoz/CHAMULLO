@@ -97,7 +97,7 @@ signing_input = "CHAMULLO/1/" || tag || 0x00 || body
 sig           = Ed25519.sign(NodeKey, signing_input)
 ```
 
-- `tag` es un identificador ASCII del tipo de mensaje (`HS`, `ENV`, `HOP`, `RCPT`, `ROT`, `REV`, ...). Cada spec que defina un mensaje firmado DEBE registrar su `tag` en la tabla del §12.
+- `tag` es un identificador ASCII del tipo de mensaje (`HS`, `ENV`, `HOP`, `ACPT`, `CONF`, `ROT`, `REV`, ...). Cada spec que defina un mensaje firmado DEBE registrar su `tag` en la tabla del §12.
 - `body` es la **codificación canónica** del mensaje. La define la *Packet Format Specification* y DEBE ser determinista: dos implementaciones que serialicen el mismo mensaje producen exactamente los mismos bytes.
 - Un verificador DEBE reconstruir `signing_input` por su cuenta y NO DEBE aceptar firmas sobre bytes enviados "ya armados" por el emisor.
 
@@ -137,7 +137,7 @@ El tráfico multi-hop puede quedar demorado en nodos intermedios (*store-and-for
 
 | Campo | Tamaño | Uso |
 |---|---|---|
-| `src` | 32 B | `NodeId` del origen |
+| `src` | 32 B | Clave pública del origen; en tráfico privado es una clave **efímera** por mensaje (Discovery & Routing §7.1) |
 | `nonce` | 16 B | aleatorio, único por mensaje |
 | `ts` | 8 B | hora de creación (ms) |
 | `exp` | 8 B | hora de expiración (ms), con `exp − ts ≤ 24 h` |
@@ -209,7 +209,10 @@ Las defensas van en la *Reward & Anti-Fraud Specification*. Algunas candidatas:
 | `SEED` | Semilla inicial de la cadena de saltos (hash, no firma) | Proof of Relay §4.1 |
 | `ACPT` | Aceptación y compromiso de firmar | Proof of Relay §5 |
 | `HOP` | Registro de salto firmado por quien entrega | Proof of Relay §4.2 |
-| `RCPT` | Recibo de entrega firmado por el destino | Proof of Relay §6 |
+| `JRNY` | Hash del viaje sellado (hash, no firma) | Proof of Relay §6.2 |
+| `CONF` | Confirmación del origen sobre el viaje | Proof of Relay §6.3 |
+| `CARD` | Tarjeta de contacto | Discovery & Routing §4 |
+| `TAG` | Etiqueta de destino (hash, no firma) | Discovery & Routing §7.2 |
 
 ## 13. Preguntas abiertas
 
