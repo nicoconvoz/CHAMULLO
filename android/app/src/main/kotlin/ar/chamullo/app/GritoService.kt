@@ -30,7 +30,7 @@ class GritoService : Service() {
 
         val identity = Vault(this).identity() ?: run { stopSelf(); return }
         radio = GritoRadio(this) { frame -> Hub.worker.post { handle(frame) } }
-        val node = Node(identity, FileStore(this), if (radio.canShout) radio.maxFrame else GritoRadio.MAX_FRAME, radio.coded) { System.currentTimeMillis() }
+        val node = Node(identity, FileStore(this), radio.maxFrame, radio.coded) { System.currentTimeMillis() }
         Hub.radio = radio
         Hub.worker.post { Hub.node = node }
         radio.start()

@@ -146,8 +146,9 @@ class Node(
     }
 
     companion object {
-        const val BEACON_MS = 2_000L
-        const val NEIGHBOR_TTL_MS = 10_000L
+        // A signed heartbeat is ~150 bytes: about 9 classic micros on the universal shout, so it goes out every 8 s.
+        const val BEACON_MS = 8_000L
+        const val NEIGHBOR_TTL_MS = 30_000L
         const val MAX_RESHOUTS = 5
         const val MAX_SEEN = 4_000
         const val MAX_OUTBOX = 400

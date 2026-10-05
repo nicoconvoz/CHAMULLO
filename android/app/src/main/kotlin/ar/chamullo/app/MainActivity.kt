@@ -92,9 +92,8 @@ class MainActivity : Activity() {
         status.text = when {
             radio == null -> "El grito está apagado: falta dar permisos."
             !radio.enabled -> "Prendé el Bluetooth: CHAMULLO usa esa radio, sin conectarse a nada."
-            !radio.extended -> "Tu celular solo puede escuchar: su radio no permite gritos largos."
-            radio.coded -> "Gritando en largo alcance."
-            else -> "Gritando en modo normal (tu radio no tiene largo alcance)."
+            radio.coded -> "Gritando: grito universal + largo alcance."
+            else -> "Gritando: grito universal (tu radio no tiene largo alcance)."
         }
         Hub.ask({ node -> node.neighbors().map { Triple(it.name, it.coded, it) } to node.store.contacts() }) { (near, cards) ->
             nearby.removeAllViews()

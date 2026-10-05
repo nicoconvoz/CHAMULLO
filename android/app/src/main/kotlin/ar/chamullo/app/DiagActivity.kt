@@ -37,10 +37,10 @@ class DiagActivity : Activity() {
         val r = Hub.radio
         radioInfo.text = if (r == null) "El grito no está encendido." else listOf(
             "Bluetooth encendido: ${yes(r.enabled)}",
-            "Gritos largos (extended advertising): ${yes(r.extended)}",
+            "Grito universal (anuncios clásicos): sí",
+            "Anuncios extendidos: ${yes(r.extended)}",
             "Largo alcance (Coded PHY): ${yes(r.coded)}",
             "Máximo por anuncio: ${r.maxAdvLen} bytes",
-            "Tamaño de grito: ${r.maxFrame} bytes",
             "Gritos enviados: ${r.shouts}",
             "Gritos escuchados: ${r.heard}",
             "Último error: ${r.lastError ?: "ninguno"}"
