@@ -3,7 +3,7 @@
 const { createSim, withConfig } = require('./core.js');
 
 const PHONES = +process.argv[2] || 400;
-const INTERNET = process.argv[3] !== undefined ? +process.argv[3] : 0.3;
+const INTERNET = process.argv[3] !== undefined ? +process.argv[3] : 0;
 const LETTERS = +process.argv[4] || 200;
 const SEED = +process.argv[5] || 1;
 const ZONE = process.argv[6] || 'celda';
@@ -61,7 +61,7 @@ console.log(JSON.stringify({
   setup: { cities: CITIES.length, phonesPerCity: PHONES, internetShare: INTERNET, letters: sent.length, seed: SEED, zoneLevel: ZONE },
   delivery: { ratio: +m.messages.deliveryRatio.toFixed(3), ...pairs },
   latencyMs: m.latency, hops: m.hops,
-  cost: { transmissionsPerLetter: +m.cost.transmissionsPerLetter.toFixed(1), touchedPerLetter: +m.cost.touchedPerLetter.toFixed(1) },
+  cost: { gritosPerLetter: +m.cost.gritosPerLetter.toFixed(1), touchedPerLetter: +m.cost.touchedPerLetter.toFixed(1) },
   drops: m.drops,
   carriersPaid: carriers.length, topCarrierLetters: carriers.slice(0, 5),
   runMs: Date.now() - t0

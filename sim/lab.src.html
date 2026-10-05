@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Laboratorio CHAMULLO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#ecece8;--surface:#ffffff;--soft:#f4f4f1;--ink:#121212;--muted:#686864;--line:#d9d9d3;--node:#b9b9b3;
+  --grito:#2f6fdb;--path:#1f9d43;--zone:#c98a00;--pocket:#e0701a;--ok:#1f9d43;--warn:#c98a00;--bad:#d93636;--lake:#d6e4f5;
+  --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){color-scheme:dark;--bg:#0f0f0f;--surface:#181817;--soft:#202020;--ink:#efefea;--muted:#9a9a94;--line:#2e2e2b;--node:#5a5a56;--grito:#6aa2ff;--path:#44c56a;--zone:#e8b030;--pocket:#ff9a4a;--ok:#44c56a;--warn:#e8b030;--bad:#ff5a5a;--lake:#16243a}
+}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0f0f0f;--surface:#181817;--soft:#202020;--ink:#efefea;--muted:#9a9a94;--line:#2e2e2b;--node:#5a5a56;--grito:#6aa2ff;--path:#44c56a;--zone:#e8b030;--pocket:#ff9a4a;--ok:#44c56a;--warn:#e8b030;--bad:#ff5a5a;--lake:#16243a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Figtree,system-ui,sans-serif;padding-inline:16px;font-size:14px}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.wrap{max-width:1320px;margin:0 auto;padding-block:20px 40px}
+header{display:flex;flex-wrap:wrap;gap:14px 20px;align-items:center;margin-bottom:16px}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{width:52px;height:42px;border-radius:10px;background:#0e0e0e;color:#fff;display:grid;place-items:center;font-family:"Dancing Script",cursive;font-size:26px;box-shadow:inset 0 0 0 1.5px #2a2a2a}
+h1{font-size:22px;margin:0;font-weight:800;letter-spacing:-.01em}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.scen{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.chipb{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 14px;font-weight:600;font-size:13px}
+.chipb.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.transport{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tbtn{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;height:38px;min-width:38px;padding:0 10px;font-weight:700;display:inline-flex;align-items:center;gap:6px;justify-content:center}
+.tbtn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.clock{font-family:var(--mono);font-size:13px;color:var(--muted);min-width:70px;text-align:right}
+.grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:1000px){.grid{grid-template-columns:minmax(0,1fr)}}
+.stack{display:grid;gap:16px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;min-width:0}
+.card h2{margin:0 0 10px;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:8px}
+.card h2 .r{margin-left:auto;letter-spacing:0;text-transform:none;font-family:var(--mono);font-weight:500}
+.mapbox{position:relative}
+#map{width:100%;aspect-ratio:1;display:block;border-radius:10px;background:var(--soft);cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend b{width:10px;height:10px;border-radius:50%;display:inline-block}
+.legend i{display:inline-block;width:22px;height:0;border-top:2px solid var(--grito)}
+.inspect{position:absolute;right:24px;top:44px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12.5px;min-width:200px;box-shadow:0 8px 24px -10px rgba(0,0,0,.35)}
+.inspect dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:6px 0 0}
+.inspect dt{color:var(--muted)}
+.inspect dd{margin:0;font-family:var(--mono);font-size:12px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:640px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{background:var(--soft);border-radius:12px;padding:10px 12px;display:grid;gap:4px}
+.tile .k{font-size:11.5px;color:var(--muted);font-weight:600;line-height:1.25}
+.tile .v{font-family:var(--mono);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.tile .t{font-size:11px;font-family:var(--mono);color:var(--muted)}
+.bars{display:grid;gap:6px}
+.brow{display:grid;grid-template-columns:118px 1fr 60px;gap:10px;align-items:center;font-size:12.5px}
+.brow .track{height:10px;background:var(--soft);border-radius:6px;overflow:hidden}
+.brow .track i{display:block;height:100%;border-radius:6px;background:var(--bad)}
+.brow .n{font-family:var(--mono);text-align:right;font-size:12px}
+.controls{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px 18px}
+.ctl{display:grid;gap:6px}
+.ctl label{font-size:12.5px;font-weight:600;display:flex;justify-content:space-between}
+.ctl label span{font-family:var(--mono);font-weight:500;color:var(--muted)}
+.ctl input[type=range]{width:100%;accent-color:var(--ink)}
+.seg{display:flex;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:none;border-radius:8px;padding:6px 4px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12.5px;font-weight:600;padding:6px 0}
+.sw small{display:block;font-weight:500;color:var(--muted);font-size:11.5px}
+.toggle{width:40px;height:24px;border-radius:999px;background:var(--line);border:0;position:relative;flex:none}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.toggle.on{background:var(--ink)}
+.toggle.on::after{transform:translateX(16px)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line)}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+td.m{font-family:var(--mono);font-size:12px}
+.log{font-family:var(--mono);font-size:11.5px;display:grid;gap:3px;max-height:260px;overflow:auto}
+.log div{display:grid;grid-template-columns:58px 150px 1fr;gap:8px;padding:4px 8px;border-radius:6px;background:var(--soft)}
+.log time{color:var(--muted)}
+.log b{font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.log span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note{color:var(--muted);font-size:12.5px;line-height:1.5;margin:10px 0 0}
+.empty{color:var(--muted);font-size:12.5px;padding:8px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><div class="logo">Ch</div><div><h1>Laboratorio CHAMULLO</h1><p>Celulares que se pasan cartas a los gritos: sin torres, sin internet, sin Wi-Fi.</p></div></div>
+    <div class="scen" id="scen"></div>
+    <div class="transport">
+      <button class="tbtn" id="play" aria-label="Pausar o reanudar"></button>
+      <div class="seg" id="speed" style="padding:2px"></div>
+      <button class="tbtn" id="reset" title="Reiniciar con la misma semilla">↺</button>
+      <button class="tbtn" id="one" title="Mandar una carta entre dos celulares al azar">✉ Carta</button>
+      <button class="tbtn" id="burst" title="Mandar 20 cartas al azar">✉ ×20</button>
+      <span class="clock" id="clock">0:00</span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="stack">
+      <section class="card mapbox">
+        <h2>Mapa · 2 × 2 km <span class="r" id="mapmeta"></span></h2>
+        <canvas id="map" aria-label="Mapa de celulares y gritos"></canvas>
+        <div class="inspect" id="inspect" hidden></div>
+        <div class="legend">
+          <span><b style="background:var(--ink)"></b>largo alcance</span><span><b style="border:1.5px solid var(--ink)"></b>modo normal</span>
+          <span><b style="background:var(--node)"></b>apagado</span><span><b style="border:2px solid var(--pocket)"></b>lleva cartas en el bolsillo</span>
+          <span><i></i>grito</span><span><i style="border-color:var(--path);border-top-width:3px"></i>camino de la última carta</span><span><i style="border-color:var(--zone);border-top-style:dashed"></i>zona destino</span>
+        </div>
+        <p class="note">Tocá un celular para ver su radio, sus vecinos y sus caramelos.</p>
+      </section>
+      <section class="card"><h2>Bus de eventos <span class="r" id="logmeta"></span></h2><div class="log" id="log"></div></section>
+    </div>
+    <div class="stack">
+      <section class="card"><h2>Indicadores</h2><div class="tiles" id="tiles"></div></section>
+      <section class="card"><h2>Controles</h2><div class="controls" id="controls"></div>
+        <p class="note">Cambiar un control reinicia el escenario con la misma semilla, así se compara una cosa por vez.</p></section>
+      <section class="card"><h2>Cartas perdidas por motivo</h2><div class="bars" id="drops"></div></section>
+      <section class="card"><h2>Carteros que más cobraron <span class="r">caramelos</span></h2><div id="carriers"></div></section>
+    </div>
+  </div>
+</div>
+
+<script>/*__CORE__*/</script>
+<script>
+'use strict';
+const { createSim, withConfig } = window.CHAMULLO_SIM;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const AREA = 2000;
+
+/* ---------- scenarios: how many phones, and where ---------- */
+const SCENARIOS = {
+  barrio: { name: 'Barrio', phones: 700, place: r => ({ x: r() * AREA, y: r() * AREA }) },
+  plaza: { name: 'Plaza llena', phones: 700, place: r => (r() < 0.5 ? disc(r, 1000, 1000, 250) : { x: r() * AREA, y: r() * AREA }) },
+  disperso: { name: 'Pueblo disperso', phones: 220, place: r => ({ x: r() * AREA, y: r() * AREA }) },
+  lago: { name: 'El lago', phones: 700, lake: { x: 1000, y: 1000, r: 550 }, place: r => { for (;;) { const p = { x: r() * AREA, y: r() * AREA }; if (Math.hypot(p.x - 1000, p.y - 1000) > 550) return p; } } },
+  islas: { name: 'Islas y viajeros', phones: 360, carry: true, walking: 0.35, place: r => (r() < 0.5 ? disc(r, 450, 1000, 300) : disc(r, 1550, 1000, 300)) }
+};
+function disc(r, cx, cy, R) { const a = r() * 2 * Math.PI, d = Math.sqrt(r()) * R; return { x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d }; }
+
+const P = { scenario: 'barrio', phones: 700, coded: 0.7, walking: 0.2, fanout: 2, zone: 'celda', carry: false, superframe: 1000, seed: 1, auto: true };
+const S = { sim: null, playing: true, speed: 4, lastMsg: null, logs: [], selected: null, nextAuto: 0, rnd: null };
+
+function build() {
+  const sc = SCENARIOS[P.scenario];
+  const sim = createSim(withConfig({
+    radio: { codedShare: P.coded }, routing: { fanout: P.fanout, zoneLevel: P.zone, carry: P.carry },
+    grito: { superframeMs: P.superframe }, world: { areaM: AREA }
+  }), P.seed);
+  let s = P.seed * 9301 + 49297; const r = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+  for (let i = 0; i < P.phones; i++) { const p = sc.place(r); sim.addNode({ x: p.x, y: p.y, speed: r() < P.walking ? 1.4 * (0.6 + r() * 0.6) : 0 }); }
+  S.sim = sim; S.rnd = r; S.lastMsg = null; S.logs = []; S.selected = null; S.nextAuto = 0;
+  $('inspect').hidden = true;
+}
+function pickScenario(key) {
+  const sc = SCENARIOS[key]; P.scenario = key; P.phones = sc.phones; P.carry = !!sc.carry; P.walking = sc.walking ?? 0.2;
+  renderControls(); build();
+}
+
+/* ---------- letters ---------- */
+function randomLetter() {
+  const ids = S.sim.nodeIds().filter(id => S.sim.node(id).online);
+  if (ids.length < 2) return;
+  const a = ids[Math.floor(S.rnd() * ids.length)]; let b = a;
+  while (b === a) b = ids[Math.floor(S.rnd() * ids.length)];
+  S.sim.exchangeCards(a, b);
+  const res = S.sim.send(a, b);
+  if (res.ok) S.lastMsg = res.msgId;
+}
+
+/* ---------- loop ---------- */
+let lastFrame = performance.now();
+function frame(t) {
+  const dt = Math.min(100, t - lastFrame); lastFrame = t;
+  if (S.playing) {
+    const simMs = dt * S.speed;
+    if (P.auto && S.sim.now() >= S.nextAuto) { randomLetter(); S.nextAuto = S.sim.now() + 3000; }
+    S.sim.step(simMs);
+    for (const e of S.sim.drainEvents()) { S.logs.unshift(e); }
+    S.logs.length = Math.min(S.logs.length, 120);
+  }
+  draw(); requestAnimationFrame(frame);
+}
+setInterval(() => renderPanels(), 400);
+
+/* ---------- map ---------- */
+const cv = $('map');
+function draw() {
+  const dpr = devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const k = w / AREA, X = x => x * k, Y = y => h - y * k;
+  const sim = S.sim, snap = sim.snapshot(), byId = new Map(snap.nodes.map(n => [n.id, n]));
+  const sc = SCENARIOS[P.scenario];
+  if (sc.lake) { g.fillStyle = css('--lake'); g.beginPath(); g.arc(X(sc.lake.x), Y(sc.lake.y), sc.lake.r * k, 0, Math.PI * 2); g.fill(); }
+
+  const last = S.lastMsg && snap.letters.find(l => l.id === S.lastMsg);
+  if (last) { // destination zone and compass target
+    const size = sim.cfg.zones[sim.cfg.routing.zoneLevel], c = last.center;
+    g.strokeStyle = css('--zone'); g.setLineDash([5, 4]); g.lineWidth = 1.5;
+    g.strokeRect(X(c.x - size / 2), Y(c.y + size / 2), size * k, size * k); g.setLineDash([]);
+  }
+  // recent shouts: a ring for the range and a line to each named carrier
+  const fadeMs = 900 * Math.max(1, S.speed / 2);
+  for (const wv of sim.wireSince(sim.now() - fadeMs)) {
+    const a = byId.get(wv.from); if (!a) continue;
+    const age = (sim.now() - wv.t) / fadeMs, alpha = Math.max(0, 1 - age);
+    g.globalAlpha = alpha * 0.5; g.strokeStyle = css('--grito'); g.lineWidth = 1;
+    g.beginPath(); g.arc(X(a.x), Y(a.y), (a.coded ? sim.cfg.radio.codedRangeM : sim.cfg.radio.normalRangeM) * k * (0.4 + 0.6 * Math.min(1, age * 3)), 0, Math.PI * 2); g.stroke();
+    g.globalAlpha = alpha; g.lineWidth = 1.5;
+    for (const id of wv.to) { const b = byId.get(id); if (!b) continue; g.beginPath(); g.moveTo(X(a.x), Y(a.y)); g.lineTo(X(b.x), Y(b.y)); g.stroke(); }
+  }
+  g.globalAlpha = 1;
+  if (last && last.path) { // the path of the last letter, once delivered
+    g.strokeStyle = css('--path'); g.lineWidth = 3; g.beginPath();
+    last.path.forEach((id, i) => { const n = byId.get(id); if (!n) return; i ? g.lineTo(X(n.x), Y(n.y)) : g.moveTo(X(n.x), Y(n.y)); }); g.stroke();
+  }
+  for (const n of snap.nodes) {
+    const x = X(n.x), y = Y(n.y), r = n.kind === 'antenna' ? 5 : 3;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2);
+    if (!n.online) { g.fillStyle = css('--node'); g.fill(); }
+    else if (n.coded) { g.fillStyle = css('--ink'); g.fill(); }
+    else { g.strokeStyle = css('--ink'); g.lineWidth = 1.2; g.stroke(); }
+    if (n.pocket) { g.strokeStyle = css('--pocket'); g.lineWidth = 2; g.beginPath(); g.arc(x, y, r + 3, 0, Math.PI * 2); g.stroke(); }
+  }
+  if (last) { // origin and destination
+    for (const [id, col] of [[last.from, '--grito'], [last.to, '--path']]) {
+      const n = byId.get(id); if (!n) continue;
+      g.strokeStyle = css(col); g.lineWidth = 2.5; g.beginPath(); g.arc(X(n.x), Y(n.y), 8, 0, Math.PI * 2); g.stroke();
+    }
+  }
+  if (S.selected) { const n = byId.get(S.selected); if (n) { g.strokeStyle = css('--ink'); g.lineWidth = 1; g.setLineDash([3, 3]); g.beginPath(); g.arc(X(n.x), Y(n.y), (n.coded ? sim.cfg.radio.codedRangeM : sim.cfg.radio.normalRangeM) * k, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); } }
+  $('mapmeta').textContent = `${snap.nodes.length} celulares`;
+  const s = Math.floor(sim.now() / 1000); $('clock').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+cv.addEventListener('click', e => {
+  const rect = cv.getBoundingClientRect(), k = rect.width / AREA;
+  const wx = (e.clientX - rect.left) / k, wy = (rect.height - (e.clientY - rect.top)) / k;
+  let best = null, bd = 25 / k;
+  for (const n of S.sim.snapshot().nodes) { const d = Math.hypot(n.x - wx, n.y - wy); if (d < bd) { bd = d; best = n; } }
+  S.selected = best ? best.id : null; renderInspect();
+});
+function renderInspect() {
+  const box = $('inspect');
+  if (!S.selected) { box.hidden = true; return; }
+  const n = S.sim.node(S.selected);
+  box.hidden = false;
+  box.innerHTML = `<b>${esc(n.id)}</b><dl>
+    <dt>Radio</dt><dd>${n.coded ? 'largo alcance' : 'normal'} · ${n.coded ? S.sim.cfg.radio.codedRangeM : S.sim.cfg.radio.normalRangeM} m</dd>
+    <dt>Vecinos</dt><dd>${S.sim.neighbors(n.id).length}</dd>
+    <dt>Camina</dt><dd>${n.speed ? n.speed.toFixed(1) + ' m/s' : 'no'}</dd>
+    <dt>Gritos</dt><dd>${n.shouts}</dd>
+    <dt>Bolsillo</dt><dd>${n.pocket.size} cartas</dd>
+    <dt>Caramelos</dt><dd>${n.credits}</dd></dl>
+    <button class="tbtn" style="margin-top:8px;height:30px" data-off>${n.online ? 'Apagar' : 'Encender'}</button>`;
+  box.querySelector('[data-off]').onclick = () => { S.sim.setOnline(n.id, !n.online); renderInspect(); };
+}
+
+/* ---------- panels ---------- */
+function renderPanels() {
+  const m = S.sim.metrics();
+  const tile = (k, v, t) => `<div class="tile"><span class="k">${k}</span><span class="v">${v}</span><span class="t">${t}</span></div>`;
+  const sec = ms => (ms / 1000).toFixed(1) + ' s';
+  const paid = S.sim.snapshot().nodes.filter(n => n.credits > 0);
+  $('tiles').innerHTML = [
+    tile('Cartas', m.messages.sent, `${m.messages.confirmed} confirmadas`),
+    tile('Llegaron', m.messages.sent ? Math.round(m.messages.deliveryRatio * 100) + '%' : '—', `${m.messages.delivered} de ${m.messages.sent}`),
+    tile('Demora', m.messages.delivered ? sec(m.latency.p50) : '—', `p95 ${m.messages.delivered ? sec(m.latency.p95) : '—'}`),
+    tile('Saltos', m.messages.delivered ? m.hops.p50 : '—', `máx ${m.hops.max}`),
+    tile('Gritos por carta', m.messages.sent ? m.cost.gritosPerLetter.toFixed(1) : '—', 'cuánto aire gasta'),
+    tile('Celulares tocados', m.messages.sent ? m.cost.touchedPerLetter.toFixed(0) : '—', 'por carta'),
+    tile('En bolsillos', m.messages.pocketed, P.carry ? 'guardar y llevar' : 'apagado'),
+    tile('Carteros que cobraron', paid.length, `${paid.reduce((s, n) => s + n.credits, 0)} caramelos`)
+  ].join('');
+  const reasons = { noRoute: 'sin camino', stuck: 'trabada', maxHops: 'muchos saltos', expired: 'venció', linkLost: 'se apagó el receptor' };
+  const max = Math.max(1, ...Object.values(m.drops));
+  $('drops').innerHTML = Object.entries(reasons).map(([k, label]) => `<div class="brow"><span>${label}</span><span class="track"><i style="width:${m.drops[k] / max * 100}%"></i></span><span class="n">${m.drops[k]}</span></div>`).join('');
+  const top = paid.sort((a, b) => b.credits - a.credits).slice(0, 6);
+  $('carriers').innerHTML = top.length ? `<table><tr><th>Celular</th><th>Radio</th><th>Gritos</th><th>Caramelos</th></tr>${top.map(n => `<tr><td class="m">${n.id}</td><td>${n.coded ? 'largo alcance' : 'normal'}</td><td class="m">${n.shouts}</td><td class="m">${n.credits}</td></tr>`).join('')}</table>` : '<div class="empty">Todavía nadie cobró: los carteros cobran cuando el origen confirma el viaje.</div>';
+  $('log').innerHTML = S.logs.slice(0, 80).map(e => `<div><time>${(e.t / 1000).toFixed(1)}s</time><b>${esc(e.type)}</b><span title="${esc(e.detail)}">${esc(e.detail)}</span></div>`).join('') || '<div class="empty">Silencio en el pueblo.</div>';
+  $('logmeta').textContent = `${S.logs.length} eventos`;
+  if (S.selected) renderInspect();
+}
+
+/* ---------- controls ---------- */
+function renderControls() {
+  const slider = (key, label, min, max, stepV, fmt) => `<div class="ctl"><label>${label} <span id="v_${key}">${fmt(P[key])}</span></label><input type="range" min="${min}" max="${max}" step="${stepV}" value="${P[key]}" data-k="${key}" data-fmt="${fmt.name}"></div>`;
+  const seg = (key, label, opts) => `<div class="ctl"><label>${label}</label><div class="seg">${opts.map(([v, t]) => `<button data-seg="${key}" data-v="${v}" class="${String(P[key]) === String(v) ? 'on' : ''}">${t}</button>`).join('')}</div></div>`;
+  const sw = (key, label, sub) => `<div class="sw"><span>${label}<small>${sub}</small></span><button class="toggle ${P[key] ? 'on' : ''}" data-sw="${key}" aria-pressed="${P[key]}" aria-label="${label}"></button></div>`;
+  $('controls').innerHTML = [
+    slider('phones', 'Celulares', 50, 1500, 10, n => String(n)),
+    slider('coded', 'Con largo alcance', 0, 1, 0.05, n => Math.round(n * 100) + '%'),
+    slider('walking', 'Caminando', 0, 1, 0.05, n => Math.round(n * 100) + '%'),
+    seg('fanout', 'Ancho del río', [[1, '1'], [2, '2'], [3, '3']]),
+    seg('zone', 'Zona destino', [['celda', 'celda 100 m'], ['barrio', 'barrio 2 km']]),
+    seg('superframe', 'Supertrama', [[250, '250 ms'], [500, '500 ms'], [1000, '1 s']]),
+    sw('carry', 'Guardar y llevar', 'si no hay camino, la carta espera en el bolsillo'),
+    sw('auto', 'Tráfico automático', 'una carta al azar cada 3 s')
+  ].join('');
+}
+$('controls').addEventListener('input', e => {
+  const el = e.target; if (!el.dataset.k) return;
+  P[el.dataset.k] = +el.value;
+  const fmt = { phones: n => String(n), coded: n => Math.round(n * 100) + '%', walking: n => Math.round(n * 100) + '%' }[el.dataset.k];
+  $('v_' + el.dataset.k).textContent = fmt(+el.value);
+});
+$('controls').addEventListener('change', e => { if (e.target.dataset.k) build(); });
+$('controls').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.seg) { const v = b.dataset.v; P[b.dataset.seg] = isNaN(+v) ? v : +v; renderControls(); build(); }
+  if (b.dataset.sw) { P[b.dataset.sw] = !P[b.dataset.sw]; renderControls(); if (b.dataset.sw !== 'auto') build(); }
+});
+
+/* ---------- header ---------- */
+$('scen').innerHTML = Object.entries(SCENARIOS).map(([k, s]) => `<button class="chipb" data-scen="${k}">${s.name}</button>`).join('');
+$('scen').addEventListener('click', e => { const b = e.target.closest('[data-scen]'); if (!b) return; pickScenario(b.dataset.scen); markScen(); });
+const markScen = () => document.querySelectorAll('[data-scen]').forEach(b => b.classList.toggle('on', b.dataset.scen === P.scenario));
+const SPEEDS = [1, 4, 20];
+$('speed').innerHTML = SPEEDS.map(v => `<button data-speed="${v}">${v}×</button>`).join('');
+const markSpeed = () => document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('on', +b.dataset.speed === S.speed));
+$('speed').addEventListener('click', e => { const b = e.target.closest('[data-speed]'); if (!b) return; S.speed = +b.dataset.speed; markSpeed(); });
+const markPlay = () => { $('play').textContent = S.playing ? '❚❚' : '▶'; $('play').classList.toggle('on', !S.playing); };
+$('play').onclick = () => { S.playing = !S.playing; markPlay(); };
+$('reset').onclick = () => build();
+$('one').onclick = () => randomLetter();
+$('burst').onclick = () => { for (let i = 0; i < 20; i++) randomLetter(); };
+
+renderControls(); markScen(); markSpeed(); markPlay(); build(); renderPanels();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

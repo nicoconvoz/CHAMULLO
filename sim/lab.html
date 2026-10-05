@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Laboratorio CHAMULLO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#ecece8;--surface:#ffffff;--soft:#f4f4f1;--ink:#121212;--muted:#686864;--line:#d9d9d3;--node:#b9b9b3;
+  --grito:#2f6fdb;--path:#1f9d43;--zone:#c98a00;--pocket:#e0701a;--ok:#1f9d43;--warn:#c98a00;--bad:#d93636;--lake:#d6e4f5;
+  --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){color-scheme:dark;--bg:#0f0f0f;--surface:#181817;--soft:#202020;--ink:#efefea;--muted:#9a9a94;--line:#2e2e2b;--node:#5a5a56;--grito:#6aa2ff;--path:#44c56a;--zone:#e8b030;--pocket:#ff9a4a;--ok:#44c56a;--warn:#e8b030;--bad:#ff5a5a;--lake:#16243a}
+}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0f0f0f;--surface:#181817;--soft:#202020;--ink:#efefea;--muted:#9a9a94;--line:#2e2e2b;--node:#5a5a56;--grito:#6aa2ff;--path:#44c56a;--zone:#e8b030;--pocket:#ff9a4a;--ok:#44c56a;--warn:#e8b030;--bad:#ff5a5a;--lake:#16243a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Figtree,system-ui,sans-serif;padding-inline:16px;font-size:14px}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.wrap{max-width:1320px;margin:0 auto;padding-block:20px 40px}
+header{display:flex;flex-wrap:wrap;gap:14px 20px;align-items:center;margin-bottom:16px}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{width:52px;height:42px;border-radius:10px;background:#0e0e0e;color:#fff;display:grid;place-items:center;font-family:"Dancing Script",cursive;font-size:26px;box-shadow:inset 0 0 0 1.5px #2a2a2a}
+h1{font-size:22px;margin:0;font-weight:800;letter-spacing:-.01em}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.scen{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.chipb{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 14px;font-weight:600;font-size:13px}
+.chipb.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.transport{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tbtn{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;height:38px;min-width:38px;padding:0 10px;font-weight:700;display:inline-flex;align-items:center;gap:6px;justify-content:center}
+.tbtn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.clock{font-family:var(--mono);font-size:13px;color:var(--muted);min-width:70px;text-align:right}
+.grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:1000px){.grid{grid-template-columns:minmax(0,1fr)}}
+.stack{display:grid;gap:16px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;min-width:0}
+.card h2{margin:0 0 10px;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:8px}
+.card h2 .r{margin-left:auto;letter-spacing:0;text-transform:none;font-family:var(--mono);font-weight:500}
+.mapbox{position:relative}
+#map{width:100%;aspect-ratio:1;display:block;border-radius:10px;background:var(--soft);cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend b{width:10px;height:10px;border-radius:50%;display:inline-block}
+.legend i{display:inline-block;width:22px;height:0;border-top:2px solid var(--grito)}
+.inspect{position:absolute;right:24px;top:44px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12.5px;min-width:200px;box-shadow:0 8px 24px -10px rgba(0,0,0,.35)}
+.inspect dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:6px 0 0}
+.inspect dt{color:var(--muted)}
+.inspect dd{margin:0;font-family:var(--mono);font-size:12px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:640px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{background:var(--soft);border-radius:12px;padding:10px 12px;display:grid;gap:4px}
+.tile .k{font-size:11.5px;color:var(--muted);font-weight:600;line-height:1.25}
+.tile .v{font-family:var(--mono);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.tile .t{font-size:11px;font-family:var(--mono);color:var(--muted)}
+.bars{display:grid;gap:6px}
+.brow{display:grid;grid-template-columns:118px 1fr 60px;gap:10px;align-items:center;font-size:12.5px}
+.brow .track{height:10px;background:var(--soft);border-radius:6px;overflow:hidden}
+.brow .track i{display:block;height:100%;border-radius:6px;background:var(--bad)}
+.brow .n{font-family:var(--mono);text-align:right;font-size:12px}
+.controls{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px 18px}
+.ctl{display:grid;gap:6px}
+.ctl label{font-size:12.5px;font-weight:600;display:flex;justify-content:space-between}
+.ctl label span{font-family:var(--mono);font-weight:500;color:var(--muted)}
+.ctl input[type=range]{width:100%;accent-color:var(--ink)}
+.seg{display:flex;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:none;border-radius:8px;padding:6px 4px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12.5px;font-weight:600;padding:6px 0}
+.sw small{display:block;font-weight:500;color:var(--muted);font-size:11.5px}
+.toggle{width:40px;height:24px;border-radius:999px;background:var(--line);border:0;position:relative;flex:none}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.toggle.on{background:var(--ink)}
+.toggle.on::after{transform:translateX(16px)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line)}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+td.m{font-family:var(--mono);font-size:12px}
+.log{font-family:var(--mono);font-size:11.5px;display:grid;gap:3px;max-height:260px;overflow:auto}
+.log div{display:grid;grid-template-columns:58px 150px 1fr;gap:8px;padding:4px 8px;border-radius:6px;background:var(--soft)}
+.log time{color:var(--muted)}
+.log b{font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.log span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note{color:var(--muted);font-size:12.5px;line-height:1.5;margin:10px 0 0}
+.empty{color:var(--muted);font-size:12.5px;padding:8px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><div class="logo">Ch</div><div><h1>Laboratorio CHAMULLO</h1><p>Celulares que se pasan cartas a los gritos: sin torres, sin internet, sin Wi-Fi.</p></div></div>
+    <div class="scen" id="scen"></div>
+    <div class="transport">
+      <button class="tbtn" id="play" aria-label="Pausar o reanudar"></button>
+      <div class="seg" id="speed" style="padding:2px"></div>
+      <button class="tbtn" id="reset" title="Reiniciar con la misma semilla">↺</button>
+      <button class="tbtn" id="one" title="Mandar una carta entre dos celulares al azar">✉ Carta</button>
+      <button class="tbtn" id="burst" title="Mandar 20 cartas al azar">✉ ×20</button>
+      <span class="clock" id="clock">0:00</span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="stack">
+      <section class="card mapbox">
+        <h2>Mapa · 2 × 2 km <span class="r" id="mapmeta"></span></h2>
+        <canvas id="map" aria-label="Mapa de celulares y gritos"></canvas>
+        <div class="inspect" id="inspect" hidden></div>
+        <div class="legend">
+          <span><b style="background:var(--ink)"></b>largo alcance</span><span><b style="border:1.5px solid var(--ink)"></b>modo normal</span>
+          <span><b style="background:var(--node)"></b>apagado</span><span><b style="border:2px solid var(--pocket)"></b>lleva cartas en el bolsillo</span>
+          <span><i></i>grito</span><span><i style="border-color:var(--path);border-top-width:3px"></i>camino de la última carta</span><span><i style="border-color:var(--zone);border-top-style:dashed"></i>zona destino</span>
+        </div>
+        <p class="note">Tocá un celular para ver su radio, sus vecinos y sus caramelos.</p>
+      </section>
+      <section class="card"><h2>Bus de eventos <span class="r" id="logmeta"></span></h2><div class="log" id="log"></div></section>
+    </div>
+    <div class="stack">
+      <section class="card"><h2>Indicadores</h2><div class="tiles" id="tiles"></div></section>
+      <section class="card"><h2>Controles</h2><div class="controls" id="controls"></div>
+        <p class="note">Cambiar un control reinicia el escenario con la misma semilla, así se compara una cosa por vez.</p></section>
+      <section class="card"><h2>Cartas perdidas por motivo</h2><div class="bars" id="drops"></div></section>
+      <section class="card"><h2>Carteros que más cobraron <span class="r">caramelos</span></h2><div id="carriers"></div></section>
+    </div>
+  </div>
+</div>
+
+<script>/*
+ * CHAMULLO network simulator core.
+ *
+ * Deterministic model of the protocol rules in docs/specs: the phone's own radio used raw ("el grito",
+ * long-range or normal mode, one shout heard by every neighbor in range, a turn in the superframe per hop),
+ * contact cards, compass routing toward a destination zone with bounded fanout (the river), widening and
+ * perimeter mode around empty areas (the lake), local eco inside the destination zone, per-letter
+ * destination tags, optional carry-and-forward by walking phones, and the double receipt (destination
+ * delivery + origin confirmation) before carriers are paid.
+ *
+ * Built on the same recipe as ICEBREAK's prototype/p2p/core.js: pure, seeded RNG, spatial grid,
+ * metrics read model. Cryptography and real radios are modeled, not executed.
+ */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.CHAMULLO_SIM = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const DEFAULT_CONFIG = {
+    version: '0.2.0',
+    // Normal LE 1M vs long-range Coded PHY (S=8): ≈1.5–2× the range (Air Interface §3.2). Antennas are optional home nodes.
+    radio: { normalRangeM: 100, codedRangeM: 200, codedShare: 0.7, antennaRangeM: 5000 },
+    // Air Interface §5: 1 s superframe; a shout waits for its turn, then spends its airtime at 125 kbit/s.
+    grito: { superframeMs: 1000, airKbps: 125, gritoBytes: 400 },
+    internet: { links: 4, hopMs: 90 },
+    zones: { celda: 100, barrio: 2000, pueblo: 20000, region: 150000 },
+    routing: { fanout: 2, minProgressM: 10, widenDeg: 90, perimeterBudget: 32, localTtl: 64, maxHops: 64, zoneLevel: 'barrio', carry: false },
+    envelope: { expS: 3600 },
+    world: { areaM: 2000 },
+    mobility: { tickMs: 1000 },
+    log: { wireMax: 200000 }
+  };
+
+  /* ---------- helpers ---------- */
+  const clone = o => JSON.parse(JSON.stringify(o));
+  function merge(base, over) {
+    for (const k of Object.keys(over || {})) {
+      if (over[k] && typeof over[k] === 'object' && !Array.isArray(over[k]) && base[k] && typeof base[k] === 'object') merge(base[k], over[k]);
+      else base[k] = over[k];
+    }
+    return base;
+  }
+  const withConfig = over => merge(clone(DEFAULT_CONFIG), over);
+  function fnv1a(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); }
+  function rngFrom(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0; let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const pct = (arr, p) => { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
+  const bearing = (from, to) => ((Math.atan2(to.x - from.x, to.y - from.y) * 180 / Math.PI) + 360) % 360;
+  const angleDiff = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
+
+  // Min-heap of scheduled events ordered by time, then insertion order (keeps runs deterministic).
+  function createQueue() {
+    const h = []; let seq = 0;
+    const less = (i, j) => h[i].at < h[j].at || (h[i].at === h[j].at && h[i].seq < h[j].seq);
+    const swap = (i, j) => { const t = h[i]; h[i] = h[j]; h[j] = t; };
+    return {
+      get size() { return h.length; },
+      peek: () => h[0],
+      push(ev) {
+        ev.seq = seq++; h.push(ev);
+        for (let i = h.length - 1; i > 0;) { const p = (i - 1) >> 1; if (!less(i, p)) break; swap(i, p); i = p; }
+      },
+      pop() {
+        const top = h[0]; const last = h.pop();
+        if (h.length) {
+          h[0] = last;
+          for (let i = 0; ;) {
+            const l = 2 * i + 1, r = l + 1; let m = i;
+            if (l < h.length && less(l, m)) m = l;
+            if (r < h.length && less(r, m)) m = r;
+            if (m === i) break; swap(i, m); i = m;
+          }
+        }
+        return top;
+      }
+    };
+  }
+
+  /* ======================================================================= */
+  function createSim(config = DEFAULT_CONFIG, seed = 1) {
+    const cfg = clone(config);
+    const rng = rngFrom(seed);
+    let now = 0, nextId = 1, nextMsg = 1, lastTick = 0;
+    const nodes = new Map();
+    const antennas = [];
+    const messages = new Map();
+    const queue = createQueue();
+    const wire = [];
+    const events = [];
+    const totals = { duplicates: 0, covered: 0, drops: { maxHops: 0, stuck: 0, noRoute: 0, expired: 0, linkLost: 0 } };
+
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const get = id => nodes.get(id);
+    const log = (type, detail = '', data = null) => { events.push({ t: now, type, detail, data }); if (events.length > 500) events.shift(); };
+    const phoneRange = n => (n.coded ? cfg.radio.codedRangeM : cfg.radio.normalRangeM);
+    // Both radios must reach: between two phones the long-range mode works only if both have it.
+    function linkRange(a, b) {
+      if (a.kind === 'antenna' && b.kind === 'antenna') return cfg.radio.antennaRangeM;
+      if (a.kind === 'antenna') return phoneRange(b);
+      if (b.kind === 'antenna') return phoneRange(a);
+      return a.coded && b.coded ? cfg.radio.codedRangeM : cfg.radio.normalRangeM;
+    }
+
+    /* ---------- zones ---------- */
+    const zoneIdx = (p, level) => { const s = cfg.zones[level]; return [Math.floor(p.x / s), Math.floor(p.y / s)]; };
+    const zoneKey = (p, level) => { const [zx, zy] = zoneIdx(p, level); return `${level}:${zx}:${zy}`; };
+    function zoneCenter(key) {
+      const [level, zx, zy] = key.split(':'); const s = cfg.zones[level];
+      return { x: (+zx + 0.5) * s, y: (+zy + 0.5) * s };
+    }
+
+    /* ---------- spatial index: grid sized to the longest phone range; antennas are few, scanned apart ---------- */
+    const G = Math.max(cfg.radio.normalRangeM, cfg.radio.codedRangeM);
+    const grid = new Map();
+    const ckey = (cx, cy) => `${cx}:${cy}`;
+    function gridPut(n) { n.cell = ckey(Math.floor(n.x / G), Math.floor(n.y / G)); if (!grid.has(n.cell)) grid.set(n.cell, new Set()); grid.get(n.cell).add(n); }
+    function gridMove(n) { const k = ckey(Math.floor(n.x / G), Math.floor(n.y / G)); if (k === n.cell) return; grid.get(n.cell).delete(n); gridPut(n); }
+    function within(p, r) {
+      const cx = Math.floor(p.x / G), cy = Math.floor(p.y / G), rings = Math.ceil(r / G);
+      const out = [];
+      for (let dx = -rings; dx <= rings; dx++) for (let dy = -rings; dy <= rings; dy++) {
+        const cell = grid.get(ckey(cx + dx, cy + dy)); if (!cell) continue;
+        for (const m of cell) if (dist(m, p) <= r) out.push(m);
+      }
+      return out;
+    }
+
+    /* ---------- nodes ---------- */
+    function addNode(o = {}) {
+      const id = 'n' + (nextId++);
+      const coded = o.coded ?? (rng() < cfg.radio.codedShare);
+      const n = {
+        id, x: o.x ?? 0, y: o.y ?? 0, kind: o.kind || 'phone', coded, online: o.online ?? true,
+        speed: o.speed ?? 0, tx: null, ty: null,
+        internet: !!o.internet, inet: new Set(), cards: new Map(), pocket: new Map(),
+        tagSecret: fnv1a(`tag|${id}|${Math.floor(rng() * 0xffffffff)}`), seen: new Set(), accepted: new Set(), credits: 0, shouts: 0
+      };
+      nodes.set(id, n); gridPut(n);
+      if (n.kind === 'antenna') antennas.push(n);
+      return id;
+    }
+    function setOnline(id, on) { get(id).online = on; log(on ? 'NODE_ONLINE' : 'NODE_OFFLINE', id); }
+    function setInternet(id, on) { const n = get(id); n.internet = on; if (!on) { for (const m of n.inet) get(m).inet.delete(id); n.inet.clear(); } }
+    function moveTo(id, x, y) { const n = get(id); n.x = x; n.y = y; n.tx = null; gridMove(n); }
+    // Each member with internet keeps up to `links` long links to other members with internet (optional, off by default).
+    function linkInternet() {
+      const members = [...nodes.values()].filter(n => n.internet);
+      for (const n of members) {
+        const pool = members.filter(m => m !== n && !n.inet.has(m.id));
+        for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+        for (const m of pool) {
+          if (n.inet.size >= cfg.internet.links) break;
+          if (m.inet.size >= cfg.internet.links) continue;
+          n.inet.add(m.id); m.inet.add(n.id);
+        }
+      }
+    }
+    function neighborNodes(n) {
+      if (!n.online) return [];
+      const found = new Map();
+      for (const m of within(n, G)) if (dist(n, m) <= linkRange(n, m)) found.set(m.id, m);
+      if (n.kind === 'antenna') for (const m of antennas) if (dist(n, m) <= cfg.radio.antennaRangeM) found.set(m.id, m);
+      for (const id of n.inet) found.set(id, get(id));
+      found.delete(n.id);
+      return [...found.values()].filter(m => m.online).sort((a, b) => dist(n, a) - dist(n, b) || (a.id < b.id ? -1 : 1));
+    }
+
+    /* ---------- contact cards ---------- */
+    function exchangeCards(a, b) {
+      const A = get(a), B = get(b), level = cfg.routing.zoneLevel;
+      A.cards.set(b, { zone: zoneKey(B, level), tagSecret: B.tagSecret });
+      B.cards.set(a, { zone: zoneKey(A, level), tagSecret: A.tagSecret });
+    }
+
+    /* ---------- letters ---------- */
+    const tagOf = (secret, nonce) => fnv1a(`TAG|${secret}|${nonce}`);
+    function send(from, to, opts = {}) {
+      const A = get(from); const card = A.cards.get(to);
+      if (!card) return { ok: false, reason: 'no_card' };
+      const msgId = 'm' + (nextMsg++);
+      const nonce = fnv1a(`nonce|${msgId}|${Math.floor(rng() * 0xffffffff)}`);
+      const m = {
+        id: msgId, from, to, nonce, src: 'e' + fnv1a(`eph|${nonce}`), tag: tagOf(card.tagSecret, nonce),
+        zone: card.zone, center: zoneCenter(card.zone), sentAt: now,
+        exp: now + (opts.expS ?? cfg.envelope.expS) * 1000, maxHops: opts.maxHops ?? cfg.routing.maxHops,
+        delivered: false, deliveredAt: null, confirmedAt: null, path: null,
+        touched: new Set([from]), gritos: 0, drops: 0, dropReasons: {}
+      };
+      messages.set(msgId, m);
+      A.seen.add(msgId); A.accepted.add(msgId);
+      log('LETTER_SENT', `${from} → zona ${card.zone}`, { msg: msgId, from });
+      forward(A, m, { path: [from], pFrom: null, pHops: 0, local: null });
+      return { ok: true, msgId };
+    }
+    function drop(m, reason) { m.drops++; m.dropReasons[reason] = (m.dropReasons[reason] || 0) + 1; totals.drops[reason]++; }
+
+    // One shout: everyone named hears it after the sender's turn comes and the frame is on the air.
+    function shout(n, targets, m, copy) {
+      m.gritos++; n.shouts++;
+      const to = targets.map(t => t.id);
+      for (const t of targets) t.accepted.add(m.id); // OFFER → ACCEPT happens before the letter travels
+      if (wire.length < cfg.log.wireMax) wire.push({ t: now, from: n.id, to, msgId: m.id, src: m.src, dst: m.tag });
+      const g = cfg.grito;
+      const radioMs = rng() * g.superframeMs + g.gritoBytes * 8 / g.airKbps;
+      for (const t of targets) {
+        const at = now + (n.inet.has(t.id) ? cfg.internet.hopMs : radioMs);
+        queue.push({ at, type: 'arrive', node: t.id, msg: m.id, from: n.id, copy: { ...copy, path: [...copy.path, t.id] } });
+      }
+    }
+
+    // The forwarding decision a carrier makes with what it can see: its neighbors, the zone and the compass.
+    // Returns true when it shouted, or the reason it could not.
+    function route(n, m, copy) {
+      const hops = copy.path.length - 1;
+      if (now > m.exp) return 'expired';
+      if (hops >= m.maxHops) return 'maxHops';
+      const around = neighborNodes(n).filter(x => !copy.path.includes(x.id));
+      // A neighbor that already has the letter declines the OFFER (Proof of Relay §5.2), so only fresh ones are candidates.
+      const nbrs = around.filter(x => !x.accepted.has(m.id) && !x.seen.has(m.id));
+      const level = cfg.routing.zoneLevel;
+
+      if (zoneKey(n, level) === m.zone) { // local eco: one shout to every neighbor inside the zone
+        const local = copy.local == null ? cfg.routing.localTtl : copy.local - 1;
+        const inZone = nbrs.filter(t => zoneKey(t, level) === m.zone);
+        if (local < 0 || !inZone.length) return 'ecoEnd';
+        shout(n, inZone, m, { ...copy, local });
+        return true;
+      }
+
+      const here = dist(n, m.center);
+      let { pFrom, pHops } = copy;
+      if (pFrom != null && here < pFrom) pFrom = null; // back on the river; the detour budget stays spent
+      // the river: the best `fanout` carriers toward the zone; a place already taken by another copy stays covered
+      const best = around.filter(x => dist(x, m.center) <= here - cfg.routing.minProgressM).sort((a, b) => dist(a, m.center) - dist(b, m.center)).slice(0, cfg.routing.fanout);
+      if (pFrom == null && best.length) {
+        const fresh = best.filter(x => nbrs.includes(x));
+        if (!fresh.length) return 'covered';
+        shout(n, fresh, m, { ...copy, pFrom: null, pHops });
+        return true;
+      }
+      // the lake: widen toward the compass first, otherwise go around it
+      if (pFrom == null) pFrom = here;
+      if (++pHops > cfg.routing.perimeterBudget) return 'stuck';
+      const b = bearing(n, m.center);
+      const wide = nbrs.filter(x => angleDiff(bearing(n, x), b) <= cfg.routing.widenDeg).sort((x, y) => angleDiff(bearing(n, x), b) - angleDiff(bearing(n, y), b));
+      const next = wide[0] || [...nbrs].sort((x, y) => dist(x, m.center) - dist(y, m.center))[0];
+      if (!next) return 'noRoute';
+      shout(n, [next], m, { ...copy, pFrom, pHops });
+      return true;
+    }
+    // A carrier that cannot pass the letter on either keeps it in its pocket (carry mode) or drops it.
+    function forward(n, m, copy) {
+      const r = route(n, m, copy);
+      if (r === true) return;
+      if (r === 'ecoEnd' && !cfg.routing.carry) return; // the zone search ran out here; other branches may still find the recipient
+      if (r === 'covered') { totals.covered++; if (!cfg.routing.carry) return; } // with carrying on, a spare copy is kept, never thrown away
+      if (cfg.routing.carry && (r === 'stuck' || r === 'noRoute' || r === 'ecoEnd' || r === 'covered')) {
+        n.pocket.set(m.id, { ...copy, pFrom: null }); // the detour budget stays spent: from the pocket only a real way forward counts
+        log('LETTER_POCKETED', `${n.id} guarda ${m.id}`, { node: n.id, msg: m.id });
+        return;
+      }
+      drop(m, r);
+      log('LETTER_DROPPED', `${m.id} en ${n.id} · ${r}`, { node: n.id, msg: m.id });
+    }
+
+    function arrive(ev) {
+      const n = get(ev.node), m = messages.get(ev.msg);
+      if (!n.online) return drop(m, 'linkLost');
+      m.touched.add(n.id);
+      if (n.seen.has(m.id)) { totals.duplicates++; return; }
+      n.seen.add(m.id);
+      if (tagOf(n.tagSecret, m.nonce) === m.tag) { // the recipient recognizes its tag
+        if (m.delivered) return;
+        m.delivered = true; m.deliveredAt = now; m.path = ev.copy.path;
+        log('LETTER_DELIVERED', `${m.id} en ${m.path.length - 1} saltos`, { msg: m.id, node: n.id });
+        // the journey goes back to the origin, which confirms it; only then carriers are paid
+        queue.push({ at: now + (now - m.sentAt), type: 'confirm', msg: m.id });
+        return;
+      }
+      forward(n, m, ev.copy);
+    }
+    function confirm(ev) {
+      const m = messages.get(ev.msg); m.confirmedAt = now;
+      for (const id of m.path.slice(1, -1)) get(id).credits++;
+      log('JOURNEY_CONFIRMED', `${m.id} · ${Math.max(0, m.path.length - 2)} carteros cobran`, { msg: m.id });
+    }
+    function handle(ev) { if (ev.type === 'arrive') arrive(ev); else if (ev.type === 'confirm') confirm(ev); }
+
+    /* ---------- the world between events: walking and pockets ---------- */
+    const movers = () => [...nodes.values()].some(n => n.speed && n.online);
+    const pocketCount = () => { let c = 0; for (const n of nodes.values()) c += n.pocket.size; return c; };
+    function tickWorld(dtS) {
+      for (const n of nodes.values()) {
+        if (!n.speed || !n.online) continue;
+        if (n.tx === null || Math.hypot(n.tx - n.x, n.ty - n.y) < 2) { n.tx = rng() * cfg.world.areaM; n.ty = rng() * cfg.world.areaM; }
+        const d = Math.hypot(n.tx - n.x, n.ty - n.y); const s = Math.min(d, n.speed * dtS);
+        n.x += (n.tx - n.x) / d * s; n.y += (n.ty - n.y) / d * s; gridMove(n);
+      }
+      for (const n of nodes.values()) {
+        if (!n.pocket.size || !n.online) continue;
+        for (const [id, copy] of [...n.pocket]) {
+          const m = messages.get(id);
+          if (m.delivered) { n.pocket.delete(id); continue; }
+          if (now > m.exp) { n.pocket.delete(id); drop(m, 'expired'); continue; }
+          if (route(n, m, copy) === true) { n.pocket.delete(id); log('LETTER_UNPOCKETED', `${n.id} pasa ${id}`, { node: n.id, msg: id }); }
+        }
+      }
+    }
+
+    /* ---------- clock ---------- */
+    function advance(end, untilIdle) {
+      for (;;) {
+        const nextEv = queue.size ? queue.peek().at : Infinity;
+        const worldBusy = movers() || pocketCount() > 0;
+        if (untilIdle && !queue.size && !worldBusy) return;
+        const nextTick = worldBusy ? lastTick + cfg.mobility.tickMs : Infinity;
+        const t = Math.min(nextEv, nextTick);
+        if (t > end || t === Infinity) break;
+        if (nextEv <= nextTick) { const ev = queue.pop(); now = ev.at; handle(ev); }
+        else { now = nextTick; lastTick = now; tickWorld(cfg.mobility.tickMs / 1000); }
+      }
+      if (!untilIdle) { now = end; if (!(movers() || pocketCount() > 0)) lastTick = now; }
+    }
+    const step = ms => advance(now + ms, false);
+    const runUntilIdle = maxMs => advance(now + maxMs, true);
+
+    /* ---------- read model ---------- */
+    function delivery(msgId) {
+      const m = messages.get(msgId);
+      return { delivered: m.delivered, deliveredAt: m.deliveredAt, confirmedAt: m.confirmedAt, path: m.path, hops: m.path ? m.path.length - 1 : null };
+    }
+    function messageStats(msgId) {
+      const m = messages.get(msgId);
+      return { touched: m.touched.size, gritos: m.gritos, drops: m.drops, dropReasons: { ...m.dropReasons } };
+    }
+    function metrics() {
+      const all = [...messages.values()]; const done = all.filter(m => m.delivered);
+      const gritos = all.reduce((s, m) => s + m.gritos, 0);
+      return {
+        t: now, nodes: nodes.size, online: [...nodes.values()].filter(n => n.online).length,
+        messages: { sent: all.length, delivered: done.length, confirmed: all.filter(m => m.confirmedAt != null).length, deliveryRatio: all.length ? done.length / all.length : 0, pocketed: pocketCount() },
+        latency: { p50: pct(done.map(m => m.deliveredAt - m.sentAt), 0.5), p95: pct(done.map(m => m.deliveredAt - m.sentAt), 0.95) },
+        hops: { p50: pct(done.map(m => m.path.length - 1), 0.5), p95: pct(done.map(m => m.path.length - 1), 0.95), max: done.reduce((x, m) => Math.max(x, m.path.length - 1), 0) },
+        cost: { gritos, gritosPerLetter: all.length ? gritos / all.length : 0, touchedPerLetter: all.length ? all.reduce((s, m) => s + m.touched.size, 0) / all.length : 0 },
+        drops: { ...totals.drops }, duplicates: totals.duplicates, covered: totals.covered
+      };
+    }
+    function snapshot() {
+      return {
+        t: now,
+        nodes: [...nodes.values()].map(n => ({ id: n.id, x: n.x, y: n.y, kind: n.kind, coded: n.coded, online: n.online, credits: n.credits, shouts: n.shouts, pocket: n.pocket.size })),
+        letters: [...messages.values()].map(m => ({ id: m.id, from: m.from, to: m.to, center: m.center, zone: m.zone, delivered: m.delivered, path: m.path, sentAt: m.sentAt, deliveredAt: m.deliveredAt, confirmedAt: m.confirmedAt }))
+      };
+    }
+
+    return {
+      cfg, addNode, setOnline, setInternet, linkInternet, moveTo, exchangeCards, send,
+      neighbors: id => neighborNodes(get(id)).map(m => m.id),
+      zoneOf: (id, level = cfg.routing.zoneLevel) => zoneKey(get(id), level),
+      zoneCenter, linkRange: (a, b) => linkRange(get(a), get(b)),
+      node: id => get(id), nodeIds: () => [...nodes.keys()], credits: id => get(id).credits,
+      pockets: () => [...nodes.values()].flatMap(n => [...n.pocket.keys()].map(msgId => ({ node: n.id, msgId }))),
+      delivery, messageStats, metrics, snapshot, wireLog: () => wire.slice(),
+      wireSince: t => { let i = wire.length; while (i > 0 && wire[i - 1].t >= t) i--; return wire.slice(i); }, drainEvents: () => events.splice(0, events.length),
+      setConfig: over => merge(cfg, over),
+      step, runUntilIdle, now: () => now
+    };
+  }
+
+  return { DEFAULT_CONFIG, createSim, withConfig };
+});
+</script>
+<script>
+'use strict';
+const { createSim, withConfig } = window.CHAMULLO_SIM;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const AREA = 2000;
+
+/* ---------- scenarios: how many phones, and where ---------- */
+const SCENARIOS = {
+  barrio: { name: 'Barrio', phones: 700, place: r => ({ x: r() * AREA, y: r() * AREA }) },
+  plaza: { name: 'Plaza llena', phones: 700, place: r => (r() < 0.5 ? disc(r, 1000, 1000, 250) : { x: r() * AREA, y: r() * AREA }) },
+  disperso: { name: 'Pueblo disperso', phones: 220, place: r => ({ x: r() * AREA, y: r() * AREA }) },
+  lago: { name: 'El lago', phones: 700, lake: { x: 1000, y: 1000, r: 550 }, place: r => { for (;;) { const p = { x: r() * AREA, y: r() * AREA }; if (Math.hypot(p.x - 1000, p.y - 1000) > 550) return p; } } },
+  islas: { name: 'Islas y viajeros', phones: 360, carry: true, walking: 0.35, place: r => (r() < 0.5 ? disc(r, 450, 1000, 300) : disc(r, 1550, 1000, 300)) }
+};
+function disc(r, cx, cy, R) { const a = r() * 2 * Math.PI, d = Math.sqrt(r()) * R; return { x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d }; }
+
+const P = { scenario: 'barrio', phones: 700, coded: 0.7, walking: 0.2, fanout: 2, zone: 'celda', carry: false, superframe: 1000, seed: 1, auto: true };
+const S = { sim: null, playing: true, speed: 4, lastMsg: null, logs: [], selected: null, nextAuto: 0, rnd: null };
+
+function build() {
+  const sc = SCENARIOS[P.scenario];
+  const sim = createSim(withConfig({
+    radio: { codedShare: P.coded }, routing: { fanout: P.fanout, zoneLevel: P.zone, carry: P.carry },
+    grito: { superframeMs: P.superframe }, world: { areaM: AREA }
+  }), P.seed);
+  let s = P.seed * 9301 + 49297; const r = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+  for (let i = 0; i < P.phones; i++) { const p = sc.place(r); sim.addNode({ x: p.x, y: p.y, speed: r() < P.walking ? 1.4 * (0.6 + r() * 0.6) : 0 }); }
+  S.sim = sim; S.rnd = r; S.lastMsg = null; S.logs = []; S.selected = null; S.nextAuto = 0;
+  $('inspect').hidden = true;
+}
+function pickScenario(key) {
+  const sc = SCENARIOS[key]; P.scenario = key; P.phones = sc.phones; P.carry = !!sc.carry; P.walking = sc.walking ?? 0.2;
+  renderControls(); build();
+}
+
+/* ---------- letters ---------- */
+function randomLetter() {
+  const ids = S.sim.nodeIds().filter(id => S.sim.node(id).online);
+  if (ids.length < 2) return;
+  const a = ids[Math.floor(S.rnd() * ids.length)]; let b = a;
+  while (b === a) b = ids[Math.floor(S.rnd() * ids.length)];
+  S.sim.exchangeCards(a, b);
+  const res = S.sim.send(a, b);
+  if (res.ok) S.lastMsg = res.msgId;
+}
+
+/* ---------- loop ---------- */
+let lastFrame = performance.now();
+function frame(t) {
+  const dt = Math.min(100, t - lastFrame); lastFrame = t;
+  if (S.playing) {
+    const simMs = dt * S.speed;
+    if (P.auto && S.sim.now() >= S.nextAuto) { randomLetter(); S.nextAuto = S.sim.now() + 3000; }
+    S.sim.step(simMs);
+    for (const e of S.sim.drainEvents()) { S.logs.unshift(e); }
+    S.logs.length = Math.min(S.logs.length, 120);
+  }
+  draw(); requestAnimationFrame(frame);
+}
+setInterval(() => renderPanels(), 400);
+
+/* ---------- map ---------- */
+const cv = $('map');
+function draw() {
+  const dpr = devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const k = w / AREA, X = x => x * k, Y = y => h - y * k;
+  const sim = S.sim, snap = sim.snapshot(), byId = new Map(snap.nodes.map(n => [n.id, n]));
+  const sc = SCENARIOS[P.scenario];
+  if (sc.lake) { g.fillStyle = css('--lake'); g.beginPath(); g.arc(X(sc.lake.x), Y(sc.lake.y), sc.lake.r * k, 0, Math.PI * 2); g.fill(); }
+
+  const last = S.lastMsg && snap.letters.find(l => l.id === S.lastMsg);
+  if (last) { // destination zone and compass target
+    const size = sim.cfg.zones[sim.cfg.routing.zoneLevel], c = last.center;
+    g.strokeStyle = css('--zone'); g.setLineDash([5, 4]); g.lineWidth = 1.5;
+    g.strokeRect(X(c.x - size / 2), Y(c.y + size / 2), size * k, size * k); g.setLineDash([]);
+  }
+  // recent shouts: a ring for the range and a line to each named carrier
+  const fadeMs = 900 * Math.max(1, S.speed / 2);
+  for (const wv of sim.wireSince(sim.now() - fadeMs)) {
+    const a = byId.get(wv.from); if (!a) continue;
+    const age = (sim.now() - wv.t) / fadeMs, alpha = Math.max(0, 1 - age);
+    g.globalAlpha = alpha * 0.5; g.strokeStyle = css('--grito'); g.lineWidth = 1;
+    g.beginPath(); g.arc(X(a.x), Y(a.y), (a.coded ? sim.cfg.radio.codedRangeM : sim.cfg.radio.normalRangeM) * k * (0.4 + 0.6 * Math.min(1, age * 3)), 0, Math.PI * 2); g.stroke();
+    g.globalAlpha = alpha; g.lineWidth = 1.5;
+    for (const id of wv.to) { const b = byId.get(id); if (!b) continue; g.beginPath(); g.moveTo(X(a.x), Y(a.y)); g.lineTo(X(b.x), Y(b.y)); g.stroke(); }
+  }
+  g.globalAlpha = 1;
+  if (last && last.path) { // the path of the last letter, once delivered
+    g.strokeStyle = css('--path'); g.lineWidth = 3; g.beginPath();
+    last.path.forEach((id, i) => { const n = byId.get(id); if (!n) return; i ? g.lineTo(X(n.x), Y(n.y)) : g.moveTo(X(n.x), Y(n.y)); }); g.stroke();
+  }
+  for (const n of snap.nodes) {
+    const x = X(n.x), y = Y(n.y), r = n.kind === 'antenna' ? 5 : 3;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2);
+    if (!n.online) { g.fillStyle = css('--node'); g.fill(); }
+    else if (n.coded) { g.fillStyle = css('--ink'); g.fill(); }
+    else { g.strokeStyle = css('--ink'); g.lineWidth = 1.2; g.stroke(); }
+    if (n.pocket) { g.strokeStyle = css('--pocket'); g.lineWidth = 2; g.beginPath(); g.arc(x, y, r + 3, 0, Math.PI * 2); g.stroke(); }
+  }
+  if (last) { // origin and destination
+    for (const [id, col] of [[last.from, '--grito'], [last.to, '--path']]) {
+      const n = byId.get(id); if (!n) continue;
+      g.strokeStyle = css(col); g.lineWidth = 2.5; g.beginPath(); g.arc(X(n.x), Y(n.y), 8, 0, Math.PI * 2); g.stroke();
+    }
+  }
+  if (S.selected) { const n = byId.get(S.selected); if (n) { g.strokeStyle = css('--ink'); g.lineWidth = 1; g.setLineDash([3, 3]); g.beginPath(); g.arc(X(n.x), Y(n.y), (n.coded ? sim.cfg.radio.codedRangeM : sim.cfg.radio.normalRangeM) * k, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); } }
+  $('mapmeta').textContent = `${snap.nodes.length} celulares`;
+  const s = Math.floor(sim.now() / 1000); $('clock').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+cv.addEventListener('click', e => {
+  const rect = cv.getBoundingClientRect(), k = rect.width / AREA;
+  const wx = (e.clientX - rect.left) / k, wy = (rect.height - (e.clientY - rect.top)) / k;
+  let best = null, bd = 25 / k;
+  for (const n of S.sim.snapshot().nodes) { const d = Math.hypot(n.x - wx, n.y - wy); if (d < bd) { bd = d; best = n; } }
+  S.selected = best ? best.id : null; renderInspect();
+});
+function renderInspect() {
+  const box = $('inspect');
+  if (!S.selected) { box.hidden = true; return; }
+  const n = S.sim.node(S.selected);
+  box.hidden = false;
+  box.innerHTML = `<b>${esc(n.id)}</b><dl>
+    <dt>Radio</dt><dd>${n.coded ? 'largo alcance' : 'normal'} · ${n.coded ? S.sim.cfg.radio.codedRangeM : S.sim.cfg.radio.normalRangeM} m</dd>
+    <dt>Vecinos</dt><dd>${S.sim.neighbors(n.id).length}</dd>
+    <dt>Camina</dt><dd>${n.speed ? n.speed.toFixed(1) + ' m/s' : 'no'}</dd>
+    <dt>Gritos</dt><dd>${n.shouts}</dd>
+    <dt>Bolsillo</dt><dd>${n.pocket.size} cartas</dd>
+    <dt>Caramelos</dt><dd>${n.credits}</dd></dl>
+    <button class="tbtn" style="margin-top:8px;height:30px" data-off>${n.online ? 'Apagar' : 'Encender'}</button>`;
+  box.querySelector('[data-off]').onclick = () => { S.sim.setOnline(n.id, !n.online); renderInspect(); };
+}
+
+/* ---------- panels ---------- */
+function renderPanels() {
+  const m = S.sim.metrics();
+  const tile = (k, v, t) => `<div class="tile"><span class="k">${k}</span><span class="v">${v}</span><span class="t">${t}</span></div>`;
+  const sec = ms => (ms / 1000).toFixed(1) + ' s';
+  const paid = S.sim.snapshot().nodes.filter(n => n.credits > 0);
+  $('tiles').innerHTML = [
+    tile('Cartas', m.messages.sent, `${m.messages.confirmed} confirmadas`),
+    tile('Llegaron', m.messages.sent ? Math.round(m.messages.deliveryRatio * 100) + '%' : '—', `${m.messages.delivered} de ${m.messages.sent}`),
+    tile('Demora', m.messages.delivered ? sec(m.latency.p50) : '—', `p95 ${m.messages.delivered ? sec(m.latency.p95) : '—'}`),
+    tile('Saltos', m.messages.delivered ? m.hops.p50 : '—', `máx ${m.hops.max}`),
+    tile('Gritos por carta', m.messages.sent ? m.cost.gritosPerLetter.toFixed(1) : '—', 'cuánto aire gasta'),
+    tile('Celulares tocados', m.messages.sent ? m.cost.touchedPerLetter.toFixed(0) : '—', 'por carta'),
+    tile('En bolsillos', m.messages.pocketed, P.carry ? 'guardar y llevar' : 'apagado'),
+    tile('Carteros que cobraron', paid.length, `${paid.reduce((s, n) => s + n.credits, 0)} caramelos`)
+  ].join('');
+  const reasons = { noRoute: 'sin camino', stuck: 'trabada', maxHops: 'muchos saltos', expired: 'venció', linkLost: 'se apagó el receptor' };
+  const max = Math.max(1, ...Object.values(m.drops));
+  $('drops').innerHTML = Object.entries(reasons).map(([k, label]) => `<div class="brow"><span>${label}</span><span class="track"><i style="width:${m.drops[k] / max * 100}%"></i></span><span class="n">${m.drops[k]}</span></div>`).join('');
+  const top = paid.sort((a, b) => b.credits - a.credits).slice(0, 6);
+  $('carriers').innerHTML = top.length ? `<table><tr><th>Celular</th><th>Radio</th><th>Gritos</th><th>Caramelos</th></tr>${top.map(n => `<tr><td class="m">${n.id}</td><td>${n.coded ? 'largo alcance' : 'normal'}</td><td class="m">${n.shouts}</td><td class="m">${n.credits}</td></tr>`).join('')}</table>` : '<div class="empty">Todavía nadie cobró: los carteros cobran cuando el origen confirma el viaje.</div>';
+  $('log').innerHTML = S.logs.slice(0, 80).map(e => `<div><time>${(e.t / 1000).toFixed(1)}s</time><b>${esc(e.type)}</b><span title="${esc(e.detail)}">${esc(e.detail)}</span></div>`).join('') || '<div class="empty">Silencio en el pueblo.</div>';
+  $('logmeta').textContent = `${S.logs.length} eventos`;
+  if (S.selected) renderInspect();
+}
+
+/* ---------- controls ---------- */
+function renderControls() {
+  const slider = (key, label, min, max, stepV, fmt) => `<div class="ctl"><label>${label} <span id="v_${key}">${fmt(P[key])}</span></label><input type="range" min="${min}" max="${max}" step="${stepV}" value="${P[key]}" data-k="${key}" data-fmt="${fmt.name}"></div>`;
+  const seg = (key, label, opts) => `<div class="ctl"><label>${label}</label><div class="seg">${opts.map(([v, t]) => `<button data-seg="${key}" data-v="${v}" class="${String(P[key]) === String(v) ? 'on' : ''}">${t}</button>`).join('')}</div></div>`;
+  const sw = (key, label, sub) => `<div class="sw"><span>${label}<small>${sub}</small></span><button class="toggle ${P[key] ? 'on' : ''}" data-sw="${key}" aria-pressed="${P[key]}" aria-label="${label}"></button></div>`;
+  $('controls').innerHTML = [
+    slider('phones', 'Celulares', 50, 1500, 10, n => String(n)),
+    slider('coded', 'Con largo alcance', 0, 1, 0.05, n => Math.round(n * 100) + '%'),
+    slider('walking', 'Caminando', 0, 1, 0.05, n => Math.round(n * 100) + '%'),
+    seg('fanout', 'Ancho del río', [[1, '1'], [2, '2'], [3, '3']]),
+    seg('zone', 'Zona destino', [['celda', 'celda 100 m'], ['barrio', 'barrio 2 km']]),
+    seg('superframe', 'Supertrama', [[250, '250 ms'], [500, '500 ms'], [1000, '1 s']]),
+    sw('carry', 'Guardar y llevar', 'si no hay camino, la carta espera en el bolsillo'),
+    sw('auto', 'Tráfico automático', 'una carta al azar cada 3 s')
+  ].join('');
+}
+$('controls').addEventListener('input', e => {
+  const el = e.target; if (!el.dataset.k) return;
+  P[el.dataset.k] = +el.value;
+  const fmt = { phones: n => String(n), coded: n => Math.round(n * 100) + '%', walking: n => Math.round(n * 100) + '%' }[el.dataset.k];
+  $('v_' + el.dataset.k).textContent = fmt(+el.value);
+});
+$('controls').addEventListener('change', e => { if (e.target.dataset.k) build(); });
+$('controls').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.seg) { const v = b.dataset.v; P[b.dataset.seg] = isNaN(+v) ? v : +v; renderControls(); build(); }
+  if (b.dataset.sw) { P[b.dataset.sw] = !P[b.dataset.sw]; renderControls(); if (b.dataset.sw !== 'auto') build(); }
+});
+
+/* ---------- header ---------- */
+$('scen').innerHTML = Object.entries(SCENARIOS).map(([k, s]) => `<button class="chipb" data-scen="${k}">${s.name}</button>`).join('');
+$('scen').addEventListener('click', e => { const b = e.target.closest('[data-scen]'); if (!b) return; pickScenario(b.dataset.scen); markScen(); });
+const markScen = () => document.querySelectorAll('[data-scen]').forEach(b => b.classList.toggle('on', b.dataset.scen === P.scenario));
+const SPEEDS = [1, 4, 20];
+$('speed').innerHTML = SPEEDS.map(v => `<button data-speed="${v}">${v}×</button>`).join('');
+const markSpeed = () => document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('on', +b.dataset.speed === S.speed));
+$('speed').addEventListener('click', e => { const b = e.target.closest('[data-speed]'); if (!b) return; S.speed = +b.dataset.speed; markSpeed(); });
+const markPlay = () => { $('play').textContent = S.playing ? '❚❚' : '▶'; $('play').classList.toggle('on', !S.playing); };
+$('play').onclick = () => { S.playing = !S.playing; markPlay(); };
+$('reset').onclick = () => build();
+$('one').onclick = () => randomLetter();
+$('burst').onclick = () => { for (let i = 0; i < 20; i++) randomLetter(); };
+
+renderControls(); markScen(); markSpeed(); markPlay(); build(); renderPanels();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

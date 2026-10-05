@@ -5,6 +5,7 @@
   "description": "Deterministic CHAMULLO network simulator (model of the protocol rules, no real crypto or transports)",
   "license": "Apache-2.0",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "build": "node build.js"
   }
 }

@@ -1,6 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createSim, withConfig, DEFAULT_CONFIG } = require('./core.js');
+const { createSim: create, withConfig: withCfg, DEFAULT_CONFIG } = require('./core.js');
+
+// Unless a test says otherwise, every phone uses the normal radio mode (no long range), so paths are predictable.
+const withConfig = (over = {}) => withCfg({ ...over, radio: { codedShare: 0, ...(over.radio || {}) } });
+const createSim = (config = withConfig(), seed) => create(config, seed);
 
 // A straight line of phones `gap` meters apart, starting at (x0, y0).
 function line(sim, count, gap = 80, x0 = 0, y0 = 0) {
@@ -26,7 +30,7 @@ const deliver = (sim, from, to, opts) => {
 
 test('determinism: the same seed gives the same result', () => {
   const run = () => {
-    const sim = createSim(DEFAULT_CONFIG, 7);
+    const sim = createSim(withConfig(), 7);
     const ids = grid(sim, 10, 10, 70);
     const { d } = deliver(sim, ids[0], ids[99]);
     return JSON.stringify([d, sim.metrics()]);
@@ -101,14 +105,14 @@ test('dedup: no carrier forwards the same letter twice', () => {
   const sim = createSim(withConfig({ routing: { zoneLevel: 'celda' } }));
   const ids = grid(sim, 12, 12, 60);
   const { msgId } = deliver(sim, ids[0], ids[ids.length - 1]);
-  const forwards = sim.wireLog().filter(w => w.msgId === msgId).map(w => `${w.from}>${w.to}`);
-  assert.equal(new Set(forwards).size, forwards.length);
+  const gritos = sim.wireLog().filter(w => w.msgId === msgId);
   const perSender = {};
-  for (const w of sim.wireLog().filter(w => w.msgId === msgId)) perSender[w.from] = (perSender[w.from] || 0) + 1;
+  for (const w of gritos) perSender[w.from] = (perSender[w.from] || 0) + 1;
+  for (const [from, n] of Object.entries(perSender)) assert.equal(n, 1, `${from} shouted the same letter ${n} times`);
   const fan = sim.cfg.routing.fanout;
-  for (const [from, n] of Object.entries(perSender)) {
-    if (sim.zoneOf(from, sim.cfg.routing.zoneLevel) === sim.zoneOf(ids[ids.length - 1], sim.cfg.routing.zoneLevel)) continue; // local eco may fan out more
-    assert.ok(n <= fan, `${from} sent ${n} copies outside the destination zone`);
+  for (const w of gritos) {
+    if (sim.zoneOf(w.from, sim.cfg.routing.zoneLevel) === sim.zoneOf(ids[ids.length - 1], sim.cfg.routing.zoneLevel)) continue; // local eco shouts to everyone
+    assert.ok(w.to.length <= fan, `${w.from} named ${w.to.length} carriers outside the destination zone`);
   }
 });
 
@@ -205,5 +209,134 @@ test('metrics: deliveries, latency and cost per letter are reported', () => {
   assert.equal(m.messages.deliveryRatio, 1);
   assert.ok(m.latency.p50 > 0 && m.latency.p95 >= m.latency.p50);
   assert.ok(m.hops.p50 > 0);
-  assert.ok(m.cost.transmissionsPerLetter >= m.hops.p50);
+  assert.ok(m.cost.gritosPerLetter >= m.hops.p50);
+});
+
+test('el grito: two long-range phones reach farther; with one normal phone the shorter mode decides', () => {
+  const sim = createSim(withConfig({ radio: { codedShare: 0 } }));
+  const a = sim.addNode({ x: 0, y: 0, coded: true });
+  const b = sim.addNode({ x: 180, y: 0, coded: true });
+  const c = sim.addNode({ x: 0, y: 180, coded: false });
+  assert.ok(sim.neighbors(a).includes(b), 'coded to coded at 180 m');
+  assert.ok(!sim.neighbors(a).includes(c), 'coded to normal at 180 m is out of range');
+});
+
+test('el grito: one shout names up to `fanout` carriers and all of them hear it', () => {
+  const sim = createSim(withConfig({ routing: { zoneLevel: 'celda' } }));
+  const ids = grid(sim, 10, 10, 60);
+  const { msgId } = deliver(sim, ids[0], ids[99]);
+  const first = sim.wireLog().find(w => w.msgId === msgId && w.from === ids[0]);
+  assert.equal(first.to.length, 2);
+  assert.equal(sim.messageStats(msgId).gritos, sim.wireLog().filter(w => w.msgId === msgId).length);
+});
+
+test('turns: every hop waits for its slot in the superframe, plus the airtime', () => {
+  const sim = createSim();
+  const ids = line(sim, 4, 80);
+  const { d: res } = deliver(sim, ids[0], ids[3]);
+  const g = sim.cfg.grito, air = g.gritoBytes * 8 / g.airKbps;
+  const took = res.deliveredAt;
+  assert.ok(took >= 3 * air, `took ${took} ms`);
+  assert.ok(took <= 3 * (g.superframeMs + air), `took ${took} ms`);
+});
+
+test('walking: phones with speed move toward their targets as time passes', () => {
+  const sim = createSim(withConfig({ world: { areaM: 1000 } }));
+  const a = sim.addNode({ x: 500, y: 500, speed: 1.4 });
+  const before = { ...sim.node(a) };
+  sim.step(10000);
+  const after = sim.node(a);
+  const moved = Math.hypot(after.x - before.x, after.y - before.y);
+  assert.ok(moved > 10 && moved <= 14.01, `moved ${moved} m in 10 s`);
+});
+
+test('guardar y llevar: with carrying on, a stuck letter waits in a pocket and is delivered when its carrier walks over', () => {
+  const sim = createSim(withConfig({ routing: { carry: true } }));
+  const [a, b] = line(sim, 2, 80, 0, 0);
+  const [c, d] = line(sim, 2, 80, 5000, 0);
+  sim.exchangeCards(a, d);
+  const { msgId } = sim.send(a, d);
+  sim.step(5000);
+  assert.equal(sim.delivery(msgId).delivered, false);
+  assert.ok(sim.pockets().length > 0, 'someone is carrying the letter');
+  sim.moveTo(b, 4950, 0);
+  sim.step(10000);
+  assert.equal(sim.delivery(msgId).delivered, true);
+});
+
+test('guardar y llevar: with carrying off, the same stuck letter is dropped', () => {
+  const sim = createSim(withConfig({ routing: { carry: false } }));
+  const [a, b] = line(sim, 2, 80, 0, 0);
+  const [, d] = line(sim, 2, 80, 5000, 0);
+  sim.exchangeCards(a, d);
+  const { msgId } = sim.send(a, d);
+  sim.step(5000);
+  sim.moveTo(b, 4950, 0);
+  sim.step(10000);
+  assert.equal(sim.delivery(msgId).delivered, false);
+  assert.equal(sim.pockets().length, 0);
+});
+
+test('read model: wireSince returns only the shouts at or after a given time', () => {
+  const sim = createSim();
+  const ids = line(sim, 6, 80);
+  sim.exchangeCards(ids[0], ids[5]);
+  sim.send(ids[0], ids[5]);
+  sim.runUntilIdle(60000);
+  const all = sim.wireLog();
+  const cut = all[2].t;
+  assert.deepEqual(sim.wireSince(cut), all.filter(w => w.t >= cut));
+});
+
+test('offer: a carrier only hands a letter to neighbors that do not have it yet, so no letter vanishes silently', () => {
+  const sim = createSim(withConfig({ routing: { carry: true } }));
+  const island = grid(sim, 8, 8, 60, 0, 0);
+  const far = sim.addNode({ x: 6000, y: 6000 });
+  sim.exchangeCards(island[0], far);
+  const { msgId } = sim.send(island[0], far);
+  sim.step(60000);
+  assert.equal(sim.delivery(msgId).delivered, false);
+  const kept = sim.pockets().filter(p => p.msgId === msgId).length;
+  const dropped = sim.messageStats(msgId).drops;
+  assert.ok(kept + dropped > 0, 'the letter must be kept in a pocket or dropped with a reason');
+  assert.equal(sim.metrics().duplicates, 0, 'nobody is handed a letter it already has');
+});
+
+for (const zoneLevel of ['celda', 'barrio']) {
+  test(`guardar y llevar: a letter stuck on an island goes to a pocket before running out of hops (${zoneLevel})`, () => {
+    const sim = createSim(withConfig({ routing: { carry: true, zoneLevel } }));
+    const island = grid(sim, 6, 6, 60, 0, 0);
+    const far = sim.addNode({ x: 900, y: 900 });
+    sim.exchangeCards(island[0], far);
+    const { msgId } = sim.send(island[0], far);
+    sim.step(60000);
+    assert.ok(sim.pockets().some(p => p.msgId === msgId), 'someone keeps it');
+    assert.equal(sim.messageStats(msgId).dropReasons.maxHops, undefined);
+  });
+}
+
+test('guardar y llevar: going around a big island does not reset the detour budget, so the letter is kept, not exhausted', () => {
+  const sim = createSim(withConfig({ routing: { carry: true, zoneLevel: 'celda' } }));
+  const island = grid(sim, 12, 12, 60, 0, 0);
+  const far = sim.addNode({ x: 1500, y: 300 });
+  sim.exchangeCards(island[0], far);
+  const { msgId } = sim.send(island[0], far);
+  sim.step(120000);
+  assert.ok(sim.pockets().some(p => p.msgId === msgId), 'someone keeps it');
+  assert.equal(sim.messageStats(msgId).dropReasons.maxHops, undefined);
+});
+
+test('no silent loss: with carrying on, every letter not delivered and not expired is in a pocket or dropped with a reason', () => {
+  const sim = createSim(withConfig({ radio: { codedShare: 0.7 }, routing: { carry: true, zoneLevel: 'celda' }, world: { areaM: 2000 } }), 1);
+  let s = 9301 + 49297; const r = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+  const disc = (cx, cy, R) => { const a = r() * 2 * Math.PI, d = Math.sqrt(r()) * R; return { x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d }; };
+  for (let i = 0; i < 360; i++) { const p = r() < 0.5 ? disc(450, 1000, 300) : disc(1550, 1000, 300); sim.addNode({ ...p, speed: r() < 0.35 ? 1.4 : 0 }); }
+  const ids = sim.nodeIds(); const sent = [];
+  for (let i = 0; i < 30; i++) { const a = ids[Math.floor(r() * ids.length)]; let b = a; while (b === a) b = ids[Math.floor(r() * ids.length)]; sim.exchangeCards(a, b); sent.push(sim.send(a, b).msgId); }
+  sim.step(30 * 60 * 1000);
+  const pocketed = new Set(sim.pockets().map(p => p.msgId));
+  for (const id of sent) {
+    if (sim.delivery(id).delivered) continue;
+    assert.ok(pocketed.has(id) || sim.messageStats(id).drops > 0, `${id} vanished`);
+  }
 });
