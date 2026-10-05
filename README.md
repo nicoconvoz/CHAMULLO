@@ -46,6 +46,10 @@ Pendiente de formalizar: formato de paquetes, descubrimiento, routing, Proof of 
 - [Economy & Governance Specification v0.1](docs/specs/04-economy-governance.md): ICE, escasez, carril gratis, pueblos, cuentas de operador, Rey y Nobleza, libretas y cámara compensadora.
 - [Discovery & Routing Specification v0.1](docs/specs/05-discovery-routing.md): zonas, tarjeta de contacto, brújula y río, búsqueda local y privacidad de ruta.
 
+## Simulador
+
+- [La maqueta](sim/README.md): modelo determinista de las reglas del protocolo, basado en el simulador P2P web de ICEBREAK. `cd sim && npm test`.
+
 ## Licencia
 
 - **Código**: [Apache License 2.0](LICENSE).

@@ -1,0 +1,10 @@
+{
+  "name": "chamullo-sim",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic CHAMULLO network simulator (model of the protocol rules, no real crypto or transports)",
+  "license": "Apache-2.0",
+  "scripts": {
+    "test": "node --test"
+  }
+}
