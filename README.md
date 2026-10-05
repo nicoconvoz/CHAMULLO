@@ -40,3 +40,8 @@ Pendiente de formalizar: formato de paquetes, descubrimiento, routing, Proof of 
 ## Documentación
 
 - [Documento maestro v0.1](docs/CHAMULLO_Documento_Maestro_v0.1.docx): concepto y arquitectura.
+
+## Licencia
+
+- **Código**: [Apache License 2.0](LICENSE).
+- **Especificaciones y documentación** (`docs/`): [Creative Commons Attribution 4.0 International](docs/LICENSE).
