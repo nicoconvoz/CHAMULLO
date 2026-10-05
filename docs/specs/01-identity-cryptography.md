@@ -206,8 +206,10 @@ Las defensas van en la *Reward & Anti-Fraud Specification*. Algunas candidatas:
 | `ENV` | Sobre de extremo a extremo | Packet Format (campos mínimos en §8.2) |
 | `ROT` | Rotación de clave | Esta spec, §10.1 |
 | `REV` | Revocación de clave | Esta spec, §10.2 |
-| `HOP` | Atestación de retransmisión | Proof of Relay / Delivery |
-| `RCPT` | Recibo de entrega firmado por el receptor | Proof of Relay / Delivery |
+| `SEED` | Semilla inicial de la cadena de saltos (hash, no firma) | Proof of Relay §4.1 |
+| `ACPT` | Aceptación y compromiso de firmar | Proof of Relay §5 |
+| `HOP` | Registro de salto firmado por quien entrega | Proof of Relay §4.2 |
+| `RCPT` | Recibo de entrega firmado por el destino | Proof of Relay §6 |
 
 ## 13. Preguntas abiertas
 

@@ -184,6 +184,8 @@ Los mensajes `LINK` nunca salen del enlace en el que se crearon.
 | `4` | `PING` / `5` `PONG` | Mantener vivo el enlace y medir latencia |
 | `6` | `CLOSE` | Cierre ordenado, con motivo |
 | `7` | `ERROR` | Error de protocolo, con código y texto opcional |
+| `8` | `OFFER` | Ofrecer un sobre al vecino (Proof of Relay §5.2) |
+| `9` | `ACCEPT` | Aceptarlo y comprometerse a firmar (Proof of Relay §5.2) |
 
 ## 7. Handshake y negociación de gestos
 
@@ -209,6 +211,11 @@ Los mensajes `LINK` nunca salen del enlace en el que se crearon.
   - **bit par** = "lo **necesito**; sin esto no hablo";
   - **bit impar** = "lo **conozco** y lo uso si el otro también".
 - El conjunto efectivo del enlace es la **intersección** de ambos mapas.
+- Features registrados:
+
+  | Bit | Feature | Definido en |
+  |---|---|---|
+  | `0` (par, obligatorio) | `receipts`: el nodo acepta y firma recibos | Proof of Relay §5.1 |
 - Si un nodo marca como necesario un feature que el otro no conoce, el enlace DEBE cerrarse con `ERROR`.
 - **Protección contra degradación:** las firmas del handshake (Identity §7) DEBEN cubrir `versions` y `features` de **ambos** lados, para que nadie en el medio pueda borrar gestos y forzar una versión más débil.
 
