@@ -1,6 +1,6 @@
 # CHAMULLO — Documentación técnica
 
-Versión del documento: 4 · Estado del código: app 0.2.3 (octubre 2026)
+Versión del documento: 5 · Estado del código: app 0.2.3 publicada; **0.3.0 "Islas" en construcción** (octubre 2026)
 
 > Este documento describe **lo que está construido y funcionando hoy**. El diseño completo de la red
 > (identidad, sobre, recibos, economía, routing, interfaz de aire) está en [`docs/specs/`](specs/). Cuando el
@@ -224,7 +224,7 @@ del otro, y se muestra un solo aviso por persona.
 
 | Conjunto | Cantidad | Qué cubre |
 |---|---|---|
-| `android/core` (JUnit 5) | 57 | Vectores tweetnacl, identidad y frase, TLV y varints, sobres, tarjetas, plaza, llaves de carretera, micros con comodines, nodo en un "pueblo de prueba" (saltos, bolsillos, reintentos, carretera) |
+| `android/core` (JUnit 5) | 71 | Vectores tweetnacl, identidad y frase, TLV y varints, sobres, tarjetas, plaza, llaves de carretera, micros con comodines, nodo en un "pueblo de prueba" (saltos, bolsillos, reintentos, una carretera por par, pasajero ocupado), saludo, **decisiones de islas y turnos del ferry** |
 | `sim/` (`node --test`) | 28 | Reglas de ruteo de la spec 05: río, lago, eco de barrio, privacidad, bolsillos, ninguna pérdida silenciosa |
 
 La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo con la caja negra**.
@@ -244,12 +244,51 @@ La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo
 | 0.1.8 | Comodines (FEC) y reintentos; devolución de tarjeta | Se perdían pedazos y tarjetas |
 | 0.1.9 | Caja negra, cola por cartas enteras, latido cada 15 s | La cola cortaba cartas por la mitad |
 | 0.2.0 | **Carretera**: Wi-Fi Direct en cadena viva | Transmitir mucho y rápido |
-| 0.2.3 | Una sola carretera por par de vecinos; pasajero ocupado; cierre de carreteras vacías; aviso de versión cada 30 min | El Capitán: "si uno abre, el otro se conecta; ¿para qué abrir las dos?" |
-| 0.2.2 | Varios megáfonos a la vez en chips viejos | Lo que gritaba un chip viejo llegaba "a veces": cada micro salía una vez o ninguna |
 | 0.2.1 | Saludo de un solo grito; la carretera abre solo con un vecino estable | "Vecinos: 0": la carretera abierta de entrada le robaba antena al grito |
+| 0.2.2 | Varios megáfonos a la vez en chips viejos | Lo que gritaba un chip viejo llegaba "a veces": cada micro salía una vez o ninguna |
+| 0.2.3 | Una sola carretera por par de vecinos; pasajero ocupado; cierre de carreteras vacías; aviso de versión cada 30 min | El Capitán: "si uno abre, el otro se conecta; ¿para qué abrir las dos?" |
+| 0.3.0 *(en construcción)* | **Islas**: todo por Wi-Fi Direct, carteles, ferry que rota; Bluetooth de respaldo | El Capitán: "¿para qué caminos si podemos trazarlos con la carretera?" |
 
-## 13. Pendientes conocidos
+## 13. En construcción: Islas (0.3.0)
 
+Rediseño del Capitán después de las pruebas de campo: **el Bluetooth complicaba todo y transmitía muy poco**. En
+0.3.0 Wi-Fi Direct hace de camino **y** de carretera. Diseño en [spec 07 §6](specs/07-camino-carretera.md#6-islas-v02).
+
+### 13.1 La idea en una tabla
+
+| Pieza | Qué es | Estado |
+|---|---|---|
+| **Isla** | Un grupo Wi-Fi Direct: un anfitrión y hasta 7 miembros que se hablan en un salto | Cerebro listo y probado |
+| **Cartel** | Registro de servicio Wi-Fi Direct (DNS-SD) con id, nombre, isla, rol, llave y lista de miembros. Se ve **sin conectarse** | Formato listo y probado |
+| **Sumarse, no fundar** | Sin isla: me sumo a la más grande con lugar; si no hay, fundo una | Cerebro listo y probado |
+| **Fusión** | Un anfitrión solo se suma a una isla vecina (a una más grande, o a otra sola de id menor) | Cerebro listo y probado |
+| **Ferry** | Por turnos de 60 s, un miembro sale, entra a la isla vecina, entrega lo que lleva y vuelve | Turnos listos y probados |
+| **Bluetooth y Wi-Fi Aware** | Apagados por defecto; el Bluetooth queda de respaldo | Pendiente en la app |
+
+### 13.2 Reglas de decisión (`Islands.decide`)
+
+1. **Sin isla:** me sumo a la isla con lugar que tenga más miembros (desempate: id menor). Si no hay, **fundo** la mía.
+2. **Anfitrión con miembros:** me quedo; la isla depende de mí.
+3. **Anfitrión solo:** me sumo a una isla vecina si es más grande o si es otra isla sola con id menor que el mío. Así dos anfitriones solos se fusionan y nunca se cruzan.
+4. **Miembro:** si hay otra isla a la vista, el turno de ferry rota por la lista ordenada de miembros (`(hora / 60 s) mod miembros`). Al de turno le toca **Ferry**; los demás se quedan.
+
+### 13.3 Cómo viaja una carta entre islas
+
+1. En la isla, la carta llega en un salto al anfitrión, que la reparte a todos.
+2. Todos la guardan en el **bolsillo** (ya existe).
+3. El ferry de turno se cambia a la isla vecina. Allí aparecen vecinos nuevos y el bolsillo **se vuelve a gritar solo**, que es la regla de bolsillos de 0.1.x.
+4. El ferry vuelve a su isla.
+
+### 13.4 Límites honestos
+
+- Conectarse a otra isla tarda **de 1 a 5 s**: el ferry lleva lotes, no paquetes sueltos.
+- Todas las islas usan `192.168.49.x`: el ferry cambia de isla, así que no hay choque. Un puente fijo en las dos a la vez queda para más adelante.
+- Unirse sin carteles de confirmación requiere **Android 10+**, y el celular del Capitán tiene Android 10.
+- El cartel publica la llave de la isla: cualquiera cerca puede entrar. Todo lo que viaja va firmado y cifrado; falta el saludo secreto con firma al conectar (spec 01 §7) para dejar afuera a intrusos.
+
+## 14. Pendientes conocidos
+
+- [ ] **Terminar Islas en la app** (§13).
 - [ ] **Medir la carretera en campo**: conexión, prueba de velocidad, posible choque de direcciones (todas las carreteras usan `192.168.49.x`).
 - [ ] Confirmar si Android pide aprobación cada vez que se sube a una carretera.
 - [ ] Brújula y río (spec 05) en la app: hoy el ruteo es eco acotado.
@@ -258,7 +297,7 @@ La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo
 - [ ] Clave de firma de release propia.
 - [ ] Rol del iPhone.
 
-## 14. Próximo paso
+## 15. Próximo paso
 
-Probar la 0.2.0 con dos teléfonos Android 10+: Wi-Fi, Bluetooth y Ubicación prendidos → Diagnóstico →
-"Caños abiertos: 1" → **Prueba de velocidad**. Si algo falla, compartir la caja negra.
+Terminar 0.3.0 "Islas" en la app (carteles, sumarse, anfitrión que reparte, ferry) y probarla con dos teléfonos
+Android 10+ con el Wi-Fi prendido: Diagnóstico → "En la isla de …" → **Prueba de velocidad**.

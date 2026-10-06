@@ -1,4 +1,4 @@
-# CHAMULLO — Camino y Carretera v0.1
+# CHAMULLO — Camino y Carretera v0.2
 
 | Campo | Valor |
 |---|---|
@@ -45,3 +45,20 @@ ROAD_INVITE = { from, to, from_box, nonce, box( ssid | clave | ts | firma_from("
 - La primera vez que un teléfono se sube a la carretera de otro, Android puede pedir confirmación.
 - Un solo chip de radio: si dos carreteras quedan en canales distintos, se reparten el tiempo.
 - Todo esto falta medirlo en campo. La app trae una **prueba de velocidad** de 4 MB en Diagnóstico.
+
+## 6. Islas (v0.2)
+
+Diseño del Capitán después de las pruebas de campo: **Wi-Fi Direct traza también los caminos.** El Bluetooth queda
+como respaldo para teléfonos sin Wi-Fi Direct.
+
+| Pieza | Regla |
+|---|---|
+| Isla | Un grupo Wi-Fi Direct: un anfitrión y hasta 7 miembros. Dentro de la isla todo está a un salto, por el anfitrión |
+| Cartel | Registro de servicio Wi-Fi Direct (DNS-SD, `_chamullo._tcp`) con `i` id, `n` nombre, `l` isla, `h` anfitrión, y si es anfitrión `s` red, `p` clave, `r` miembros (8 hex c/u). Cabe en ~255 bytes |
+| Sumarse | Sin isla: unirse a la isla con lugar con más miembros; si no hay, fundar una |
+| Fusión | Un anfitrión solo se une a una isla vecina más grande, o a otra sola de id menor |
+| Ferry | Turnos de 60 s sobre la lista ordenada de miembros: el de turno va a la isla vecina, entrega y vuelve |
+| Puente fijo (futuro) | Miembro de su isla y cliente Wi-Fi común de la otra a la vez (concurrencia), con sockets atados a cada red |
+
+Implementación de referencia de las decisiones: `android/core/.../Islands.kt` (`Islands.decide`), con pruebas en
+`IslandsTest.kt`.
