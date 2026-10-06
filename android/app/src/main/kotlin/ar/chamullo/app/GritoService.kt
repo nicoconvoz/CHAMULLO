@@ -51,11 +51,16 @@ class GritoService : Service() {
         locator = Locator(this) { lat, lon -> Hub.post { it.locate(lat, lon) } }.also { it.start() }
         // The Internet bridge (Discovery & Routing §11): only if the owner lends it and there is a relé to talk to.
         val founder = Settings.founder(this)
-        val relayUrl = Settings.relay(this)
-        if (Settings.lendInternet(this) && relayUrl.isNotBlank()) {
-            relay = ar.chamullo.core.RelayBridge(relayUrl, identity, incoming).also { r -> r.start(); Hub.relay = r; Hub.worker.post { node.bridge = r } }
-            FieldLog.add("PUENTE", "presto Internet por el relé $relayUrl")
-        }
+        // Nobody types an address: the relay comes from CHAMULLO's page, and we keep looking until one answers.
+        if (Settings.lendInternet(this)) Thread {
+            while (running && relay == null) {
+                val url = RelayList.pick()
+                if (url != null) {
+                    relay = ar.chamullo.core.RelayBridge(url, identity, incoming).also { r -> r.start(); Hub.relay = r; Hub.worker.post { node.bridge = r } }
+                    FieldLog.add("PUENTE", "presto Internet por el relé de CHAMULLO")
+                } else runCatching { Thread.sleep(RELAY_RETRY_MS) }
+            }
+        }.apply { isDaemon = true }.start()
         running = true
         Hub.worker.post(object : Runnable {
             override fun run() {
@@ -153,5 +158,6 @@ class GritoService : Service() {
         const val ROAD_FRAME = 60_000
         const val HELLO_MS = 3_000L
         const val ROAD_IDLE_MS = 2 * 60_000L
+        const val RELAY_RETRY_MS = 10 * 60_000L
     }
 }

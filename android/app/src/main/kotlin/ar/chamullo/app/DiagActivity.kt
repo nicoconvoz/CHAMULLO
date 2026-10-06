@@ -8,7 +8,6 @@ import android.widget.TextView
 import android.content.Intent
 import ar.chamullo.app.Ui.button
 import ar.chamullo.app.Ui.card
-import ar.chamullo.app.Ui.input
 import ar.chamullo.app.Ui.logo
 import ar.chamullo.app.Ui.screen
 import ar.chamullo.app.Ui.text
@@ -43,10 +42,7 @@ class DiagActivity : Activity() {
             })
             addView(title("Puente por Internet"))
             addView(text("Donde las islas no llegan (un salto grande), tu Internet puede llevar la carta al otro lado. Usa tus datos: queda apagado si no lo prendés.", 13f, Ui.MUTED))
-            val relayField = input("Dirección del relé, por ejemplo http://mi-servidor:47475").apply { setText(Settings.relay(this@DiagActivity)) }
-            addView(relayField)
             addView(button(if (Settings.lendInternet(this@DiagActivity)) "Dejar de prestar Internet" else "Prestar Internet como puente", primary = false) {
-                Settings.setRelay(this@DiagActivity, relayField.text.toString())
                 Settings.setLendInternet(this@DiagActivity, !Settings.lendInternet(this@DiagActivity))
                 stopService(Intent(this@DiagActivity, GritoService::class.java))
                 startForegroundService(Intent(this@DiagActivity, GritoService::class.java))
@@ -75,7 +71,7 @@ class DiagActivity : Activity() {
             else "$founder\nPáginas: ${l.pages.size}\nRey: ${l.court().king?.toHex()?.take(8) ?: "—"}${if (l.court().nobles.isEmpty()) " (génesis)" else " · ${l.court().nobles.size} nobles"}\nMis Lucas: $lucas\nMi clave: $me"
         }
         val r = Hub.relay
-        bridgeInfo.text = if (r == null) "Apagado." else
+        bridgeInfo.text = if (r == null) (if (Settings.lendInternet(this)) "Buscando el relé de CHAMULLO…" else "Apagado.") else
             "Prestando Internet.\n  Llevé por Internet: ${r.sentBytes / 1024} KB\n  Último aviso: ${r.lastError ?: "ninguno"}"
         val radios = Hub.radios
         radioInfo.text = if (radios.isEmpty()) "El grito no está encendido." else radios.joinToString("\n\n") { r ->

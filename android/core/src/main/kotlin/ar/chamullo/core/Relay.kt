@@ -28,6 +28,13 @@ object Relay {
     fun verify(id: ByteArray, method: String, path: String, ts: Long, body: ByteArray, sig: ByteArray, now: Long): Boolean =
         kotlin.math.abs(now - ts) <= CLOCK_SKEW_MS && Identity.verify(id, "RELAY", signingBody(method, path, ts, body), sig)
 
+    /**
+     * The relays published on CHAMULLO's page (relays.txt): one address per line, http or https; comments (#), blanks,
+     * junk and repeats are skipped. Phones read it on their own: nobody types an address.
+     */
+    fun parseList(text: String): List<String> = text.lines().map { it.trim().trimEnd('/') }
+        .filter { it.startsWith("https://") || it.startsWith("http://") }.distinct()
+
     /** Mailbox contents: frames one after the other, each with its length first. */
     fun pack(frames: List<ByteArray>): ByteArray = Writer().apply { for (f in frames) varint(f.size.toLong()).raw(f) }.bytes()
 

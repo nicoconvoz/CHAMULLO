@@ -265,6 +265,6 @@ Un servidor chico (`android/relay`, `./gradlew :relay:run`, puerto 47475). No de
 " + ts + "
 " + H(cuerpo))`, en los encabezados `X-Chamullo-Id`, `X-Chamullo-Ts` y `X-Chamullo-Sig`. Vale ±5 min. Nadie lee el buzón de otro ni se anota en su nombre.
 - El relé guarda todo en memoria: si se reinicia, en un minuto los puentes se anotan de nuevo. Los buzones guardan hasta 500 tramas por hasta una hora.
-- **En la app:** Diagnóstico → "Puente por Internet". Dirección del relé y "Prestar Internet", apagado por defecto (son los datos del dueño). El cliente (`RelayBridge`) nunca bloquea al nodo: el directorio responde desde un caché que se refresca solo, y las tramas salen de una cola.
+- **En la app:** un solo botón, "Prestar Internet", apagado por defecto (son los datos del dueño). **Nadie escribe direcciones:** la app lee `relays.txt` de la página de CHAMULLO, igual que `version.txt`, y usa el primer relé que contesta. Si el proyecto muda su relé, cambia ese archivo y todos los celulares lo siguen sin actualizar la app. El cliente (`RelayBridge`) nunca bloquea al nodo: el directorio responde desde un caché que se refresca solo, y las tramas salen de una cola.
 - El puente cobra en **Lucas** por un servicio real: eso le da a la moneda su respaldo (Economy & Governance §13).
 
