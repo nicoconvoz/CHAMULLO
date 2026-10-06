@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "laboratorio-en-vivo",
+      "runtimeExecutable": "E:/Chamullo/android/gradlew.bat",
+      "runtimeArgs": ["-p", "E:/Chamullo/android", ":simulator:live", "--console=plain"],
+      "port": 8787
+    }
+  ]
+}

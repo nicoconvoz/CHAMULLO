@@ -29,3 +29,12 @@ tasks.test {
     useJUnitPlatform()
     testLogging { events("passed", "failed"); exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
 }
+
+// The lab, live: the twin serves the lab page at http://localhost:8787
+tasks.register<JavaExec>("live") {
+    group = "application"
+    description = "Runs the CHAMULLO lab live on the digital twin"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("ar.chamullo.sim.LiveKt")
+    args("8787")
+}

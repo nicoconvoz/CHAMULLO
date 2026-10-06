@@ -18,33 +18,16 @@ fun main() {
     out.appendLine("Generado por `android/simulator` (`./gradlew :simulator:run`). Corre **el núcleo real de la app** (Node, sobres, recibos, pagos, `Islands.decide`);")
     out.appendLine("lo simulado es la radio: alcance Wi-Fi 80 m, 3 s para sumarse a una isla, 30 ms por trama. Son números de diseño, no de campo.")
     out.appendLine()
-    for (s in scenarios()) out.append(run(s))
+    for (s in Scenarios.all) out.append(run(s))
     val file = File("../../docs/SIMULACION.md")
     file.writeText(out.toString())
     println(out)
     println("Informe escrito en ${file.canonicalPath}")
 }
 
-private class Village(val name: String, val cx: Double, val radius: Double, val phones: Int, val walkers: Int = 0)
-private class Scenario(val title: String, val story: String, val villages: List<Village>, val letters: Int, val minutes: Int, val crossOnly: Boolean = false)
-
-private fun scenarios() = listOf(
-    Scenario("Una plaza llena", "20 celulares en 60 m. Más de 7 no entran en una isla: se forman varias y se conectan por ferry.",
-        listOf(Village("Plaza", 0.0, 30.0, 20)), letters = 30, minutes = 12),
-    Scenario("Dos pueblos que se tocan por el borde", "Pueblos de 8 celulares, bordes a ~70 m. Las cartas cruzan solo con el ferry.",
-        listOf(Village("Norte", 0.0, 15.0, 8), Village("Sur", 100.0, 15.0, 8)), letters = 20, minutes = 15, crossOnly = true),
-    Scenario("Ruta de tres pueblos", "Norte y Sur no se ven: todo pasa por el pueblo del medio, y su gente cobra por escasez.",
-        listOf(Village("Norte", 0.0, 15.0, 6), Village("Medio", 95.0, 15.0, 4), Village("Sur", 190.0, 15.0, 6)), letters = 20, minutes = 20, crossOnly = true)
-)
-
 private fun run(s: Scenario): String {
-    val w = World(seed = 7)
     val r = Random(7)
-    for (v in s.villages) repeat(v.phones) { i ->
-        val a = r.nextDouble() * 2 * Math.PI; val d = sqrt(r.nextDouble()) * v.radius
-        w.addPhone("${v.name}-${i + 1}", v.cx + cos(a) * d, sin(a) * d, v.name, if (i < v.walkers) 1.2 else 0.0)
-    }
-    w.befriendAll()
+    val w = Scenarios.build(s, seed = 7)
     val t0 = System.currentTimeMillis()
     w.run(90_000) // islands form
     val formed = w.islands()

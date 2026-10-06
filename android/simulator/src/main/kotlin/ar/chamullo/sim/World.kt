@@ -57,6 +57,10 @@ class World(
     private val crossIsland = HashSet<String>()
     var ferryTrips = 0; private set
     private val carries = ArrayList<Carry>()
+    /** What is happening, newest last: for the live screen. */
+    val log = ArrayDeque<String>()
+    private fun say(msg: String) { log.addLast("${now / 1000}s · $msg"); while (log.size > 200) log.removeFirst() }
+    private val letterFrom = HashMap<String, Pair<String, String>>()
 
     /** A confirmed carry, with what the economy needs: who, for whom, and how many alternatives there were. */
     class Carry(val carrier: String, val origin: String, val destination: String, val alternatives: Int, val village: String)
@@ -75,6 +79,8 @@ class World(
         val a = phones.getValue(from); val b = phones.getValue(to)
         val id = a.node.send(b.identity.card(), text)
         sentAt[id] = now
+        letterFrom[id] = from to to
+        say("✉ $from le escribe a $to")
         if (a.island != b.island) crossIsland += id
         return id
     }
@@ -95,6 +101,22 @@ class World(
     fun islands(): Map<String, List<String>> = phones.values.filter { it.host }.associate { h -> h.id to (listOf(h.name) + members(h).map { it.name }) }
 
     fun membersOfSomeIsland(): List<String> = islands().values.maxBy { it.size }
+
+    /** A picture of the world right now, as JSON, for the live screen. */
+    fun snapshotJson(): String {
+        fun q(x: String) = "\"" + x.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        val r = report()
+        val nat = Economy.national(r.carries, nobles = 5)
+        val courts = Economy.courts(r.carries, nobles = 3)
+        val ph = phones.values.joinToString(",") { p ->
+            val hostName = p.island?.let { byId[it]?.name } ?: ""
+            "{\"n\":${q(p.name)},\"x\":${p.x},\"y\":${p.y},\"v\":${q(p.village)},\"i\":${q(hostName)},\"h\":${p.host},\"c\":${p.connected},\"f\":${p.ferryHome != null},\"k\":${p.node.candies},\"b\":${p.node.pocketCount()}}"
+        }
+        val court = courts.entries.joinToString(",") { (v, c) -> "{\"v\":${q(v)},\"king\":${q(c.king ?: "")},\"nobles\":[${c.nobles.joinToString(",") { q(it) }}]}" }
+        return "{\"t\":$now,\"range\":$wifiRangeM,\"phones\":[$ph],\"sent\":${r.sent},\"delivered\":${r.delivered},\"p50\":${r.latencyP50s},\"ferry\":${r.ferryTrips}," +
+            "\"candies\":${r.candies.values.sum()},\"king\":${q(nat.king ?: "")},\"nobles\":[${nat.nobles.joinToString(",") { q(it) }}],\"courts\":[$court]," +
+            "\"log\":[${log.toList().takeLast(40).reversed().joinToString(",") { q(it) }}]}"
+    }
 
     /** For probes: who each phone is, where it stands and which islands it can see. */
     fun debug(): List<String> = phones.values.map { p ->
@@ -132,9 +154,9 @@ class World(
         val roster = if (p.host) members(p).map { it.id.take(8) } else hostOf(p)?.let { h -> members(h).map { it.id.take(8) } } ?: emptyList()
         when (val a = Islands.decide(p.id, IslandState(p.island, p.host, roster, p.ferriedTurn), visible, now)) {
             IslandAction.Stay -> Unit
-            IslandAction.Host -> { p.host = true; p.island = p.id }
+            IslandAction.Host -> { p.host = true; p.island = p.id; say("🏝 ${p.name} funda una isla") }
             is IslandAction.Join -> connect(p, a.island, ferry = false)
-            is IslandAction.Ferry -> { p.ferryHome = p.island; p.ferriedTurn = Islands.turnOf(now); ferryTrips++; connect(p, a.island, ferry = true) }
+            is IslandAction.Ferry -> { p.ferryHome = p.island; p.ferriedTurn = Islands.turnOf(now); ferryTrips++; say("🚢 ${p.name} sale de ferry a la isla de ${byId[a.island]?.name}"); connect(p, a.island, ferry = true) }
         }
     }
 
@@ -181,8 +203,12 @@ class World(
 
     private fun collect(p: Phone, events: List<NodeEvent>) {
         for (e in events) when (e) {
+            is NodeEvent.CandyEarned -> say("🍬 ${p.name} cobró un caramelo (tiene ${e.total})")
             is NodeEvent.LetterReceived -> {
-                deliveredAt.putIfAbsent(e.msgId, now)
+                if (deliveredAt.putIfAbsent(e.msgId, now) == null) {
+                    val via = e.journey.mapNotNull { byId[it.take(16)]?.name }
+                    say("📬 llegó a ${p.name} la carta de ${e.from.name}" + if (via.isEmpty()) " (directo)" else " · la llevaron ${via.joinToString(" → ")}")
+                }
                 val origin = e.from.nodeId.toHex().take(16)
                 for (carrier in e.journey) {
                     val c = byId[carrier.take(16)] ?: continue

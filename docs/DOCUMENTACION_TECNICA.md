@@ -295,6 +295,14 @@ cd android
 
 Escribe el informe en [`docs/SIMULACION.md`](SIMULACION.md).
 
+**En vivo**, con la cara del laboratorio (`sim/lab.html`) y el gemelo como motor:
+
+```bash
+./gradlew :simulator:live
+```
+
+Abre `http://localhost:8787`: mapa de islas con su alcance Wi-Fi, caños, ferrys, caramelos, la Corte coronándose y el bus de eventos. Trae cuatro escenarios: plaza llena, dos pueblos, ruta de tres pueblos y pueblos con viajeros.
+
 | Escenario | Cartas | Hallazgo |
 |---|---|---|
 | Plaza llena (20) | 30/30 | Más de 7 no entran en una isla: se forman varias y el ferry las une |
