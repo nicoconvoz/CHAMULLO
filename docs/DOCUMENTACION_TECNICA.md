@@ -1,6 +1,6 @@
 # CHAMULLO — Documentación técnica
 
-Versión del documento: 8 · Estado del código: app 0.4.0 (octubre 2026)
+Versión del documento: 9 · Estado del código: app 0.4.1 (octubre 2026)
 
 > Este documento describe **lo que está construido y funcionando hoy**. El diseño completo de la red
 > (identidad, sobre, recibos, economía, routing, interfaz de aire) está en [`docs/specs/`](specs/). Cuando el
@@ -220,7 +220,8 @@ del otro, y se muestra un solo aviso por persona.
 - La app lee `version.txt` al abrirse, al volver y cada 30 min. Si hay una versión nueva, muestra un aviso y una notificación (una por versión) que llevan a la página.
 - Mismo criterio que ICEBREAK 0.10.13: **sin** `REQUEST_INSTALL_PACKAGES`.
 - Publicar: subir `versionCode` y `versionName` en `android/app/build.gradle.kts` y correr `scripts/publish-web.sh`.
-- Firma: por ahora, la clave de depuración local. Falta una clave de release propia.
+- Firma: clave propia RSA 4096 en `C:/Users/Nico/.android/chamullo-release.jks`. La contraseña está en `GRADLE_USER_HOME/gradle.properties` (`CHAMULLO_STORE_*`), **nunca en el repo**. Se usa con `CHAMULLO_RELEASE_KEY=true` (`android/gradle.properties`).
+- **Si se pierde el `.jks` no se pueden publicar más actualizaciones**: hay que guardar una copia de respaldo fuera de la PC.
 
 ## 11. Pruebas
 
@@ -249,6 +250,7 @@ La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo
 | 0.2.1 | Saludo de un solo grito; la carretera abre solo con un vecino estable | "Vecinos: 0": la carretera abierta de entrada le robaba antena al grito |
 | 0.2.2 | Varios megáfonos a la vez en chips viejos | Lo que gritaba un chip viejo llegaba "a veces": cada micro salía una vez o ninguna |
 | 0.2.3 | Una sola carretera por par de vecinos; pasajero ocupado; cierre de carreteras vacías; aviso de versión cada 30 min | El Capitán: "si uno abre, el otro se conecta; ¿para qué abrir las dos?" |
+| 0.4.1 | **Clave de firma propia** (`CN=CHAMULLO, O=nicoconvoz`) | Dejar la clave de depuración. Requiere desinstalar una vez y recuperar con las 16 palabras |
 | 0.4.0 | **Recibos con la semilla y caramelos**; ICEBREAK como servicio | Proof of Relay: cobrar solo lo que se puede probar |
 | 0.3.1 | Saludo secreto con firma en cada caño de la isla; bolsillos que sobreviven al reinicio | Intrusos con la llave del cartel; cartas perdidas al cerrar la app |
 | 0.3.0 | **Islas**: todo por Wi-Fi Direct, carteles, anfitrión que reparte, ferry que rota; Bluetooth de respaldo apagado por defecto; Wi-Fi Aware apagado | El Capitán: "¿para qué caminos si podemos trazarlos con la carretera?" |
@@ -323,7 +325,6 @@ Rediseño del Capitán después de las pruebas de campo: **el Bluetooth complica
 - [ ] Economía completa (spec 04): hoy los caramelos son un contador local verificado; falta la libreta de la Corte, la escasez y la diversidad.
 - [ ] Aceptación bilateral por salto (`ACCEPT`, spec 03 §5): con islas y eco, el registro de salto lo firma solo quien entrega.
 - [ ] Brújula entre islas lejanas (spec 05): dentro de una isla todo está a un salto; la brújula vuelve cuando haya varias islas en campo.
-- [ ] Clave de firma de release propia.
 - [ ] Rol del iPhone.
 
 ## 15. Próximo paso
