@@ -54,6 +54,18 @@ class GritoService : Service() {
         tunnel = DataTunnel(this, identity, islands).also { it.start(); Hub.tunnel = it }
         // Calls inside the island (Camino y Carretera §7). Both ride the same pipes: frames for one phone.
         Calls.attach(this, identity, islands)
+        // Wi-Fi off in the street: no island can live. A notice with the switch, and the screens redraw.
+        islands.onWifi = { on ->
+            if (on) runCatching { getSystemService(NotificationManager::class.java).cancel(ID_WIFI) }
+            else {
+                val panel = if (Build.VERSION.SDK_INT >= 29) Intent(android.provider.Settings.Panel.ACTION_WIFI) else Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)
+                val pi = PendingIntent.getActivity(this, ID_WIFI, panel, PendingIntent.FLAG_IMMUTABLE)
+                notify(ID_WIFI, Notification.Builder(this, CH_MSG).setSmallIcon(R.drawable.ic_launcher_fg)
+                    .setContentTitle("📶 Prendé el Wi-Fi para CHAMULLO").setContentText("Sin Wi-Fi no hay islas. No hace falta conectarse a ninguna red.")
+                    .setContentIntent(pi).setAutoCancel(true).build())
+            }
+            Hub.emit(null)
+        }
         islands.onDirect = { m ->
             when (m) {
                 is ar.chamullo.core.TunnelMsg -> runCatching { tunnel?.onMsg(m) }
@@ -180,6 +192,7 @@ class GritoService : Service() {
         const val ID_RUN = 1
         const val ID_CARD = 2
         const val ID_UPDATE = 3
+        const val ID_WIFI = 4
         const val TICK_MS = 200L
         const val ROAD_FRAME = 60_000
         const val HELLO_MS = 3_000L

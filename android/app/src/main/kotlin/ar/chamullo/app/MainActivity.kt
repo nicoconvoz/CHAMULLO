@@ -109,6 +109,7 @@ class MainActivity : Activity() {
             val unread = s.chats.entries.sumOf { (id, msgs) -> msgs.count { !it.mine && it.ts > Settings.seenAt(this, id) } }
             drawBar(unread)
             page.removeAllViews()
+            wifiWarning()
             when (current) {
                 0 -> contactsTab(s)
                 1 -> chatsTab(s)
@@ -117,6 +118,17 @@ class MainActivity : Activity() {
                 else -> configTab(s)
             }
         }
+    }
+
+    // Islands are CHAMULLO's own Wi-Fi network: they need the Wi-Fi on, not connected to anything. Android 10+ does not
+    // let an app turn it on, so the warning opens the system switch in one tap.
+    private fun wifiWarning() {
+        if (getSystemService(android.net.wifi.WifiManager::class.java)?.isWifiEnabled != false) return
+        page.addView(card {
+            addView(text("📶 Prendé el Wi-Fi", 17f, Ui.RED, bold = true))
+            addView(text("CHAMULLO arma su propia red Wi-Fi con los celulares de alrededor, sin router ni Internet. Solo necesita el Wi-Fi prendido: no hace falta conectarse a ninguna red.", 13f, Ui.MUTED))
+            addView(button("Prender Wi-Fi") { openWifiSwitch(this@MainActivity) })
+        })
     }
 
     private class Snapshot(
@@ -336,6 +348,12 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        /** The system's Wi-Fi switch: a panel over the app on Android 10+, the Wi-Fi settings before. */
+        fun openWifiSwitch(c: android.content.Context) {
+            val panel = if (android.os.Build.VERSION.SDK_INT >= 29) Intent(android.provider.Settings.Panel.ACTION_WIFI) else Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)
+            runCatching { c.startActivity(panel.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }
+
         const val ICEBREAK_URL = "https://nicoconvoz.github.io/icebreak-web/"
         const val ICEBREAK_APK = "https://nicoconvoz.github.io/icebreak-web/android.html"
         private const val REQ_PERMS = 7

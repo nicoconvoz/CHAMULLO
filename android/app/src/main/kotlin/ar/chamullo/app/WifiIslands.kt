@@ -96,6 +96,10 @@ class WifiIslands(
     @Volatile var stuck: Zone? = null
     /** Frames for one phone (the data tunnel, calls) addressed to me or to everyone (Discovery & Routing §11.3, Camino y Carretera §7). */
     var onDirect: (ar.chamullo.core.Addressed) -> Unit = {}
+    /** The Wi-Fi switch is off: islands need the Wi-Fi on (not connected to anything), and Android 10+ apps cannot turn it on. */
+    @Volatile var wifiOff = false; private set
+    /** Tells the service when the Wi-Fi goes off (false) or comes back (true). */
+    var onWifi: (Boolean) -> Unit = {}
     /** Tells the node a ferry heading (boarding) or that it arrived (null). */
     var onHeading: (Zone?) -> Unit = {}
 
@@ -119,6 +123,7 @@ class WifiIslands(
             channel = p2p!!.initialize(context, Looper.getMainLooper(), null)
             context.registerReceiver(connectionReceiver, IntentFilter(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION))
             context.registerReceiver(scanReceiver, IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION))
+            context.registerReceiver(stateReceiver, IntentFilter(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)) // sticky: says the state now
             p2p.setDnsSdResponseListeners(channel, { _, _, _ -> }, { _, record, _ ->
                 Cartel.fromTxt(record)?.takeIf { it.nodeId != me }?.let { c ->
                     val fresh = c.nodeId !in carteles
@@ -131,6 +136,26 @@ class WifiIslands(
             handler.postDelayed(discoverLoop, 500)
             handler.postDelayed(decideLoop, DECIDE_MS)
             FieldLog.add("ISLA", "buscando islas por Wi-Fi Direct")
+        }
+    }
+
+    // Wi-Fi off: no island can live. Say so at once and start over the moment it comes back, instead of a minute later.
+    private val stateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, i: Intent?) {
+            val on = i?.getIntExtra(WifiP2pManager.EXTRA_WIFI_STATE, WifiP2pManager.WIFI_P2P_STATE_ENABLED) == WifiP2pManager.WIFI_P2P_STATE_ENABLED
+            if (on == !wifiOff) return
+            wifiOff = !on
+            if (!on) {
+                FieldLog.add("ISLA", "el Wi-Fi se apagó: sin Wi-Fi no hay islas")
+                lastError = "el Wi-Fi está apagado: prendelo (no hace falta conectarse a ninguna red)"
+                closeLinks(); unbridge(); island = null; host = false; busy = false; carteles.clear(); members.clear(); ferrying = null
+            } else {
+                FieldLog.add("ISLA", "volvió el Wi-Fi: busco islas")
+                lastError = null
+                publishCartel()
+                handler.post(discoverLoop)
+            }
+            onWifi(on)
         }
     }
 
@@ -156,7 +181,7 @@ class WifiIslands(
         override fun run() {
             if (!running) return
             handler.removeCallbacks(this)
-            search(attempt = 0)
+            if (!wifiOff) search(attempt = 0)
             runCatching { @Suppress("DEPRECATION") wifi?.startScan() } // Android may throttle it; results also come from its own scans
             readScan()
             handler.postDelayed(this, DISCOVER_MS)
@@ -230,7 +255,7 @@ class WifiIslands(
             if (!running) return
             val now = System.currentTimeMillis()
             carteles.values.removeAll { now - it.second > CARTEL_TTL_MS }
-            if (!busy && ferrying == null) {
+            if (!busy && ferrying == null && !wifiOff) {
                 readScan()
                 val a = Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn, bridgingTo, canBridge),
                     carteles.values.map { it.first }, now, myCell, stuck)
@@ -440,6 +465,7 @@ class WifiIslands(
         handler.removeCallbacks(discoverLoop); handler.removeCallbacks(decideLoop)
         runCatching { context.unregisterReceiver(connectionReceiver) }
         runCatching { context.unregisterReceiver(scanReceiver) }
+        runCatching { context.unregisterReceiver(stateReceiver) }
         closeLinks()
         runCatching { server?.close() }; server = null
         channel?.let { ch -> runCatching { p2p?.removeGroup(ch, null) }; publishedService?.let { runCatching { p2p?.removeLocalService(ch, it, null) } } }

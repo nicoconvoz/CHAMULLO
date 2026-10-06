@@ -106,6 +106,14 @@ Con la depuración USB del Moto E7 Plus del Capitán (Android 10), Android lo di
 - **Arreglo:** el servicio declara el tipo `location` además de `connectedDevice` (manifiesto, `FOREGROUND_SERVICE_LOCATION` y `startForeground`). Así conserva la ubicación "mientras se usa" estando de fondo.
 - **Comprobado en el celular:** de fondo, sin rechazos de permiso, con la búsqueda corriendo (`mDiscoveryStarted true`) y la isla en pie.
 
+### 6.6 En la calle: la red propia necesita el Wi-Fi prendido (0.8.1)
+
+Una isla **es** la red propia de CHAMULLO: un grupo Wi-Fi Direct (`DIRECT-CH-xxxxxx`) que arma un celular, sin router ni Internet. No hace falta estar conectado a ningún Wi-Fi, pero sí tener **el Wi-Fi prendido**. En la calle mucha gente lo apaga, y Android 10+ no deja que una app lo prenda sola.
+
+- La isla escucha el estado del Wi-Fi Direct (`WIFI_P2P_STATE_CHANGED`, que además dice el estado actual al arrancar).
+- **Se apaga:** cierra los caños y el puente fijo, se olvida de la isla y de los carteles, y no busca ni decide. Avisa con una notificación que abre el interruptor del sistema, y la app muestra arriba de todo una tarjeta roja con el botón **"Prender Wi-Fi"**: en Android 10+, el panel de Wi-Fi sobre la app, en un toque.
+- **Vuelve:** cuelga el cartel y busca islas en el acto, sin esperar el minuto de la búsqueda.
+
 ## 7. Llamadas y videollamadas en la isla (0.8.0)
 
 Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en celular. Por eso anda **solo dentro de la isla** (o por un puente fijo), donde todo está a uno o dos saltos por Wi-Fi Direct.
