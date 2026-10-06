@@ -2,9 +2,11 @@ package ar.chamullo.core
 
 sealed interface NodeEvent {
     data class CardReceived(val card: Card) : NodeEvent
-    data class LetterReceived(val from: Card, val text: String, val msgId: String) : NodeEvent
+    data class LetterReceived(val from: Card, val text: String, val msgId: String, val journey: List<String> = emptyList(), val service: String = "chat") : NodeEvent
     data class Delivered(val msgId: String) : NodeEvent
     data object NeighborsChanged : NodeEvent
+    /** A letter I carried was confirmed: one more candy. */
+    data class CandyEarned(val total: Int) : NodeEvent
     data class PlazaReceived(val id: String, val name: String, val text: String) : NodeEvent
     data class PlazaHeard(val id: String, val name: String) : NodeEvent
     /** A neighbor handed me the key of its Wi-Fi road (la carretera). */
@@ -58,6 +60,12 @@ class Node(
     private val plazaRetries = LinkedHashMap<String, Retry>()
     private val cardRetries = LinkedHashMap<String, Retry>()
     private var road: Road? = null
+    // Receipts and candies (Proof of Relay): what I carried, what I sent, and the payments already seen.
+    private class Carried(val src: ByteArray, val commit: ByteArray, val myRecord: ByteArray)
+    private val carried = LinkedHashMap<String, Carried>()
+    private val sent = LinkedHashMap<String, Sealed>()
+    private val paymentsSeen = LinkedHashSet<String>()
+    var candies = store.loadCandies(); private set
     private val nearby = LinkedHashMap<String, Nearby>()
     private val roadInvitedAt = HashMap<String, Long>()
     private var riding = false
@@ -141,9 +149,12 @@ class Node(
         enqueue(frame)
     }
 
-    fun send(to: Card, text: String, maxHops: Int = 8): String {
-        val env = Envelope.letter(identity, to, Letter.Text(text), clock(), maxHops = maxHops)
+    fun send(to: Card, text: String, maxHops: Int = 8, service: String = "chat"): String {
+        val sealed = Envelope.seal(identity, to, Letter.Text(text, service), clock(), maxHops = maxHops)
+        val env = sealed.envelope
         val id = env.msgId.toHex()
+        sent[id] = sealed
+        while (sent.size > 500) sent.remove(sent.keys.first())
         seen += id
         store.saveMessage(Message(to.nodeId.toHex(), true, text, clock(), id, MessageState.SENT))
         pockets[id] = Pocket(env) // the sender keeps its own letter until it is confirmed
@@ -176,6 +187,7 @@ class Node(
             is Plaza -> onPlaza(p)
             is Heard -> onHeard(p)
             is RoadInvite -> onRoadInvite(p)
+            is Payment -> onPayment(p)
             else -> emptyList()
         }
     }
@@ -195,6 +207,19 @@ class Node(
         keepPlaza(PlazaEntry(p.id, p.name, p.text, p.ts, false))
         enqueue(Heard.of(identity, p.id, clock()).encode())
         return listOf(NodeEvent.PlazaReceived(p.id, p.name, p.text))
+    }
+
+    // A payment: if my record is in the journey the origin confirmed, I earn a candy. Then it keeps spreading.
+    private fun onPayment(p: Payment): List<NodeEvent> {
+        val id = p.msgId.toHex()
+        if (!paymentsSeen.add(id)) return emptyList()
+        while (paymentsSeen.size > 4000) paymentsSeen.remove(paymentsSeen.first())
+        if (p.ttl > 1) enqueue(p.withTtl(p.ttl - 1).encode())
+        val c = carried.remove(id) ?: return emptyList()
+        if (!c.src.contentEquals(p.src) || !p.proves(c.commit) || p.journey.none { it.contentEquals(c.myRecord) }) return emptyList()
+        candies++
+        store.saveCandies(candies)
+        return listOf(NodeEvent.CandyEarned(candies))
     }
 
     private fun onRoadInvite(i: RoadInvite): List<NodeEvent> {
@@ -232,19 +257,29 @@ class Node(
                 is Letter.Text -> {
                     val from = store.contact(opened.sender) ?: Card(opened.sender, ByteArray(32), ByteArray(32), "Desconocido", 0, ByteArray(64))
                     store.saveMessage(Message(opened.sender.toHex(), false, body.text, opened.ts, id, MessageState.RECEIVED))
-                    store.contact(opened.sender)?.let { enqueue(Envelope.letter(identity, it, Letter.Ack(env.msgId), now).encode()) }
-                    listOf(NodeEvent.LetterReceived(from, body.text, id))
+                    // The journey: who carried it, read with the key that came inside. The receipt carries only hashes.
+                    val hops = opened.journeySecret?.let { env.journey(it) } ?: emptyList()
+                    val receipt = Letter.Ack(env.msgId, env.blobs.map { Crypto.hash(it) }, opened.deliverySecret ?: ByteArray(0))
+                    store.contact(opened.sender)?.let { enqueue(Envelope.letter(identity, it, receipt, now).encode()) }
+                    listOf(NodeEvent.LetterReceived(from, body.text, id, hops.filter { it.valid }.map { it.giver.toHex() }, body.service))
                 }
                 is Letter.Ack -> {
                     val acked = body.msgId.toHex()
                     if (pockets.remove(acked) != null) savePockets()
                     store.setState(acked, MessageState.DELIVERED)
+                    // The origin checks the receipt with the secret only the reader could know, signs it and pays the carriers.
+                    sent.remove(acked)?.takeIf { it.deliverySecret.contentEquals(body.revealed) && body.journey.isNotEmpty() }?.let {
+                        val pay = Payment.confirm(it, body.journey, body.revealed)
+                        paymentsSeen += acked
+                        enqueue(pay.encode())
+                    }
                     listOf(NodeEvent.Delivered(acked))
                 }
             }
         }
         if (env.hopCount < env.maxHops) {
-            val next = env.withHop()
+            val next = env.withHop(identity, now)
+            next.deliveryCommit?.let { carried[id] = Carried(env.src, it, Crypto.hash(next.blobs.last())); while (carried.size > 2000) carried.remove(carried.keys.first()) }
             pockets[id] = Pocket(next)
             savePockets()
             enqueue(next.encode())

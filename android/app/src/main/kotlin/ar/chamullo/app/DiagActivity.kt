@@ -75,7 +75,7 @@ class DiagActivity : Activity() {
         }
         Hub.ask({ n -> Triple(n.neighbors().map { "${it.name.ifBlank { "?" }} (${if (it.coded) "largo" else "normal"}, hace ${(System.currentTimeMillis() - it.lastSeen) / 1000}s)" }, n.pocketCount(), n.shoutsSent) }) { (near, pockets, sent) ->
             logView.text = FieldLog.last(25).reversed().joinToString("\n")
-            nodeInfo.text = (listOf(helloInfo, "Vecinos con latido firmado: ${near.size}") + near.map { "  · $it" } + listOf("Cartas en el bolsillo: $pockets", "Tramas que preparó el nodo: $sent (salen solo con la radio encendida)")).joinToString("\n")
+            nodeInfo.text = (listOf("Caramelos: ${Hub.node?.candies ?: 0}", helloInfo, "Vecinos con latido firmado: ${near.size}") + near.map { "  · $it" } + listOf("Cartas en el bolsillo: $pockets", "Tramas que preparó el nodo: $sent (salen solo con la radio encendida)")).joinToString("\n")
         }
     }
 

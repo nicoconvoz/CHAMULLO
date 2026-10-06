@@ -288,6 +288,7 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit, pri
             is CardOffer -> "tarjeta"
             is Envelope -> "carta cifrada"
             is ar.chamullo.core.RoadInvite -> "llave de carretera"
+            is ar.chamullo.core.Payment -> "pago de caramelos"
             null -> if (frame.size > 3 && frame[3].toInt() == Packet.KIND_FRAGMENT) "trozo de carta" else "desconocido"
         }
         const val RESCAN_MS = 10 * 60_000L

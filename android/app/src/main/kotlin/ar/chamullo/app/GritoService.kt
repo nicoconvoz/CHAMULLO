@@ -83,11 +83,12 @@ class GritoService : Service() {
             }
             FieldLog.add("NODO", when (event) {
                 is NodeEvent.CardReceived -> "tarjeta de ${event.card.name}"
-                is NodeEvent.LetterReceived -> "carta de ${event.from.name}"
+                is NodeEvent.LetterReceived -> "carta de ${event.from.name} (${event.journey.size} carteros en el camino)"
                 is NodeEvent.Delivered -> "✓✓ entregada"
                 is NodeEvent.PlazaReceived -> "plaza de ${event.name}: ${event.text.take(30)}"
                 is NodeEvent.PlazaHeard -> "${event.name} escuchó mi plaza"
                 NodeEvent.NeighborsChanged -> "vecino nuevo"
+                is NodeEvent.CandyEarned -> "🍬 confirmaron una carta que llevé: ya tengo ${event.total} caramelos"
                 is NodeEvent.RoadInvited -> "${event.name.ifBlank { "un vecino" }} me dio la llave de su carretera ${event.ssid}"
             })
             Hub.emit(event)

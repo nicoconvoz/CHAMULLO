@@ -15,6 +15,7 @@ sealed interface Packet {
         const val LINK_PLAZA = 12L
         const val LINK_HEARD = 13L
         const val LINK_ROAD_INVITE = 14L
+        const val LINK_PAYMENT = 15L
 
         fun isChamullo(b: ByteArray) = b.size >= 4 && b[0] == MAGIC[0] && b[1] == MAGIC[1] && b[2].toInt() == VERSION
 
@@ -32,6 +33,7 @@ sealed interface Packet {
                         LINK_PLAZA -> Plaza.decode(tlv)
                         LINK_HEARD -> Heard.decode(tlv)
                         LINK_ROAD_INVITE -> RoadInvite.decode(tlv)
+                        LINK_PAYMENT -> Payment.decode(tlv)
                         else -> throw WireException("unknown link message $type")
                     }
                 }
@@ -126,11 +128,20 @@ class CardOffer(val from: ByteArray, val to: ByteArray, val fromBox: ByteArray, 
 /* ======================= the letter inside the envelope ======================= */
 
 sealed interface Letter {
-    data class Text(val text: String) : Letter
-    class Ack(val msgId: ByteArray) : Letter
+    /** [service] says which service on the network the letter belongs to: "chat" for now, ICEBREAK and others later. */
+    data class Text(val text: String, val service: String = "chat") : Letter
+    /** The receipt (Proof of Relay §6): which letter, the hashes of its journey and the secret only its reader knew. */
+    class Ack(val msgId: ByteArray, val journey: List<ByteArray> = emptyList(), val revealed: ByteArray = ByteArray(0)) : Letter
 }
 
-class Opened(val sender: ByteArray, val ts: Long, val body: Letter)
+/** What the recipient finds inside: the real sender, the letter, and the keys to read its journey and prove the delivery. */
+class Opened(val sender: ByteArray, val ts: Long, val body: Letter, val journeySecret: ByteArray?, val deliverySecret: ByteArray?)
+
+/** A letter just sealed, with the secrets only its origin keeps: to sign the confirmation and check the receipt. */
+class Sealed(val envelope: Envelope, val ephemeralSeed: ByteArray, val deliverySecret: ByteArray)
+
+/** One carrier in the journey, as the recipient reads it. */
+class Hop(val giver: ByteArray, val valid: Boolean)
 
 /* ======================= the envelope (Packet Format §5, Discovery & Routing §7) ======================= */
 
@@ -141,17 +152,55 @@ class Envelope(
     val msgId: ByteArray get() = Crypto.hash(src + nonce)
     private val origin: Map<Long, ByteArray> by lazy { Tlv.decode(originTlv) }
     val maxHops: Int get() = (origin[4]?.firstOrNull()?.toInt() ?: 0) and 0xff
+    val journeyKey: ByteArray? get() = origin[8]
+    val deliveryCommit: ByteArray? get() = origin[10]
+
+    /** The sealed hop records carriers appended in transit (Proof of Relay §4.3). */
+    val blobs: List<ByteArray> by lazy {
+        val raw = Tlv.decode(transitTlv)[2] ?: return@lazy emptyList()
+        val r = Reader(raw); buildList { while (r.remaining > 0) add(r.take(r.varint().toInt())) }
+    }
+
+    // The seed (Capitán's idea): it changes with every carrier's sealed record.
+    private fun seedAfter(n: Int): ByteArray {
+        var s = Crypto.hash("CHAMULLO/1/SEED".toByteArray() + 0.toByte() + msgId + sig)
+        for (b in blobs.take(n)) s = Crypto.hash(s + Crypto.hash(b))
+        return s
+    }
 
     private fun body() = Writer().u8(Packet.VERSION).u8(Packet.KIND_ENVELOPE).raw(src).raw(dstTag).raw(nonce).u64(ts).u64(exp)
         .varint(originTlv.size.toLong()).raw(originTlv).bytes()
 
-    fun verify(): Boolean = runCatching { Tlv.requireKnown(origin, setOf(2, 4, 6)) }.isSuccess && Identity.verify(src, "ENV", body(), sig)
+    fun verify(): Boolean = runCatching { Tlv.requireKnown(origin, setOf(2, 4, 6, 8, 10)) }.isSuccess && Identity.verify(src, "ENV", body(), sig)
 
     fun expired(now: Long) = now > exp
 
     fun isFor(me: Identity) = dstTag.contentEquals(tagFor(me.tagSecret, nonce))
 
     fun withHop() = Envelope(src, dstTag, nonce, ts, exp, originTlv, sig, hopCount + 1, transitTlv)
+
+    /** A carrier passes the letter on and leaves its record, sealed with the journey key: only origin and recipient read it. */
+    fun withHop(carrier: Identity, now: Long): Envelope {
+        val jPub = journeyKey ?: return withHop()
+        val i = blobs.size
+        val body = msgId + Tlv.u64(i.toLong()) + seedAfter(i) + carrier.nodeId + Tlv.u64(now)
+        val record = Tlv.encode(listOf(2L to carrier.nodeId, 4L to Tlv.u64(i.toLong()), 6L to Tlv.u64(now), 8L to carrier.sign("HOP", body)))
+        val e = Crypto.randomBytes(32); val n = Crypto.randomBytes(24)
+        val blob = Crypto.boxPublicKey(e) + n + Crypto.box(record, n, jPub, e)
+        val list = Writer().apply { for (b in blobs + listOf(blob)) varint(b.size.toLong()).raw(b) }.bytes()
+        return Envelope(src, dstTag, nonce, ts, exp, originTlv, sig, hopCount + 1, Tlv.encode(listOf(2L to list)))
+    }
+
+    /** Reads the journey with the key found inside the letter: every carrier, in order, and whether its record holds. */
+    fun journey(journeySecret: ByteArray): List<Hop> = blobs.mapIndexed { i, blob ->
+        runCatching {
+            val rec = Tlv.decode(Crypto.boxOpen(blob.copyOfRange(56, blob.size), blob.copyOfRange(32, 56), blob.copyOfRange(0, 32), journeySecret)!!)
+            val giver = rec.getValue(2)
+            val ok = Tlv.readU64(rec.getValue(4)) == i.toLong() &&
+                Identity.verify(giver, "HOP", msgId + Tlv.u64(i.toLong()) + seedAfter(i) + giver + rec.getValue(6), rec.getValue(8))
+            Hop(giver, ok)
+        }.getOrElse { Hop(ByteArray(0), false) }
+    }
 
     override fun encode(): ByteArray = Writer().raw(Packet.MAGIC).u8(Packet.VERSION).u8(Packet.KIND_ENVELOPE)
         .raw(src).raw(dstTag).raw(nonce).u64(ts).u64(exp).varint(originTlv.size.toLong()).raw(originTlv).raw(sig)
@@ -162,12 +211,13 @@ class Envelope(
         val r = Reader(origin.getValue(6))
         val ephBox = r.take(32); val boxNonce = r.take(24)
         val inner = Tlv.decode(Crypto.boxOpen(r.rest(), boxNonce, ephBox, me.boxSecret) ?: return null)
-        Tlv.requireKnown(inner, setOf(2, 4, 6, 8, 12))
+        Tlv.requireKnown(inner, setOf(2, 4, 6, 8, 12, 14, 16, 18, 20))
         val sender = inner.getValue(2); val sentTs = Tlv.readU64(inner.getValue(4))
-        val body: Letter = inner[6]?.let { Letter.Text(String(it)) } ?: Letter.Ack(inner.getValue(12))
-        val content = inner[6] ?: inner.getValue(12)
-        if (!Identity.verify(sender, "MSG", msgId + Tlv.u64(sentTs) + content, inner.getValue(8))) return null
-        Opened(sender, sentTs, body)
+        val service = inner[19]?.let { String(it) } ?: "chat"
+        val body: Letter = inner[6]?.let { Letter.Text(String(it), service) }
+            ?: Letter.Ack(inner.getValue(12), (inner[18] ?: ByteArray(0)).toList().chunked(32) { it.toByteArray() }, inner[20] ?: ByteArray(0))
+        if (!Identity.verify(sender, "MSG", msgId + Tlv.u64(sentTs) + content(body), inner.getValue(8))) return null
+        Opened(sender, sentTs, body, inner[14], inner[16])
     }.getOrNull()
 
     companion object {
@@ -175,26 +225,45 @@ class Envelope(
 
         fun tagFor(tagSecret: ByteArray, nonce: ByteArray) = Crypto.hash("CHAMULLO/1/TAG".toByteArray() + 0.toByte() + tagSecret + nonce)
 
-        fun letter(sender: Identity, to: Card, body: Letter, now: Long, ttlMs: Long = 6 * 3600_000L, maxHops: Int = 8): Envelope {
+        // What the sender signs: the text and service, or the whole receipt.
+        internal fun content(body: Letter): ByteArray = when (body) {
+            is Letter.Text -> body.text.toByteArray() + 0.toByte() + body.service.toByteArray()
+            is Letter.Ack -> body.msgId + body.journey.fold(ByteArray(0)) { a, h -> a + h } + body.revealed
+        }
+
+        fun letter(sender: Identity, to: Card, body: Letter, now: Long, ttlMs: Long = 6 * 3600_000L, maxHops: Int = 8): Envelope =
+            seal(sender, to, body, now, ttlMs, maxHops).envelope
+
+        /** Seals a letter with a journey key and a delivery secret (Proof of Relay §4.1); the origin keeps the secrets. */
+        fun seal(sender: Identity, to: Card, body: Letter, now: Long, ttlMs: Long = 6 * 3600_000L, maxHops: Int = 8): Sealed {
             val eph = Crypto.randomBytes(32)
             val src = Crypto.signPublicKey(eph)
             val nonce = Crypto.randomBytes(16)
             val msgId = Crypto.hash(src + nonce)
-            val content = when (body) { is Letter.Text -> body.text.toByteArray(); is Letter.Ack -> body.msgId }
+            val journeySecret = Crypto.randomBytes(32)
+            val deliverySecret = Crypto.randomBytes(32)
             val inner = Tlv.encode(
                 listOfNotNull(
                     2L to sender.nodeId, 4L to Tlv.u64(now),
-                    (body as? Letter.Text)?.let { 6L to content },
-                    8L to sender.sign("MSG", msgId + Tlv.u64(now) + content),
-                    (body as? Letter.Ack)?.let { 12L to content }
+                    (body as? Letter.Text)?.let { 6L to it.text.toByteArray() },
+                    8L to sender.sign("MSG", msgId + Tlv.u64(now) + content(body)),
+                    (body as? Letter.Ack)?.let { 12L to it.msgId },
+                    14L to journeySecret, 16L to deliverySecret,
+                    (body as? Letter.Ack)?.let { 18L to it.journey.fold(ByteArray(0)) { a, h -> a + h } },
+                    (body as? Letter.Text)?.service?.takeIf { it != "chat" }?.let { 19L to it.toByteArray() },
+                    (body as? Letter.Ack)?.let { 20L to it.revealed }
                 )
             )
             val ephBoxSecret = Crypto.randomBytes(32)
             val boxNonce = Crypto.randomBytes(24)
             val payload = Crypto.boxPublicKey(ephBoxSecret) + boxNonce + Crypto.box(inner, boxNonce, to.boxPublic, ephBoxSecret)
-            val originTlv = Tlv.encode(listOf(2L to Writer().varint(SEALED).bytes(), 4L to byteArrayOf(maxHops.toByte()), 6L to payload))
+            val originTlv = Tlv.encode(listOf(
+                2L to Writer().varint(SEALED).bytes(), 4L to byteArrayOf(maxHops.toByte()), 6L to payload,
+                8L to Crypto.boxPublicKey(journeySecret), 10L to Crypto.hash(deliverySecret)
+            ))
             val unsigned = Envelope(src, tagFor(to.tagSecret, nonce), nonce, now, now + ttlMs, originTlv, ByteArray(64), 0)
-            return Envelope(unsigned.src, unsigned.dstTag, nonce, now, now + ttlMs, originTlv, Crypto.sign(eph, Identity.signingInput("ENV", unsigned.body())), 0)
+            val env = Envelope(unsigned.src, unsigned.dstTag, nonce, now, now + ttlMs, originTlv, Crypto.sign(eph, Identity.signingInput("ENV", unsigned.body())), 0)
+            return Sealed(env, eph, deliverySecret)
         }
 
         fun decode(r: Reader): Envelope {
@@ -288,6 +357,42 @@ class RoadInvite(val from: ByteArray, val to: ByteArray, val fromBox: ByteArray,
         fun decode(t: Map<Long, ByteArray>): RoadInvite {
             Tlv.requireKnown(t, setOf(2, 4, 6, 8, 10))
             return RoadInvite(t.getValue(2), t.getValue(4), t.getValue(6), t.getValue(8), t.getValue(10))
+        }
+    }
+}
+
+/* ======================= the payment: the origin confirms the journey, every carrier checks its own record ======================= */
+
+/**
+ * Proof of Relay §6–7: the recipient revealed the delivery secret and the hashes of the journey; the origin checked
+ * them and signs the confirmation with the same ephemeral key that sealed the letter. It floods the payment; each
+ * carrier that finds the hash of its own record in the journey earns a candy. Nobody needs to see the whole route.
+ */
+class Payment(val msgId: ByteArray, val src: ByteArray, val journey: List<ByteArray>, val revealed: ByteArray, val confirm: ByteArray, val ttl: Int) : Packet {
+    fun journeyHash() = Crypto.hash("CHAMULLO/1/JRNY".toByteArray() + 0.toByte() + msgId + journey.fold(ByteArray(0)) { a, h -> a + h })
+
+    /** True if [deliveryCommit] (from the letter I carried) matches the revealed secret and the origin signed this journey. */
+    fun proves(deliveryCommit: ByteArray) =
+        Crypto.hash(revealed).contentEquals(deliveryCommit) && Identity.verify(src, "CONF", msgId + journeyHash(), confirm)
+
+    fun withTtl(t: Int) = Payment(msgId, src, journey, revealed, confirm, t)
+
+    override fun encode() = Packet.link(Packet.LINK_PAYMENT, listOf(
+        2L to msgId, 4L to src, 6L to journey.fold(ByteArray(0)) { a, h -> a + h }, 8L to revealed, 10L to confirm, 11L to byteArrayOf(ttl.toByte())
+    ))
+
+    companion object {
+        fun confirm(sealed: Sealed, journey: List<ByteArray>, revealed: ByteArray, ttl: Int = 8): Payment {
+            val env = sealed.envelope
+            val unsigned = Payment(env.msgId, env.src, journey, revealed, ByteArray(64), ttl)
+            val sig = Crypto.sign(sealed.ephemeralSeed, Identity.signingInput("CONF", env.msgId + unsigned.journeyHash()))
+            return Payment(env.msgId, env.src, journey, revealed, sig, ttl)
+        }
+
+        fun decode(t: Map<Long, ByteArray>): Payment {
+            Tlv.requireKnown(t, setOf(2, 4, 6, 8, 10))
+            return Payment(t.getValue(2), t.getValue(4), t.getValue(6).toList().chunked(32) { it.toByteArray() }, t.getValue(8), t.getValue(10),
+                (t[11]?.firstOrNull()?.toInt() ?: 0) and 0xff)
         }
     }
 }

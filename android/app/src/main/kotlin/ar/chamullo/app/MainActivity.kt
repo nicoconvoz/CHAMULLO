@@ -24,6 +24,7 @@ import ar.chamullo.core.toHex
 
 class MainActivity : Activity() {
     private lateinit var status: android.widget.TextView
+    private lateinit var candies: android.widget.TextView
     private lateinit var nearby: LinearLayout
     private lateinit var contacts: LinearLayout
     private lateinit var update: LinearLayout
@@ -40,17 +41,21 @@ class MainActivity : Activity() {
             addView(card {
                 addView(text(vault.name(), 18f, bold = true))
                 addView(text("id " + (vault.identity()?.nodeId?.toHex()?.take(8) ?: "—"), 13f, Ui.MUTED))
+                candies = text("", 14f, Ui.GREEN, bold = true)
+                addView(candies)
                 status = text("Encendiendo el grito…", 14f, Ui.MUTED)
                 addView(status)
             })
-            addView(button("La Plaza: chat de prueba con los de cerca") { startActivity(Intent(this@MainActivity, PlazaActivity::class.java)) })
+            // Services on the network: CHAMULLO carries them; none of them is CHAMULLO itself.
+            addView(title("Servicios"))
+            addView(button("La Plaza: chat abierto con los de cerca") { startActivity(Intent(this@MainActivity, PlazaActivity::class.java)) })
+            addView(button("ICEBREAK: la red social", primary = false) { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ICEBREAK_URL))) })
+            addView(text("ICEBREAK es un servicio más sobre la red. Por ahora se abre en el navegador y necesita internet; CHAMULLO no.", 12f, Ui.MUTED))
             addView(title("Cerca tuyo"))
             nearby = column(); addView(nearby)
             addView(title("Contactos"))
             contacts = column(); addView(contacts)
             addView(title("Más"))
-            addView(button("Abrir ICEBREAK, la red social") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ICEBREAK_URL))) })
-            addView(text("ICEBREAK se abre en el navegador y necesita internet; CHAMULLO no.", 12f, Ui.MUTED))
             addView(button("Diagnóstico del grito", primary = false) { startActivity(Intent(this@MainActivity, DiagActivity::class.java)) })
             addView(button("Ver mis 16 palabras", primary = false) { showPhrase(vault) })
         }
@@ -101,6 +106,7 @@ class MainActivity : Activity() {
                 else -> "Bluetooth: apagado (es el respaldo; no se conecta a nada)."
             }
         }
+        Hub.ask({ it.candies }) { n -> candies.text = "🍬 $n caramelos por cartas que llevaste y se confirmaron" }
         Hub.ask({ node -> Triple(node.neighbors().map { Triple(it.name, it.coded, it) }, node.store.contacts(), node.nearby()) }) { (near, cards, hellos) ->
             nearby.removeAllViews()
             val verified = near.map { it.third.nodeId.toHex().take(16) }.toSet()

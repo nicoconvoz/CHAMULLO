@@ -1,6 +1,6 @@
 # CHAMULLO — Documentación técnica
 
-Versión del documento: 7 · Estado del código: app 0.3.1 "Islas" (octubre 2026)
+Versión del documento: 8 · Estado del código: app 0.4.0 (octubre 2026)
 
 > Este documento describe **lo que está construido y funcionando hoy**. El diseño completo de la red
 > (identidad, sobre, recibos, economía, routing, interfaz de aire) está en [`docs/specs/`](specs/). Cuando el
@@ -21,6 +21,7 @@ saltan de celular en celular hasta llegar. Cada teléfono es un nodo que envía,
 | Contactos | Intercambio de tarjetas selladas por el camino |
 | Chat cifrado de punta a punta | Sobres con remitente efímero y etiqueta de destino; ✓✓ al llegar |
 | Chat de prueba abierto | **La Plaza**: lo leen los cercanos y responden "lo escuché" |
+| Recibos y caramelos | Cada cartero deja su huella cifrada; el destino confirma y el origen paga. Cobra solo quien puede probarlo |
 | Actualizaciones | Página web con `version.txt`; la app avisa sola |
 
 Plataforma: **Android 8+**. La carretera requiere **Android 10+**. iPhone no está soportado: iOS no permite
@@ -225,7 +226,7 @@ del otro, y se muestra un solo aviso por persona.
 
 | Conjunto | Cantidad | Qué cubre |
 |---|---|---|
-| `android/core` (JUnit 5) | 71 | Vectores tweetnacl, identidad y frase, TLV y varints, sobres, tarjetas, plaza, llaves de carretera, micros con comodines, nodo en un "pueblo de prueba" (saltos, bolsillos, reintentos, una carretera por par, pasajero ocupado), saludo, **decisiones de islas y turnos del ferry** |
+| `android/core` (JUnit 5) | 79 | Vectores tweetnacl, identidad y frase, TLV y varints, sobres, tarjetas, plaza, llaves de carretera, micros con comodines, nodo en un "pueblo de prueba" (saltos, bolsillos, reintentos, una carretera por par, pasajero ocupado), saludo, **decisiones de islas y turnos del ferry** |
 | `sim/` (`node --test`) | 28 | Reglas de ruteo de la spec 05: río, lago, eco de barrio, privacidad, bolsillos, ninguna pérdida silenciosa |
 
 La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo con la caja negra**.
@@ -248,8 +249,33 @@ La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo
 | 0.2.1 | Saludo de un solo grito; la carretera abre solo con un vecino estable | "Vecinos: 0": la carretera abierta de entrada le robaba antena al grito |
 | 0.2.2 | Varios megáfonos a la vez en chips viejos | Lo que gritaba un chip viejo llegaba "a veces": cada micro salía una vez o ninguna |
 | 0.2.3 | Una sola carretera por par de vecinos; pasajero ocupado; cierre de carreteras vacías; aviso de versión cada 30 min | El Capitán: "si uno abre, el otro se conecta; ¿para qué abrir las dos?" |
+| 0.4.0 | **Recibos con la semilla y caramelos**; ICEBREAK como servicio | Proof of Relay: cobrar solo lo que se puede probar |
 | 0.3.1 | Saludo secreto con firma en cada caño de la isla; bolsillos que sobreviven al reinicio | Intrusos con la llave del cartel; cartas perdidas al cerrar la app |
 | 0.3.0 | **Islas**: todo por Wi-Fi Direct, carteles, anfitrión que reparte, ferry que rota; Bluetooth de respaldo apagado por defecto; Wi-Fi Aware apagado | El Capitán: "¿para qué caminos si podemos trazarlos con la carretera?" |
+
+## 12 bis. Recibos y caramelos (0.4.0)
+
+Implementación de la [spec 03](specs/03-proof-of-relay.md), adaptada a islas.
+
+| Paso | Qué pasa | Código |
+|---|---|---|
+| 1. Sellar | El origen genera una **llave del viaje** y un **secreto de entrega**. En el sobre van `J_pub` (TLV 8) y `H(r)` (TLV 10); `J_sec` y `r` van adentro, para el destino | `Envelope.seal` |
+| 2. Llevar | Cada cartero agrega su **registro cifrado** con `J_pub` (quién, posición, hora, firma sobre la semilla anterior). La **semilla** cambia con cada registro | `Envelope.withHop(carrier, now)` |
+| 3. Leer el viaje | El destino abre los registros con `J_sec` y ve **quién llevó la carta, en orden** | `Envelope.journey` |
+| 4. Recibo | El destino responde con las **huellas** (hashes) de los registros y revela `r`: solo pudo saberlo quien abrió la carta | `Letter.Ack(journey, revealed)` |
+| 5. Pago | El origen comprueba `r`, firma el viaje con su clave efímera y **difunde el pago** (LINK 15, hasta 8 saltos) | `Payment.confirm` |
+| 6. Cobrar | Cada cartero que encuentra **su propia huella** en un pago válido suma **1 caramelo** | `Node.onPayment` |
+
+**Diferencias con la spec 03 (honestas):**
+- El registro de salto lo firma **solo quien entrega**. La aceptación del que recibe (`ACCEPT`) necesita entregas uno a uno, y hoy las islas reparten a todos.
+- Los caramelos son un **contador local verificado** (`Store.saveCandies`). La libreta pública de la Corte (spec 04) todavía no existe.
+- El origen no cobra por su propia carta, ni el destino por recibirla.
+
+## 12 ter. Servicios (0.4.0)
+
+CHAMULLO es la red; los servicios viajan por ella. Cada carta lleva su **servicio** (TLV 19 dentro del sobre; por defecto `chat`).
+En la pantalla de inicio, **Servicios** muestra La Plaza e **ICEBREAK** como uno más. ICEBREAK hoy se abre en su web; el
+siguiente paso es que hable por cartas CHAMULLO con su propio nombre de servicio.
 
 ## 13. Islas (0.3.0)
 
@@ -294,7 +320,9 @@ Rediseño del Capitán después de las pruebas de campo: **el Bluetooth complica
 - [ ] **Medir la carretera en campo**: conexión, prueba de velocidad, posible choque de direcciones (todas las carreteras usan `192.168.49.x`).
 - [ ] Confirmar si Android pide aprobación cada vez que se sube a una carretera.
 - [ ] Brújula y río (spec 05) en la app: hoy el ruteo es eco acotado.
-- [ ] Recibos con cadena de saltos y cobro (spec 03) y economía (spec 04).
+- [ ] Economía completa (spec 04): hoy los caramelos son un contador local verificado; falta la libreta de la Corte, la escasez y la diversidad.
+- [ ] Aceptación bilateral por salto (`ACCEPT`, spec 03 §5): con islas y eco, el registro de salto lo firma solo quien entrega.
+- [ ] Brújula entre islas lejanas (spec 05): dentro de una isla todo está a un salto; la brújula vuelve cuando haya varias islas en campo.
 - [ ] Clave de firma de release propia.
 - [ ] Rol del iPhone.
 

@@ -275,4 +275,36 @@ class NodeTest {
         val again = Node(beto, store) { now } // the app was closed and opened again
         assertEquals(1, again.pocketCount())
     }
+
+    @Test
+    fun `receipts - the carrier in the middle earns a candy once the origin confirms, and nobody else does`() {
+        val air = Air("ana", "beto", "caro").apply { link("ana", "beto"); link("beto", "caro"); befriend("ana", "caro") }
+        air.node("ana").send(air.node("caro").identity.card(), "pagale a Beto")
+        air.run(10_000)
+        assertEquals("pagale a Beto", air.events.getValue("caro").filterIsInstance<NodeEvent.LetterReceived>().single().text)
+        assertEquals(1, air.node("beto").candies, "beto carried it")
+        assertEquals(0, air.node("ana").candies, "the origin does not earn for its own letter")
+        assertEquals(0, air.node("caro").candies, "the destination does not earn for receiving")
+    }
+
+    @Test
+    fun `receipts - the destination sees the journey, who carried the letter, in order`() {
+        val air = Air("ana", "beto", "caro", "dani").apply { link("ana", "beto"); link("beto", "caro"); link("caro", "dani"); befriend("ana", "dani") }
+        air.node("ana").send(air.node("dani").identity.card(), "por la cadena")
+        air.run(10_000)
+        val got = air.events.getValue("dani").filterIsInstance<NodeEvent.LetterReceived>().single()
+        assertEquals(listOf("Beto", "Caro"), got.journey.map { id -> air.nodes.values.single { it.identity.nodeId.toHex() == id }.identity.name })
+    }
+
+    @Test
+    fun `receipts - a payment that does not prove the delivery pays nobody`() {
+        var now = 0L
+        val beto = Node(Identity.generate("Beto"), MemoryStore()) { now }
+        val ana = Identity.generate("Ana"); val caro = Identity.generate("Caro")
+        val env = Envelope.letter(ana, caro.card(), Letter.Text("hola"), now)
+        beto.onFrame(env.encode()) // beto carries it
+        val fake = Payment(env.msgId, env.src, listOf(Crypto.hash(byteArrayOf(1))), Crypto.randomBytes(32), ByteArray(64), ttl = 4)
+        beto.onFrame(fake.encode())
+        assertEquals(0, beto.candies)
+    }
 }
