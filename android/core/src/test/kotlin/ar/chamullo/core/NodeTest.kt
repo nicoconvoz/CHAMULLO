@@ -95,7 +95,7 @@ class NodeTest {
         assertTrue(air.events["caro"].orEmpty().none { it is NodeEvent.LetterReceived })
         assertTrue(air.node("beto").pocketCount() > 0, "beto carries it")
         air.unlink("ana", "beto"); air.link("beto", "caro") // beto walks to caro
-        air.run(5_000)
+        air.run(Node.BEACON_MS + 5_000)
         assertEquals("te espero", air.events.getValue("caro").filterIsInstance<NodeEvent.LetterReceived>().single().text)
     }
 

@@ -5,6 +5,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.TextView
+import android.content.Intent
+import ar.chamullo.app.Ui.button
 import ar.chamullo.app.Ui.card
 import ar.chamullo.app.Ui.logo
 import ar.chamullo.app.Ui.screen
@@ -15,6 +17,7 @@ import ar.chamullo.app.Ui.title
 class DiagActivity : Activity() {
     private lateinit var radioInfo: TextView
     private lateinit var nodeInfo: TextView
+    private lateinit var logView: TextView
     private val handler = Handler(Looper.getMainLooper())
     private val tick = object : Runnable { override fun run() { refresh(); handler.postDelayed(this, 1000) } }
 
@@ -26,6 +29,11 @@ class DiagActivity : Activity() {
             radioInfo = text("", 14f); addView(card { addView(radioInfo) })
             addView(title("Nodo"))
             nodeInfo = text("", 14f); addView(card { addView(nodeInfo) })
+            addView(title("Caja negra"))
+            addView(button("Compartir registro") {
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "CHAMULLO ${WebVersion.installed(this@DiagActivity)}\n" + FieldLog.text()), "Mandar el registro"))
+            })
+            logView = text("", 11f, Ui.MUTED); addView(card { addView(logView) })
             addView(text("Para medir alcance: dos celulares con esta pantalla abierta, alejalos de a 10 m y anotá cuándo deja de aparecer el vecino.", 13f, Ui.MUTED))
         }
     }
@@ -42,6 +50,7 @@ class DiagActivity : Activity() {
                 "  Encendido y gritando: ${yes(r.active)}",
                 (r as? WifiRadio)?.let { "  Celulares encontrados: ${it.peers}" },
                 (r as? GritoRadio)?.let { "  Anuncios extendidos: ${yes(it.extended)} · largo alcance: ${yes(it.coded)}" },
+                (r as? GritoRadio)?.let { "  Escuchando: ${yes(it.listening)} · cartas en cola: ${it.waiting}" },
                 (r as? GritoRadio)?.let { "  Cartas completas armadas: ${it.assembled}" },
                 (r as? GritoRadio)?.let { "  Último grito escuchado: " + if (it.lastHeardAt == 0L) "nunca" else "hace ${(System.currentTimeMillis() - it.lastHeardAt) / 1000} s" },
                 "  Gritos que salieron: ${r.shouts}",
@@ -50,6 +59,7 @@ class DiagActivity : Activity() {
             ).joinToString("\n")
         }
         Hub.ask({ n -> Triple(n.neighbors().map { "${it.name.ifBlank { "?" }} (${if (it.coded) "largo" else "normal"}, hace ${(System.currentTimeMillis() - it.lastSeen) / 1000}s)" }, n.pocketCount(), n.shoutsSent) }) { (near, pockets, sent) ->
+            logView.text = FieldLog.last(25).reversed().joinToString("\n")
             nodeInfo.text = (listOf("Vecinos: ${near.size}") + near.map { "  · $it" } + listOf("Cartas en el bolsillo: $pockets", "Tramas que preparó el nodo: $sent (salen solo con la radio encendida)")).joinToString("\n")
         }
     }

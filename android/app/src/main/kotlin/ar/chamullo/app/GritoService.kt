@@ -62,13 +62,21 @@ class GritoService : Service() {
             when (event) {
                 is NodeEvent.CardReceived ->
                     if (node.store.contact(event.card.nodeId) == null) {
-                        synchronized(Hub.pendingCards) { Hub.pendingCards += event.card }
+                        synchronized(Hub.pendingCards) { if (Hub.pendingCards.none { it.nodeId.contentEquals(event.card.nodeId) }) Hub.pendingCards += event.card } // repeated offers: one dialog
                         notify(ID_CARD, notification(CH_MSG, "${event.card.name} quiere intercambiar tarjetas", "Tocá para aceptar.", MainActivity::class.java))
                     }
                 is NodeEvent.LetterReceived ->
                     notify(event.msgId.hashCode(), notification(CH_MSG, event.from.name, event.text, ChatActivity::class.java, event.from.nodeId))
                 else -> Unit
             }
+            FieldLog.add("NODO", when (event) {
+                is NodeEvent.CardReceived -> "tarjeta de ${event.card.name}"
+                is NodeEvent.LetterReceived -> "carta de ${event.from.name}"
+                is NodeEvent.Delivered -> "✓✓ entregada"
+                is NodeEvent.PlazaReceived -> "plaza de ${event.name}: ${event.text.take(30)}"
+                is NodeEvent.PlazaHeard -> "${event.name} escuchó mi plaza"
+                NodeEvent.NeighborsChanged -> "vecino nuevo"
+            })
             Hub.emit(event)
         }
     }
