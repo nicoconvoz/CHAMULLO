@@ -81,6 +81,10 @@ class Node(
     private var cell: Zone? = null
     private var heading: Zone? = null
     private var myCard: Card? = null
+    // El barrio grande (Discovery & Routing §2.1): the zone on my card measures the crowd I hide in, not kilometers.
+    private val crowd = HashMap<String, Long>() // who I heard in my manzana lately: id → last time
+    private var inCrowd = false
+    private var announced: Zone? = null
     private var routeDirty = false
     private val pending = HashMap<String, Handoff>()
     private class Promise(val giver: ByteArray, val at: Long)
@@ -117,13 +121,22 @@ class Node(
 
     /** The phone says where it is (from its GPS, or the twin's map). Changing barrio is a mudanza: my contacts hear it. */
     fun locate(here: Zone) {
-        val before = cell?.up(Zone.BARRIO)
         cell = here
         routeDirty = true
-        val barrio = here.up(Zone.BARRIO)
-        if (barrio == before) return
+        refreshCard()
+    }
+
+    /** The zone my card should say now: the manzana if I hide in a crowd there, the barrio if not. */
+    private fun cardZone(): Zone? = cell?.up(if (inCrowd) Zone.MANZANA else Zone.BARRIO)
+
+    // When the zone on my card changes, my contacts hear it: a mudanza (§5). The first one is not a move.
+    private fun refreshCard() {
+        val z = cardZone()
+        if (z == announced) return
+        val before = announced
+        announced = z
         myCard = null
-        if (before != null) for (c in store.contacts()) sendLetter(c, Letter.Moved(card()))
+        if (before != null && z != null) for (c in store.contacts()) sendLetter(c, Letter.Moved(card()))
     }
 
     fun locate(lat: Double, lon: Double) = locate(Zone.of(lat, lon))
@@ -134,7 +147,7 @@ class Node(
     fun stuckZone(): Zone? = pockets.values.firstOrNull { it.stuck }?.env?.destZone
 
     /** My card, with my barrio when I know it. */
-    fun card(): Card = myCard ?: Card.of(identity, clock(), cell?.up(Zone.BARRIO)).also { myCard = it }
+    fun card(): Card = myCard ?: Card.of(identity, clock(), announced ?: cardZone()).also { myCard = it }
 
     /**
      * A ferry about to sail (Camino y Carretera §6.1) announces where it goes, so the letters headed there board it;
@@ -183,6 +196,10 @@ class Node(
             nearby.values.removeAll { now - it.lastSeen > NEIGHBOR_TTL_MS }
             if (pockets.values.removeAll { it.env.expired(now) }) savePockets()
             payPockets.values.removeAll { now - it.at > PAY_KEEP_MS }
+            crowd.values.removeAll { now - it > CROWD_WINDOW_MS }
+            // Into the crowd at CROWD_MIN, out of it below half: no back-and-forth mudanzas at the edge.
+            inCrowd = if (inCrowd) crowd.size >= CROWD_MIN / 2 else crowd.size >= CROWD_MIN
+            refreshCard()
             val late = promised.values.count { now - it.at > 2 * OFFER_TIMEOUT_MS }
             if (late > 0) { promised.values.removeAll { now - it.at > 2 * OFFER_TIMEOUT_MS }; dropped.merge("promesa sin carta", late, Int::plus) } // the copy never came
         }
@@ -241,7 +258,7 @@ class Node(
     private fun offerTo(nodeId: ByteArray, boxPublic: ByteArray) {
         val key = nodeId.toHex()
         offeredTo += key
-        val frame = CardOffer.to(identity, nodeId, boxPublic, clock(), cell?.up(Zone.BARRIO)).encode()
+        val frame = CardOffer.to(identity, nodeId, boxPublic, clock(), announced).encode()
         if (store.contact(nodeId) == null) cardRetries[key] = Retry(frame, CARD_RETRIES, clock() + RETRY_MS)
         enqueue(frame)
     }
@@ -308,6 +325,8 @@ class Node(
         neighbors[key] = Neighbor(b, clock(), (before?.beats ?: 0) + 1)
         if (isNew) newNeighbor = true
         if (before != null && before.cell != b.cell) routeDirty = true // a ferry announcing its heading, or someone walking
+        val mine = cell?.up(Zone.MANZANA)
+        if (mine != null && b.cell?.up(Zone.MANZANA) == mine) crowd[key] = clock() else crowd.remove(key)
         // Someone new: I answer with my heartbeat, so a ferry that just arrived knows the island at once (§10.2).
         if (isNew && clock() - lastReply >= BEACON_REPLY_MS) { lastReply = clock(); lastBeacon = clock(); enqueue(beacon()) }
         return if (isNew) listOf(NodeEvent.NeighborsChanged) else emptyList()
@@ -596,6 +615,9 @@ class Node(
         const val BEACON_REPLY_MS = 5_000L
         const val PAY_KEEP_MS = 30 * 60_000L
         const val LAKE_WAIT_MS = 2 * Islands.FERRY_TURN_MS
+        // How many different phones heard in my manzana in the last hour make a crowd to hide in (k-anonymity).
+        const val CROWD_MIN = 20
+        const val CROWD_WINDOW_MS = 60 * 60_000L
         // Three bridges bring a letter down: if one fails, the others still do (the Capitán's "diversificando").
         const val BRIDGE_PEERS = 3
         // A big jump: farther than the next barrio (~1.8 km wide), where islands would take half an hour or more.

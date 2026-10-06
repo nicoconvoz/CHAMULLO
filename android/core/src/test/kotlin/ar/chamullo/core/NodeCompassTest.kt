@@ -290,4 +290,30 @@ class NodeCompassTest {
         air.run(2_000)
         assertEquals(1, air.node("road").pocketCount(), "a short jump stays on the islands")
     }
+
+    /* ---------- the big barrio: the zone measures the crowd you hide in, not kilometers ---------- */
+
+    @Test
+    fun `in a crowd the card points to the block, alone it points to the barrio - and changing tells the contacts`() {
+        var now = 0L
+        val ana = Node(Identity.generate("Ana"), MemoryStore(), maxFrame = 4_096) { now }.apply { locate(lat, -58.4300) }
+        val beto = Identity.generate("Beto").card()
+        ana.store.saveContact(beto)
+        assertEquals(Zone.of(lat, -58.4300, Zone.BARRIO), ana.card().zone, "alone: the barrio")
+        repeat(Node.CROWD_MIN) { k -> ana.onFrame(Beacon.of(Identity.generate("v$k"), false, now, Zone.of(lat, -58.4300 + (k % 4) * 0.0005)).encode()) }
+        now += 1_000; ana.tick()
+        assertEquals(Zone.of(lat, -58.4300, Zone.MANZANA), ana.card().zone, "in a crowd: the block")
+        assertTrue(ana.drainOutbox().any { (Packet.parseOrNull(it) as? Envelope) != null }, "a moving letter to beto")
+        now += Node.CROWD_WINDOW_MS + 1_000; ana.tick()
+        assertEquals(Zone.of(lat, -58.4300, Zone.BARRIO), ana.card().zone, "the crowd left: the barrio again")
+    }
+
+    @Test
+    fun `strangers in other blocks do not count as my crowd`() {
+        var now = 0L
+        val ana = Node(Identity.generate("Ana"), MemoryStore(), maxFrame = 4_096) { now }.apply { locate(lat, -58.4300) }
+        repeat(Node.CROWD_MIN) { k -> ana.onFrame(Beacon.of(Identity.generate("v$k"), false, now, Zone.of(lat, -58.4100)).encode()) }
+        now += 1_000; ana.tick()
+        assertEquals(Zone.of(lat, -58.4300, Zone.BARRIO), ana.card().zone)
+    }
 }

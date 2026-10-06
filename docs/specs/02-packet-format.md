@@ -202,7 +202,7 @@ Los mensajes `LINK` nunca salen del enlace en el que se crearon.
 | `14` | `ROAD_INVITE` | Llave de la carretera, sellada |
 | `15` | `PAYMENT` | Confirmación del origen que paga a los carteros. `11` ttl, `13` zona destino y `15` receivers viajan sin firma (Discovery & Routing §10.7) |
 
-La **tarjeta de contacto** lleva su zona (nivel barrio) en el TLV `11`, impar y firmado: una tarjeta vieja sin zona sigue sirviendo. El contenido sellado de cada carta lleva la tarjeta actual del remitente en el TLV interno `21` (Discovery & Routing §5).
+La **tarjeta de contacto** lleva su zona (manzana o barrio, Discovery & Routing §2.1) en el TLV `11`, impar y firmado: una tarjeta vieja sin zona sigue sirviendo. El contenido sellado de cada carta lleva la tarjeta actual del remitente en el TLV interno `21` (Discovery & Routing §5).
 
 ## 7. Handshake y negociación de gestos
 

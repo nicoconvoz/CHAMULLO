@@ -8,8 +8,8 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * A square of the fixed grid of Discovery & Routing §2 and §10.1: a cell (~50 m), a barrio (~2 km), a pueblo (~20 km)
- * or a region (~150 km). Higher levels are computed from the cell by integer division, so they nest exactly.
+ * A square of the fixed grid of Discovery & Routing §2 and §10.1: a cell (~50 m), a manzana (~400 m), a barrio (~2 km),
+ * a pueblo (~20 km) or a region (~150 km). Higher levels are computed from the cell by integer division, so they nest exactly.
  */
 data class Zone(val level: Int, val latIndex: Long, val lonIndex: Long) {
     val centerLat get() = (latIndex + 0.5) * size(level)
@@ -44,15 +44,16 @@ data class Zone(val level: Int, val latIndex: Long, val lonIndex: Long) {
 
     companion object {
         const val CELL = 0
-        const val BARRIO = 1
-        const val PUEBLO = 2
-        const val REGION = 3
-        private val RATIOS = longArrayOf(40, 10, 7) // cell→barrio, barrio→pueblo, pueblo→region
+        const val MANZANA = 1
+        const val BARRIO = 2
+        const val PUEBLO = 3
+        const val REGION = 4
+        private val RATIOS = longArrayOf(8, 5, 10, 7) // cell→manzana, manzana→barrio, barrio→pueblo, pueblo→region
         // Finer than a Wi-Fi Direct reach: whoever learns my cell is already within earshot (§10.1).
         private const val CELL_DEG = 0.0005
         private const val EARTH_M = 6_371_000.0
 
-        /** Side of a square of [level], in degrees: 0.0005, 0.02, 0.2 and 1.4. */
+        /** Side of a square of [level], in degrees: 0.0005, 0.004, 0.02, 0.2 and 1.4. */
         fun size(level: Int): Double = (0 until level).fold(CELL_DEG) { a, l -> a * RATIOS[l] }
 
         fun of(lat: Double, lon: Double, level: Int = CELL): Zone =

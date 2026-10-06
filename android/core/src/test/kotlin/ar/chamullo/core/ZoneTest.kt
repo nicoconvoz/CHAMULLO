@@ -13,7 +13,7 @@ class ZoneTest {
     fun `cells nest inside their barrio, pueblo and region`() {
         val (lat, lon) = obelisco
         val cell = Zone.of(lat, lon, Zone.CELL)
-        for (level in listOf(Zone.BARRIO, Zone.PUEBLO, Zone.REGION)) {
+        for (level in listOf(Zone.MANZANA, Zone.BARRIO, Zone.PUEBLO, Zone.REGION)) {
             assertEquals(Zone.of(lat, lon, level), cell.up(level))
             assertTrue(Zone.of(lat, lon, level).contains(cell))
         }
@@ -48,6 +48,8 @@ class ZoneTest {
         val (lat, lon) = obelisco
         val cell = Zone.of(lat, lon, Zone.CELL)
         assertEquals(55.6, cell.distanceTo(Zone.of(lat + Zone.size(Zone.CELL), lon, Zone.CELL)), 1.0) // finer than a Wi-Fi reach
+        val manzana = Zone.of(lat, lon, Zone.MANZANA)
+        assertEquals(445.0, manzana.distanceTo(Zone.of(lat + Zone.size(Zone.MANZANA), lon, Zone.MANZANA)), 5.0)
         val barrio = Zone.of(lat, lon, Zone.BARRIO)
         assertEquals(2_224.0, barrio.distanceTo(Zone.of(lat + Zone.size(Zone.BARRIO), lon, Zone.BARRIO)), 10.0)
         assertFalse(barrio.contains(Zone.of(lat + Zone.size(Zone.BARRIO), lon, Zone.CELL)))

@@ -78,7 +78,9 @@ class World(
      */
     private inner class CloudPort(val owner: Phone) : Bridge {
         override fun peersIn(zone: Zone): List<ByteArray> {
+            // No bridge in that manzana: the barrio's bridges bring it down, and the compass walks it the rest.
             val down = phones.values.filter { it.internet && it !== owner && zone.contains(it.cell) }
+                .ifEmpty { if (zone.level < Zone.BARRIO) phones.values.filter { it.internet && it !== owner && zone.up(Zone.BARRIO).contains(it.cell) } else emptyList() }
             if (down.isEmpty()) return emptyList()
             val start = (cloudTurn++ % down.size) // spread the load: each upload starts with another bridge
             return (down.drop(start) + down.take(start)).map { it.identity.nodeId }

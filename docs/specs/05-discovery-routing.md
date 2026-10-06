@@ -31,13 +31,24 @@ El territorio se divide en una grilla jerárquica de celdas (estilo *geohash*):
 | Nivel | Tamaño aproximado | Uso |
 |---|---|---|
 | Región | ~150 km | Rumbo de larga distancia |
-| Pueblo | ~20 km | Economía (Economy §7), destino mínimo recomendado |
-| Barrio | ~2 km | Destino por defecto en el sobre |
-| Celda | ~100 m | Solo se comparte con vecinos directos, como en ICEBREAK |
+| Pueblo | ~20 km | Economía (Economy §7) |
+| Barrio | ~2 km | Destino del sobre cuando hay poca gente alrededor |
+| Manzana | ~400 m | Destino del sobre en medio de una multitud (§2.1) |
+| Celda | ~50 m | Solo se comparte con vecinos directos, como en ICEBREAK |
 
 - La grilla es fija y anidada, en grados (§10.1): cada celda de un nivel cae entera dentro de una del nivel superior.
 - Un nodo NUNCA DEBE publicar coordenadas GPS exactas.
-- El sobre lleva como destino una zona de nivel **barrio o mayor**. Cuanto más grande, más privacidad y más búsqueda final.
+- El sobre lleva como destino la zona de la tarjeta: **manzana o barrio** (§2.1). Cuanto más grande, más privacidad y más búsqueda final.
+
+### 2.1 La zona mide la multitud, no los kilómetros (el barrio grande)
+
+El acertijo del barrio grande: en una ciudad todo cae en un barrio de 2 km, y la búsqueda final (§6.4) no alcanza. La respuesta sale de la pregunta abierta 3 y de lo que la zona protege. Lo que esconde a alguien no son los kilómetros, sino **cuánta gente hay en la misma zona** (k-anonimato).
+
+- Cada nodo cuenta los teléfonos **distintos** que escuchó en su misma manzana durante la última hora (`CROWD_WINDOW_MS`).
+- Con `CROWD_MIN = 20` o más, su tarjeta dice la **manzana**: entre tanta gente, esconde igual que un barrio de campo.
+- Si bajan de la mitad, la tarjeta vuelve al **barrio**. El margen evita mudanzas de ida y vuelta en el borde.
+- Cambiar de zona es una mudanza (§5): los contactos se enteran.
+- En el gemelo, la Ciudad de 1000 pasó del 45 % al 72 % de entregas, con un tercio menos de copias en los bolsillos.
 
 ## 3. Descubrimiento de vecinos
 
@@ -142,7 +153,7 @@ Cada cartero escribe su registro de salto **cifrado** para que solo el origen y 
 
 1. **Etiqueta por contacto:** usar un secreto distinto por contacto evitaría que los contactos reconozcan cartas ajenas, pero el destino tendría que probar con todos sus contactos en cada sobre. ¿Cuál es el punto de equilibrio?
 2. **Triangulación:** varios carteros cómplices pueden cruzar rumbos y deducir la zona destino. Si la zona es grande, la fuga es aceptable; hay que cuantificarlo en el simulador.
-3. **Tamaño de zona dinámico:** ¿zonas más grandes en ciudades densas y más chicas en el campo?
+3. ~~**Tamaño de zona dinámico**~~: resuelto en §2.1, al revés de como estaba planteado. En la ciudad densa la zona se achica (manzana), porque la multitud ya esconde.
 4. **Destinos móviles rápidos** (personas en auto o en colectivo): ¿la búsqueda local alcanza?
 5. **Modo agente secreto:** ruta tipo mamushka (*onion*) elegida por el origen, con propinas por capa, para quien necesite que ni siquiera los extremos vean la ruta.
 6. **El barrio grande** (acertijo abierto del Capitán): en una ciudad densa todo cae en el mismo barrio y la carta pasa enseguida al eco local (§6.4). ¿Cómo encuentra el cartero la casa dentro del barrio sin que nadie sepa dónde vive el destino?
@@ -155,10 +166,11 @@ Lo que sigue fija cada número y cada desempate, para que el núcleo de la app y
 
 | Nivel | Código | Lado de la celda | Aproximado en Argentina |
 |---|---|---|---|
-| Celda | `0` | 0,001° | ~110 m × ~90 m |
-| Barrio | `1` | 0,02° | ~2,2 km × ~1,8 km |
-| Pueblo | `2` | 0,2° | ~22 km × ~18 km |
-| Región | `3` | 1,4° | ~155 km × ~127 km |
+| Celda | `0` | 0,0005° | ~55 m × ~46 m (más chica que un alcance de Wi-Fi: quien la conoce ya está al alcance) |
+| Manzana | `1` | 0,004° | ~445 m × ~366 m |
+| Barrio | `2` | 0,02° | ~2,2 km × ~1,8 km |
+| Pueblo | `3` | 0,2° | ~22 km × ~18 km |
+| Región | `4` | 1,4° | ~155 km × ~127 km |
 
 - Índices: `lat_i = ⌊lat / lado⌋`, `lon_i = ⌊lon / lado⌋`. El centro es `((lat_i + ½)·lado, (lon_i + ½)·lado)`.
 - Codificación: `nivel u8 || zigzag-varint(lat_i) || zigzag-varint(lon_i)`.
