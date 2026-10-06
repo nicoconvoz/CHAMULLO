@@ -206,6 +206,22 @@ Cuando una carta cruza pueblos (Ana en Mendoza, Caro de Junín que la lleva):
 2. Periódicamente, la libreta nacional **neta** los saldos entre pueblos: "Mendoza debe 500 a Junín, Junín debe 300 a Mendoza, entonces Mendoza transfiere 200".
 3. Como las Lucas son las mismas en todo el país, no hay tipos de cambio.
 
+### 9.4 La libreta tal como la implementa el núcleo (`Ledger.kt`)
+
+| Decisión | Valor | Por qué |
+|---|---|---|
+| Pueblo | El cuadro de nivel pueblo de la grilla (~20 km, Discovery & Routing §10.1) | Resuelve §12.2: igual en todo el país, sin depender de mapas municipales |
+| Bolsa por período | `E_pueblo = 1000` Lucas, período de 1 día | Se calibra con el gemelo |
+| Sueldo de la Corte | Rey 20, cada noble 2 por período, de la bolsa | §8.2: remuneración fija por sellar la libreta; no depende del puntaje |
+| Peso de un vecino | Su antigüedad en la libreta, de 0 a 1 en 30 días | §5.1: lo nuevo pesa casi cero |
+| Grito a todos | Vecino "eco", con peso fijo ½ | Un salto sin taker no nombra vecino: cuenta, pero menos |
+| Gasto de prioridad | Mitad se quema, mitad queda en garantía para los carteros de esa carta y se reparte al cierre | §4.3 y §6.1 |
+
+- **Asientos:** `JOURNEY` (el viaje sellado: se acepta si `H(r) = R` y `CONFIRM` vale), `CLAIM` (las cinco pruebas de Proof of Relay §7, una vez por renglón), `SPEND` (firmado, sin saldo negativo), `CLOSE` (el reparto, que cada copia recalcula y debe dar igual) y `DEPOSE` (más de 2/3 de la Nobleza).
+- **Página:** índice, hash de la anterior, hora, asientos, firma del Rey y endorsos de la Nobleza; hacen falta **más** de 2/3. Si el primer asiento es un `DEPOSE` válido, la escribe el primer noble.
+- **Puntaje (§5):** por cartero, para cada vecino distinto con el que trabajó: `peso(vecino) × (1 + log2 n) × promedio(escasez × parte de la entrega)`, donde la parte es `1 / (saltos cobrables)`.
+- **Cámara compensadora (§9.3):** `Clearing.net` netea lo que se deben los pueblos, de a pares.
+
 ## 10. Arranque (génesis)
 
 Al principio no hay recibos, así que no hay ranking.
