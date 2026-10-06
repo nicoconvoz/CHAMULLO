@@ -458,6 +458,7 @@ En el puente fijo, Android le pide permiso al dueño la primera vez, y eso todav
 | 0.5.7 | El servicio declara el tipo `location` además de `connectedDevice` (spec 07 §6.5) | Depuración USB en el Moto E7 Plus (Android 10): de fondo, Android negaba la ubicación, y sin ella no hay búsqueda Wi-Fi Direct ni lista de redes. Comprobado en el celular, con la app de fondo |
 
 | 0.6.0 | **Interfaz estilo ICEBREAK:** barra gris arriba con 5 íconos de ICEBREAK (Contactos con favoritos, Chats con no leídos, Apps, Guía, Configuración), dibujados desde sus SVG sin librerías. **Chat privado** copiado de ICEBREAK: llamada, videollamada (llegan en la próxima versión, solo dentro de la isla) y eliminar contacto; burbujas y píldora de ICEBREAK. **Adjuntos** como cartas selladas (Packet Format §5.6): foto, cámara, video, archivo, ubicación y contacto, hasta 3 MB. **Tienda de Lucas** con catálogo publicado en la página (`tienda.json`): datos de Internet prestados de 50 MB a 10 GB, prioridad, insignias y apoyos. "Mis compras" sale de la libreta. La moneda 🪙 se cambió por 💰 | El Capitán pidió la distribución de ICEBREAK y una tienda buena. 🪙 (Emoji 13) no se ve en Android 10: era el "ícono que no se ve" en su Moto |
+| 0.6.1 | **Guía:** ICEBREAK va primero (abrir en la web o descargar la APK para Android) y debajo la guía de uso de CHAMULLO | El Capitán pidió ICEBREAK arriba de la guía de uso |
 
 **Cómo se documenta:** cada cambio va a su spec (la regla) y a esta bitácora (qué y por qué). El informe del gemelo se regenera con `./gradlew :simulator:run`.
 

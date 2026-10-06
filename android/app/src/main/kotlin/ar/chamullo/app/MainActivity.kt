@@ -213,9 +213,16 @@ class MainActivity : Activity() {
         })
     }
 
-    /* ---------- 4. Guía: how to use CHAMULLO and ICEBREAK, and where to get ICEBREAK ---------- */
+    /* ---------- 4. Guía: ICEBREAK first (web or APK), then how to use CHAMULLO ---------- */
 
     private fun guideTab() {
+        page.addView(title("ICEBREAK"))
+        page.addView(card {
+            addView(text("ICEBREAK es la red social que viaja sobre CHAMULLO.", 14f))
+            addView(text("💡 La guía completa de ICEBREAK está adentro de ICEBREAK: Configuración → Guía de uso.", 13f, Ui.MUTED))
+            addView(button("Abrir ICEBREAK en la web") { web(ICEBREAK_URL) })
+            addView(button("Descargar ICEBREAK para Android", primary = false) { web(ICEBREAK_APK) })
+        })
         page.addView(title("Guía de uso"))
         val steps = listOf(
             "1. Intercambiá tarjetas" to "En Contactos → Cerca tuyo, tocá \"Intercambiar tarjeta\" con alguien que tenga CHAMULLO. Cuando acepta, ya se pueden escribir aunque estén lejos.",
@@ -226,13 +233,6 @@ class MainActivity : Activity() {
             "6. Islas" to "Los celulares de cerca forman islas Wi-Fi solos. No hace falta conectarse a ninguna red."
         )
         for ((h, b) in steps) page.addView(card { addView(text(h, 16f, bold = true)); addView(text(b, 14f)) })
-        page.addView(title("ICEBREAK"))
-        page.addView(card {
-            addView(text("ICEBREAK es la red social que viaja sobre CHAMULLO.", 14f))
-            addView(text("💡 La guía completa de ICEBREAK está adentro de ICEBREAK: Configuración → Guía de uso.", 13f, Ui.MUTED))
-            addView(button("Abrir ICEBREAK en la web") { web(ICEBREAK_URL) })
-            addView(button("Descargar ICEBREAK para Android", primary = false) { web(ICEBREAK_APK) })
-        })
     }
 
     /* ---------- 5. Configuración: everything else of CHAMULLO ---------- */
