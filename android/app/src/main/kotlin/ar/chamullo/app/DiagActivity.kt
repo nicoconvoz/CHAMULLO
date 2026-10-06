@@ -42,6 +42,7 @@ class DiagActivity : Activity() {
                 "  Encendido y gritando: ${yes(r.active)}",
                 (r as? WifiRadio)?.let { "  Celulares encontrados: ${it.peers}" },
                 (r as? GritoRadio)?.let { "  Anuncios extendidos: ${yes(it.extended)} · largo alcance: ${yes(it.coded)}" },
+                (r as? GritoRadio)?.let { "  Último grito escuchado: " + if (it.lastHeardAt == 0L) "nunca" else "hace ${(System.currentTimeMillis() - it.lastHeardAt) / 1000} s" },
                 "  Gritos que salieron: ${r.shouts}",
                 "  Gritos escuchados: ${r.heard}",
                 "  Último aviso: ${r.lastError ?: "ninguno"}"
