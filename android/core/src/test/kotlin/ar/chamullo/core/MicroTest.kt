@@ -84,4 +84,17 @@ class MicroTest {
     fun `something that is not a micro is ignored`() {
         assertNull(MicroAssembler().accept(byteArrayOf(1, 2, 3)))
     }
+
+    @Test
+    fun `a hello fits in one classic shout and carries a short id, a short name and the long-range flag`() {
+        val id = Identity.generate("Hermano de Nico")
+        val h = Hello.of(id, coded = true)
+        assertTrue(h.size <= Micro.MAX)
+        assertTrue(Hello.isHello(h))
+        val p = Hello.parse(h)!!
+        assertEquals(id.nodeId.toHex().take(16), p.shortId)
+        assertTrue("Hermano de Nico".startsWith(p.name) && p.name.isNotEmpty())
+        assertTrue(p.coded)
+        assertNull(Hello.parse(Micro.split(ByteArray(10)).first()), "a micro is not a hello")
+    }
 }

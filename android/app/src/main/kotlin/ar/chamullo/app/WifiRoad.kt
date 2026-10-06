@@ -66,7 +66,16 @@ class WifiRoad(
     override fun start() {
         if (!supported) { lastError = "necesita Android 10 o más nuevo con Wi-Fi Direct"; return }
         running = true
-        handler.post { openRoad() }
+    }
+
+    // Camino first: my road opens only when the camino has a stable neighbor (Camino y Carretera). An open road
+    // takes antenna time from Bluetooth on the shared 2.4 GHz chip, so it must not be up for nothing.
+    @Volatile private var opening = false
+    fun ensureOpen() = handler.post {
+        if (!running || opening || roadUp) return@post
+        opening = true
+        FieldLog.add("RUTA", "hay un vecino estable: abro mi carretera")
+        openRoad()
     }
 
     // My own road: a Wi-Fi Direct group with a fixed name and key, plus a socket server for whoever rides it.

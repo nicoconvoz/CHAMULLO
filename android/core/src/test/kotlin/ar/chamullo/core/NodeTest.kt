@@ -216,4 +216,23 @@ class NodeTest {
         air.run(1_000)
         assertTrue(air.events["beto"].orEmpty().none { it is NodeEvent.RoadInvited })
     }
+
+    @Test
+    fun `hello - one shout is enough to know someone is around, and it fades after a while`() {
+        var now = 0L
+        val ana = Node(Identity.generate("Ana"), MemoryStore()) { now }
+        val beto = Identity.generate("Beto")
+        ana.onHello(Hello.of(beto, coded = false))
+        assertEquals(listOf("Beto"), ana.nearby().map { it.name })
+        now += Node.NEIGHBOR_TTL_MS + 1
+        ana.tick()
+        assertTrue(ana.nearby().isEmpty())
+    }
+
+    @Test
+    fun `hello - my own hello is not someone nearby`() {
+        val ana = Node(Identity.generate("Ana"), MemoryStore()) { 0 }
+        ana.onHello(ana.hello())
+        assertTrue(ana.nearby().isEmpty())
+    }
 }

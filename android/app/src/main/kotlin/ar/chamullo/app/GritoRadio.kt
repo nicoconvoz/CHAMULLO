@@ -25,6 +25,7 @@ import ar.chamullo.core.Beacon
 import ar.chamullo.core.CardOffer
 import ar.chamullo.core.Envelope
 import ar.chamullo.core.Fragments
+import ar.chamullo.core.Hello
 import ar.chamullo.core.Heard
 import ar.chamullo.core.Plaza
 import ar.chamullo.core.toHex
@@ -41,7 +42,7 @@ import java.util.UUID
  *   every [RESCAN_MS].
  */
 @SuppressLint("MissingPermission")
-class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) : Radio {
+class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit, private val onHello: (ByteArray) -> Unit = {}) : Radio {
     private enum class Mode { CLASSIC, LONG }
     private class Emission(val mode: Mode, val bytes: ByteArray)
 
@@ -110,6 +111,13 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) : R
         FieldLog.add("BT", "a la cola: ${describe(frame)} · ${group.size} gritos · ${queue.size} cartas esperando")
         pump()
     } }
+
+    /** "¡Hola!" in one classic shout, ahead of everything else in line. */
+    fun sayHello(hello: ByteArray) = handler.post {
+        if (!enabled) return@post
+        queue.addFirst(ArrayDeque(listOf(Emission(Mode.CLASSIC, hello))))
+        pump()
+    }
 
     private fun data(e: Emission): AdvertiseData = when (e.mode) {
         Mode.CLASSIC -> AdvertiseData.Builder().addManufacturerData(COMPANY, e.bytes).build()
@@ -197,6 +205,7 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) : R
         val scanner = adapter?.bluetoothLeScanner ?: run { lastError = "Bluetooth apagado"; return }
         val filters = buildList {
             add(ScanFilter.Builder().setManufacturerData(COMPANY, byteArrayOf(Micro.MARK), byteArrayOf(-1)).build())
+            add(ScanFilter.Builder().setManufacturerData(COMPANY, byteArrayOf(Hello.MARK), byteArrayOf(-1)).build())
             if (extended) add(ScanFilter.Builder().setServiceData(ParcelUuid(SERVICE), ByteArray(0)).build())
         }
         val settings = ScanSettings.Builder()
@@ -226,6 +235,7 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) : R
         while (recent.size > 1024) recent.remove(recent.keys.first())
         heard++
         lastHeardAt = now
+        if (micro != null && Hello.isHello(micro)) { onHello(micro); return }
         val frame = if (micro != null) micros.accept(micro) else bytes
         if (frame != null) { assembled++; FieldLog.add("BT", "llegó: ${describe(frame)}${if (micro == null) " (grito largo)" else ""}"); onFrame(frame) }
     }

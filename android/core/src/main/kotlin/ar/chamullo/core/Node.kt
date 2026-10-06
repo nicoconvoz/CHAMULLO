@@ -13,6 +13,9 @@ sealed interface NodeEvent {
 
 class PlazaLine(val id: String, val name: String, val text: String, val ts: Long, val mine: Boolean, val heardBy: List<String>)
 
+/** Someone heard saying hello: near, not verified. */
+class Nearby(val shortId: String, val name: String, val coded: Boolean, val lastSeen: Long)
+
 class Neighbor(val beacon: Beacon, val lastSeen: Long, val beats: Int = 1) {
     /** Heard more than once: the camino is stable enough to open a carretera. */
     val stable get() = beats >= Node.STABLE_BEATS
@@ -50,6 +53,7 @@ class Node(
     private val plazaRetries = LinkedHashMap<String, Retry>()
     private val cardRetries = LinkedHashMap<String, Retry>()
     private var road: Road? = null
+    private val nearby = LinkedHashMap<String, Nearby>()
     private val roadInvitedAt = HashMap<String, Long>()
     private val plaza = ArrayList<PlazaEntry>().apply {
         for (l in store.loadPlaza()) add(PlazaEntry(l.id, l.name, l.text, l.ts, l.mine, LinkedHashSet(l.heardBy)))
@@ -62,12 +66,24 @@ class Node(
 
     fun neighbors(): List<Neighbor> = neighbors.values.toList()
 
+    /** Everyone heard saying hello lately, verified or not. */
+    fun nearby(): List<Nearby> = nearby.values.toList()
+
+    fun hello(): ByteArray = Hello.of(identity, coded)
+
+    fun onHello(bytes: ByteArray) {
+        val h = Hello.parse(bytes) ?: return
+        if (h.shortId == identity.nodeId.toHex().take(16)) return
+        nearby[h.shortId] = Nearby(h.shortId, h.name, h.coded, clock())
+    }
+
     fun drainOutbox(): List<ByteArray> = buildList { while (outbox.isNotEmpty()) add(outbox.removeFirst()) }.also { shoutsSent += it.size }
 
     fun tick() {
         val now = clock()
         if (now - lastBeacon >= BEACON_MS) { lastBeacon = now; enqueue(Beacon.of(identity, coded, now).encode()) }
         neighbors.values.removeAll { now - it.lastSeen > NEIGHBOR_TTL_MS }
+        nearby.values.removeAll { now - it.lastSeen > NEIGHBOR_TTL_MS }
         pockets.values.removeAll { it.env.expired(now) }
         for (r in plazaRetries.values + cardRetries.values) if (r.left > 0 && now >= r.nextAt) { r.left--; r.nextAt = now + RETRY_MS; enqueue(r.frame) }
         plazaRetries.values.removeAll { it.left == 0 }

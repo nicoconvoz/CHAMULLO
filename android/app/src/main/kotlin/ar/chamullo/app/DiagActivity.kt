@@ -18,6 +18,7 @@ class DiagActivity : Activity() {
     private lateinit var radioInfo: TextView
     private lateinit var nodeInfo: TextView
     private lateinit var logView: TextView
+    private var helloInfo = ""
     private val handler = Handler(Looper.getMainLooper())
     private val tick = object : Runnable { override fun run() { refresh(); handler.postDelayed(this, 1000) } }
 
@@ -62,9 +63,12 @@ class DiagActivity : Activity() {
                 "  Último aviso: ${r.lastError ?: "ninguno"}"
             ).joinToString("\n")
         }
+        Hub.ask({ n -> n.nearby().map { "${it.name.ifBlank { "?" }} (hace ${(System.currentTimeMillis() - it.lastSeen) / 1000}s)" } }) { hellos ->
+            helloInfo = (listOf("Saludos escuchados: ${hellos.size}") + hellos.map { "  · $it" }).joinToString("\n")
+        }
         Hub.ask({ n -> Triple(n.neighbors().map { "${it.name.ifBlank { "?" }} (${if (it.coded) "largo" else "normal"}, hace ${(System.currentTimeMillis() - it.lastSeen) / 1000}s)" }, n.pocketCount(), n.shoutsSent) }) { (near, pockets, sent) ->
             logView.text = FieldLog.last(25).reversed().joinToString("\n")
-            nodeInfo.text = (listOf("Vecinos: ${near.size}") + near.map { "  · $it" } + listOf("Cartas en el bolsillo: $pockets", "Tramas que preparó el nodo: $sent (salen solo con la radio encendida)")).joinToString("\n")
+            nodeInfo.text = (listOf(helloInfo, "Vecinos con latido firmado: ${near.size}") + near.map { "  · $it" } + listOf("Cartas en el bolsillo: $pockets", "Tramas que preparó el nodo: $sent (salen solo con la radio encendida)")).joinToString("\n")
         }
     }
 

@@ -79,3 +79,34 @@ class MicroAssembler(private val maxPending: Int = 128) {
         return data.map { it!! }
     }
 }
+
+/**
+ * "¡Hola!": presence in a single classic shout, so one shout heard is enough to know someone is around.
+ *
+ *   MARK(0xC6) | short id(8) | flags(1, bit 0 = long range) | name (up to 12 bytes of UTF-8)
+ *
+ * Not signed: it only says who is near. Cards and roads still need the full signed heartbeat.
+ */
+object Hello {
+    const val MARK = 0xC6.toByte()
+    private const val NAME_MAX = Micro.MAX - 10
+
+    class Parsed(val shortId: String, val name: String, val coded: Boolean)
+
+    fun isHello(b: ByteArray) = b.size in 10..Micro.MAX && b[0] == MARK
+
+    fun of(id: Identity, coded: Boolean): ByteArray {
+        var name = id.name.toByteArray()
+        if (name.size > NAME_MAX) {
+            var cut = id.name
+            while (cut.toByteArray().size > NAME_MAX) cut = cut.dropLast(1)
+            name = cut.toByteArray()
+        }
+        return byteArrayOf(MARK) + id.nodeId.copyOf(8) + byteArrayOf(if (coded) 1 else 0) + name
+    }
+
+    fun parse(b: ByteArray): Parsed? {
+        if (!isHello(b)) return null
+        return Parsed(b.copyOfRange(1, 9).toHex(), String(b, 10, b.size - 10), (b[9].toInt() and 1) == 1)
+    }
+}

@@ -18,6 +18,7 @@ import ar.chamullo.core.toHex
 class GritoService : Service() {
     private var radios: List<Radio> = emptyList()
     private val recent = LinkedHashMap<String, Long>()
+    private var lastHello = 0L
     private var running = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -33,7 +34,7 @@ class GritoService : Service() {
 
         val identity = Vault(this).identity() ?: run { stopSelf(); return }
         val incoming: (ByteArray) -> Unit = { frame -> Hub.worker.post { handle(frame) } }
-        val bluetooth = GritoRadio(this, incoming)
+        val bluetooth = GritoRadio(this, incoming) { hello -> Hub.worker.post { Hub.node?.onHello(hello) } }
         val road = WifiRoad(this, identity, incoming) { ssid, pass -> Hub.post { it.setRoad(ssid, pass) } }
         radios = listOf(road, WifiRadio(this, incoming), bluetooth)
         // Frames up to 60 KB stay whole: the carretera carries them in one piece; caminos split small ones.
@@ -45,7 +46,14 @@ class GritoService : Service() {
         Hub.worker.post(object : Runnable {
             override fun run() {
                 if (!running) return
-                Hub.node?.let { n -> n.tick(); val on = radios.filter { it.active }; for (f in n.drainOutbox()) on.forEach { it.shout(f) } }
+                Hub.node?.let { n ->
+                    n.tick()
+                    val now = System.currentTimeMillis()
+                    if (now - lastHello >= HELLO_MS) { lastHello = now; bluetooth.sayHello(n.hello()) }
+                    if (n.neighbors().any { it.stable }) road.ensureOpen()
+                    val on = radios.filter { it.active }
+                    for (f in n.drainOutbox()) on.forEach { it.shout(f) }
+                }
                 Hub.worker.postDelayed(this, TICK_MS)
             }
         })
@@ -121,5 +129,6 @@ class GritoService : Service() {
         const val ID_UPDATE = 3
         const val TICK_MS = 200L
         const val ROAD_FRAME = 60_000
+        const val HELLO_MS = 3_000L
     }
 }

@@ -101,9 +101,14 @@ class MainActivity : Activity() {
                 else -> "Bluetooth: apagado (es el respaldo; no se conecta a nada)."
             }
         }
-        Hub.ask({ node -> node.neighbors().map { Triple(it.name, it.coded, it) } to node.store.contacts() }) { (near, cards) ->
+        Hub.ask({ node -> Triple(node.neighbors().map { Triple(it.name, it.coded, it) }, node.store.contacts(), node.nearby()) }) { (near, cards, hellos) ->
             nearby.removeAllViews()
-            if (near.isEmpty()) nearby.addView(text("Nadie a la vista todavía. Acercate a otro celular con CHAMULLO.", 14f, Ui.MUTED))
+            val verified = near.map { it.third.nodeId.toHex().take(16) }.toSet()
+            for (h in hellos.filter { it.shortId !in verified }) nearby.addView(card {
+                addView(text(h.name.ifBlank { "Sin nombre" }, 16f, bold = true))
+                addView(text("te escucho saludar · esperando su latido firmado para intercambiar tarjeta", 12f, Ui.MUTED))
+            })
+            if (near.isEmpty() && hellos.isEmpty()) nearby.addView(text("Nadie a la vista todavía. Acercate a otro celular con CHAMULLO.", 14f, Ui.MUTED))
             val known = cards.map { it.nodeId.toHex() }.toSet()
             for ((name, coded, n) in near) nearby.addView(card {
                 addView(row {

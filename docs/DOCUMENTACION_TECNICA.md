@@ -1,6 +1,6 @@
 # CHAMULLO — Documentación técnica
 
-Versión del documento: 1 · Estado del código: app 0.2.0 (octubre 2026)
+Versión del documento: 2 · Estado del código: app 0.2.1 (octubre 2026)
 
 > Este documento describe **lo que está construido y funcionando hoy**. El diseño completo de la red
 > (identidad, sobre, recibos, economía, routing, interfaz de aire) está en [`docs/specs/`](specs/). Cuando el
@@ -140,7 +140,8 @@ crecientes y la **regla par/impar**: un campo desconocido impar se ignora, uno p
 | Largo alcance | Si el chip tiene Coded PHY, la trama entera sale además en un anuncio extendido |
 | Chips viejos | Sin anuncios extendidos se usa el anunciante clásico de Android (start/stop por micro) |
 | Escucha | Filtro por fabricante `0xFFFF` + prefijo `0xC5`; se reinicia cada 10 min (Android corta las de más de 30 min) |
-| Ritmo | 250 ms por micro, cola por **cartas enteras** (máx. 12); latido cada 15 s |
+| Ritmo | 250 ms por micro, cola por **cartas enteras** (máx. 12); latido firmado cada 15 s |
+| Saludo | **"¡Hola!" en un solo grito** (`0xC6 | id corto(8) | largo alcance | nombre ≤ 12 B`) cada 3 s, adelante de la cola. Muestra quién está cerca; no está firmado |
 | Límite | Tramas de hasta 4 KB; lo más grande va solo por la carretera |
 
 **Wi-Fi Aware** (`WifiRadio.kt`): si el teléfono lo trae, publica y se suscribe al servicio `chamullo` y manda
@@ -153,7 +154,7 @@ cada trama como mensaje (≤ 255 bytes) a cada teléfono encontrado. Sin red ni 
 
 `WifiRoad.kt`, diseño en [spec 07](specs/07-camino-carretera.md).
 
-1. Cada teléfono abre **su carretera**: un grupo Wi-Fi Direct con nombre fijo `DIRECT-CH-<id>` y clave derivada de su semilla.
+1. Cuando el camino tiene un **vecino estable**, el teléfono abre **su carretera**: un grupo Wi-Fi Direct con nombre fijo `DIRECT-CH-<id>` y clave derivada de su semilla. No antes: Bluetooth y Wi-Fi comparten antena y una carretera abierta de más le quita oído al grito.
 2. Cuando un vecino es **estable** (2 latidos escuchados), el nodo le manda la llave con `ROAD_INVITE`, sellada y firmada. Se repite como mucho cada 5 min.
 3. El vecino **se sube como cliente Wi-Fi común** (`WifiNetworkSpecifier`, red local sin internet) **sin cerrar su propia carretera**: así se forma la **cadena viva**.
 4. Por cada carretera corre un caño TCP (puerto **47474**) con tramas `[largo][bytes]` de hasta 1 MB. El nodo arma tramas de hasta **60 KB enteras**.
@@ -243,6 +244,7 @@ La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo
 | 0.1.8 | Comodines (FEC) y reintentos; devolución de tarjeta | Se perdían pedazos y tarjetas |
 | 0.1.9 | Caja negra, cola por cartas enteras, latido cada 15 s | La cola cortaba cartas por la mitad |
 | 0.2.0 | **Carretera**: Wi-Fi Direct en cadena viva | Transmitir mucho y rápido |
+| 0.2.1 | Saludo de un solo grito; la carretera abre solo con un vecino estable | "Vecinos: 0": la carretera abierta de entrada le robaba antena al grito |
 
 ## 13. Pendientes conocidos
 
