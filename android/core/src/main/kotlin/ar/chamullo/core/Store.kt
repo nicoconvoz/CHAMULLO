@@ -14,6 +14,8 @@ interface Store {
     fun setState(msgId: String, state: MessageState)
     fun savePlaza(lines: List<PlazaLine>) {}
     fun loadPlaza(): List<PlazaLine> = emptyList()
+    fun savePockets(envelopes: List<ByteArray>) {}
+    fun loadPockets(): List<ByteArray> = emptyList()
 }
 
 class MemoryStore : Store {
@@ -23,6 +25,9 @@ class MemoryStore : Store {
 
     override fun savePlaza(lines: List<PlazaLine>) { plaza = lines }
     override fun loadPlaza() = plaza
+    private var pockets = emptyList<ByteArray>()
+    override fun savePockets(envelopes: List<ByteArray>) { pockets = envelopes }
+    override fun loadPockets() = pockets
     override fun saveContact(card: Card) { contacts[card.nodeId.toHex()] = card }
     override fun contacts() = contacts.values.toList()
     override fun saveMessage(m: Message) { messages += m }

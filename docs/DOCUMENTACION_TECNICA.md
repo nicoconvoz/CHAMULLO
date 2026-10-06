@@ -1,6 +1,6 @@
 # CHAMULLO — Documentación técnica
 
-Versión del documento: 6 · Estado del código: app 0.3.0 "Islas" (octubre 2026)
+Versión del documento: 7 · Estado del código: app 0.3.1 "Islas" (octubre 2026)
 
 > Este documento describe **lo que está construido y funcionando hoy**. El diseño completo de la red
 > (identidad, sobre, recibos, economía, routing, interfaz de aire) está en [`docs/specs/`](specs/). Cuando el
@@ -198,7 +198,8 @@ del otro, y se muestra un solo aviso por persona.
 |---|---|
 | Frase (identidad) | SharedPreferences cifrado con Keystore (`Vault`) |
 | Contactos, chats, plaza | `files/store.json` (`FileStore`), escritura atómica |
-| Bolsillos y vistos | Memoria del nodo: se pierden al cerrar el servicio |
+| Bolsillos | `files/store.json`: sobreviven al reinicio |
+| Vistos | Memoria del nodo |
 | Caja negra | Memoria (últimas 800 líneas), exportable desde Diagnóstico |
 
 ## 9. Permisos
@@ -247,6 +248,7 @@ La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo
 | 0.2.1 | Saludo de un solo grito; la carretera abre solo con un vecino estable | "Vecinos: 0": la carretera abierta de entrada le robaba antena al grito |
 | 0.2.2 | Varios megáfonos a la vez en chips viejos | Lo que gritaba un chip viejo llegaba "a veces": cada micro salía una vez o ninguna |
 | 0.2.3 | Una sola carretera por par de vecinos; pasajero ocupado; cierre de carreteras vacías; aviso de versión cada 30 min | El Capitán: "si uno abre, el otro se conecta; ¿para qué abrir las dos?" |
+| 0.3.1 | Saludo secreto con firma en cada caño de la isla; bolsillos que sobreviven al reinicio | Intrusos con la llave del cartel; cartas perdidas al cerrar la app |
 | 0.3.0 | **Islas**: todo por Wi-Fi Direct, carteles, anfitrión que reparte, ferry que rota; Bluetooth de respaldo apagado por defecto; Wi-Fi Aware apagado | El Capitán: "¿para qué caminos si podemos trazarlos con la carretera?" |
 
 ## 13. Islas (0.3.0)
@@ -284,7 +286,7 @@ Rediseño del Capitán después de las pruebas de campo: **el Bluetooth complica
 - Conectarse a otra isla tarda **de 1 a 5 s**: el ferry lleva lotes, no paquetes sueltos.
 - Todas las islas usan `192.168.49.x`: el ferry cambia de isla, así que no hay choque. Un puente fijo en las dos a la vez queda para más adelante.
 - Unirse sin carteles de confirmación requiere **Android 10+**, y el celular del Capitán tiene Android 10.
-- El cartel publica la llave de la isla: cualquiera cerca puede entrar. Todo lo que viaja va firmado y cifrado; falta el saludo secreto con firma al conectar (spec 01 §7) para dejar afuera a intrusos.
+- El cartel publica la llave de la isla: cualquiera cerca puede entrar al Wi-Fi, pero **cada caño exige el saludo secreto** (spec 01 §7): ambos lados firman los dos ids y dos nonces frescos. Sin firma válida en 10 s, el caño se cierra.
 
 ## 14. Pendientes conocidos
 
@@ -293,7 +295,6 @@ Rediseño del Capitán después de las pruebas de campo: **el Bluetooth complica
 - [ ] Confirmar si Android pide aprobación cada vez que se sube a una carretera.
 - [ ] Brújula y río (spec 05) en la app: hoy el ruteo es eco acotado.
 - [ ] Recibos con cadena de saltos y cobro (spec 03) y economía (spec 04).
-- [ ] Bolsillos persistentes: hoy se pierden si el servicio se cierra.
 - [ ] Clave de firma de release propia.
 - [ ] Rol del iPhone.
 

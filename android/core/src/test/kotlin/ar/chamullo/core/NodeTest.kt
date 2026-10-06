@@ -261,4 +261,18 @@ class NodeTest {
         assertEquals(1, sent.size)
         assertEquals("DIRECT-CH-beto", sent.single().open(Identity.fromSeed(other.seed, "Caro"))!!.ssid)
     }
+
+    @Test
+    fun `pockets - letters being carried survive an app restart`() {
+        val store = MemoryStore()
+        var now = 0L
+        val beto = Identity.generate("Beto")
+        val ana = Node(Identity.generate("Ana"), MemoryStore()) { now }
+        val carrier = Node(beto, store) { now }
+        ana.send(Identity.generate("Caro").card(), "llevala vos")
+        for (f in ana.drainOutbox()) carrier.onFrame(f)
+        assertEquals(1, carrier.pocketCount())
+        val again = Node(beto, store) { now } // the app was closed and opened again
+        assertEquals(1, again.pocketCount())
+    }
 }

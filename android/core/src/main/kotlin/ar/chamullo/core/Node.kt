@@ -43,7 +43,12 @@ class Node(
     private val reassembler = Reassembler()
     private val neighbors = LinkedHashMap<String, Neighbor>()
     private val seen = LinkedHashSet<String>()
-    private val pockets = LinkedHashMap<String, Pocket>()
+    private val pockets = LinkedHashMap<String, Pocket>().apply {
+        // Letters being carried survive a restart: they come back from the store.
+        for (b in store.loadPockets()) (Packet.parseOrNull(b) as? Envelope)?.let { put(it.msgId.toHex(), Pocket(it)) }
+    }
+
+    private fun savePockets() = store.savePockets(pockets.values.map { it.env.encode() })
     private val offeredTo = mutableSetOf<String>()
     private var lastBeacon = Long.MIN_VALUE / 2
     private var newNeighbor = false
@@ -87,7 +92,7 @@ class Node(
         if (now - lastBeacon >= BEACON_MS) { lastBeacon = now; enqueue(Beacon.of(identity, coded, now).encode()) }
         neighbors.values.removeAll { now - it.lastSeen > NEIGHBOR_TTL_MS }
         nearby.values.removeAll { now - it.lastSeen > NEIGHBOR_TTL_MS }
-        pockets.values.removeAll { it.env.expired(now) }
+        if (pockets.values.removeAll { it.env.expired(now) }) savePockets()
         for (r in plazaRetries.values + cardRetries.values) if (r.left > 0 && now >= r.nextAt) { r.left--; r.nextAt = now + RETRY_MS; enqueue(r.frame) }
         plazaRetries.values.removeAll { it.left == 0 }
         cardRetries.values.removeAll { it.left == 0 }
@@ -142,6 +147,7 @@ class Node(
         seen += id
         store.saveMessage(Message(to.nodeId.toHex(), true, text, clock(), id, MessageState.SENT))
         pockets[id] = Pocket(env) // the sender keeps its own letter until it is confirmed
+        savePockets()
         enqueue(env.encode())
         return id
     }
@@ -231,7 +237,7 @@ class Node(
                 }
                 is Letter.Ack -> {
                     val acked = body.msgId.toHex()
-                    pockets.remove(acked)
+                    if (pockets.remove(acked) != null) savePockets()
                     store.setState(acked, MessageState.DELIVERED)
                     listOf(NodeEvent.Delivered(acked))
                 }
@@ -240,6 +246,7 @@ class Node(
         if (env.hopCount < env.maxHops) {
             val next = env.withHop()
             pockets[id] = Pocket(next)
+            savePockets()
             enqueue(next.encode())
         }
         return emptyList()

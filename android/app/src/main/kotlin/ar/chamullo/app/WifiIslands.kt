@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.Looper
 import ar.chamullo.core.Cartel
 import ar.chamullo.core.Crypto
+import ar.chamullo.core.Handshake
 import ar.chamullo.core.Identity
 import ar.chamullo.core.IslandAction
 import ar.chamullo.core.IslandState
@@ -41,7 +42,7 @@ import java.util.concurrent.LinkedBlockingQueue
 @SuppressLint("MissingPermission")
 class WifiIslands(
     private val context: Context,
-    identity: Identity,
+    private val identity: Identity,
     private val onFrame: (ByteArray) -> Unit
 ) : Radio {
     private val handler = Handler(Looper.getMainLooper())
@@ -218,8 +219,7 @@ class WifiIslands(
             runCatching {
                 val s = Socket()
                 s.connect(InetSocketAddress(owner, PORT), 4_000)
-                val link = Link(s); link.start()
-                link.send(HELLO + me.toByteArray())
+                Link(s).start()
                 FieldLog.add("ISLA", "en la isla: caño abierto con el anfitrión")
                 return
             }
@@ -272,15 +272,20 @@ class WifiIslands(
         private val out = LinkedBlockingQueue<ByteArray>(4096)
         @Volatile private var open = true
         private var speedExpected = 0; private var speedGot = 0; private var speedStart = 0L
+        // The secret greeting (Identity §7): nothing passes until the other side proves who it is.
+        private val handshake = Handshake(identity)
+        @Volatile private var trusted = false
 
         fun start() {
             links += this
             socket.tcpNoDelay = true
+            out.offer(handshake.hello())
+            handler.postDelayed({ if (!trusted) { FieldLog.add("ISLA", "un caño no probó quién era: lo cierro"); close() } }, HANDSHAKE_MS)
             Thread { readLoop() }.apply { isDaemon = true }.start()
             Thread { writeLoop() }.apply { isDaemon = true }.start()
         }
 
-        fun send(frame: ByteArray) { if (open) out.offer(frame) }
+        fun send(frame: ByteArray) { if (open && trusted) out.offer(frame) }
 
         private fun writeLoop() = runCatching {
             val w = DataOutputStream(socket.getOutputStream().buffered(256 * 1024))
@@ -299,12 +304,17 @@ class WifiIslands(
                 if (size !in 1..MAX_FRAME) error("trama inválida")
                 val f = ByteArray(size).also { r.readFully(it) }
                 heard++
-                when {
-                    f.startsWith(HELLO) -> handler.post {
-                        members[this] = String(f, HELLO.size, f.size - HELLO.size).take(8)
-                        FieldLog.add("ISLA", "se sumó un miembro (${members.size})")
-                        publishCartel()
+                if (!trusted) {
+                    handshake.onHello(f)?.let { out.offer(it) }
+                    if (Handshake.isHandshake(f) && handshake.onProof(f)) {
+                        trusted = true
+                        val who = handshake.peer!!.toHex()
+                        FieldLog.add("ISLA", "caño verificado con ${who.take(6)}")
+                        if (host) handler.post { members[this] = who.take(8); FieldLog.add("ISLA", "se sumó un miembro (${members.size})"); publishCartel() }
                     }
+                    continue
+                }
+                when {
                     f.startsWith(SPEED_START) -> { speedExpected = intOf(f, SPEED_START.size); speedGot = 0; speedStart = System.nanoTime() }
                     f.startsWith(SPEED) -> {
                         speedGot += f.size
@@ -346,7 +356,7 @@ class WifiIslands(
         const val DECIDE_MS = 5_000L
         const val CARTEL_TTL_MS = 60_000L
         const val FERRY_STAY_MS = 20_000L
-        private val HELLO = "CHISL".toByteArray()
+        const val HANDSHAKE_MS = 10_000L
         private val SPEED = "CHSPD".toByteArray()
         private val SPEED_START = "CHSPS".toByteArray()
         private val SPEED_RESULT = "CHSPR".toByteArray()
