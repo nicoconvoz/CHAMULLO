@@ -94,4 +94,23 @@ class PacketTest {
         assertNull(Packet.parseOrNull(byteArrayOf(1, 2, 3)))
         assertNotNull(Packet.parseOrNull(Beacon.of(ana, false, 1).encode()))
     }
+
+    @Test
+    fun `a plaza message is signed by its author and anyone nearby can read it`() {
+        val p = Packet.parse(Plaza.of(ana, "hola plaza", now = 7).encode()) as Plaza
+        assertTrue(p.verify())
+        assertEquals("hola plaza", p.text)
+        assertEquals("Ana", p.name)
+        val forged = Plaza(p.nodeId, p.ts, "otra cosa", p.name, p.nonce, p.sig)
+        assertFalse(forged.verify())
+    }
+
+    @Test
+    fun `a heard receipt names who heard which plaza message`() {
+        val msg = Plaza.of(ana, "hola", now = 1)
+        val h = Packet.parse(Heard.of(beto, msg.id, now = 2).encode()) as Heard
+        assertTrue(h.verify())
+        assertEquals(msg.id, h.plazaId)
+        assertEquals("Beto", h.name)
+    }
 }

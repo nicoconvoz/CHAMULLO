@@ -5,7 +5,11 @@ sealed interface NodeEvent {
     data class LetterReceived(val from: Card, val text: String, val msgId: String) : NodeEvent
     data class Delivered(val msgId: String) : NodeEvent
     data object NeighborsChanged : NodeEvent
+    data class PlazaReceived(val id: String, val name: String, val text: String) : NodeEvent
+    data class PlazaHeard(val id: String, val name: String) : NodeEvent
 }
+
+class PlazaLine(val id: String, val name: String, val text: String, val ts: Long, val mine: Boolean, val heardBy: List<String>)
 
 class Neighbor(val beacon: Beacon, val lastSeen: Long) {
     val name get() = beacon.name
@@ -36,6 +40,8 @@ class Node(
     private val offeredTo = mutableSetOf<String>()
     private var lastBeacon = Long.MIN_VALUE / 2
     private var newNeighbor = false
+    private class PlazaEntry(val id: String, val name: String, val text: String, val ts: Long, val mine: Boolean, val heardBy: LinkedHashSet<String> = LinkedHashSet())
+    private val plaza = ArrayList<PlazaEntry>()
 
     var shoutsSent = 0L; private set
     var framesHeard = 0L; private set
@@ -78,6 +84,18 @@ class Node(
         return id
     }
 
+    fun plaza(): List<PlazaLine> = plaza.map { PlazaLine(it.id, it.name, it.text, it.ts, it.mine, it.heardBy.toList()) }
+
+    /** La plaza: an open message for whoever is within earshot; it is not carried further. */
+    fun sendPlaza(text: String): String {
+        val p = Plaza.of(identity, text, clock())
+        keepPlaza(PlazaEntry(p.id, identity.name, text, p.ts, true))
+        enqueue(p.encode())
+        return p.id
+    }
+
+    private fun keepPlaza(e: PlazaEntry) { plaza += e; while (plaza.size > 200) plaza.removeAt(0) }
+
     fun onFrame(bytes: ByteArray): List<NodeEvent> {
         framesHeard++
         val frame = reassembler.accept(bytes) ?: return emptyList()
@@ -85,6 +103,8 @@ class Node(
             is Beacon -> onBeacon(p)
             is CardOffer -> onCardOffer(p)
             is Envelope -> onEnvelope(p)
+            is Plaza -> onPlaza(p)
+            is Heard -> onHeard(p)
             else -> emptyList()
         }
     }
@@ -96,6 +116,19 @@ class Node(
         neighbors[key] = Neighbor(b, clock())
         if (isNew) newNeighbor = true
         return if (isNew) listOf(NodeEvent.NeighborsChanged) else emptyList()
+    }
+
+    private fun onPlaza(p: Plaza): List<NodeEvent> {
+        if (p.nodeId.contentEquals(identity.nodeId) || !p.verify() || plaza.any { it.id == p.id }) return emptyList()
+        keepPlaza(PlazaEntry(p.id, p.name, p.text, p.ts, false))
+        enqueue(Heard.of(identity, p.id, clock()).encode())
+        return listOf(NodeEvent.PlazaReceived(p.id, p.name, p.text))
+    }
+
+    private fun onHeard(h: Heard): List<NodeEvent> {
+        val mine = plaza.firstOrNull { it.mine && it.id == h.plazaId } ?: return emptyList()
+        if (!h.verify() || !mine.heardBy.add(h.name.ifBlank { h.nodeId.toHex().take(8) })) return emptyList()
+        return listOf(NodeEvent.PlazaHeard(h.plazaId, h.name))
     }
 
     private fun onCardOffer(o: CardOffer): List<NodeEvent> {

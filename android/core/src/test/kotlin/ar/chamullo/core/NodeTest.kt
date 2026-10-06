@@ -118,4 +118,15 @@ class NodeTest {
         air.run(5_000)
         assertEquals(text, air.events.getValue("beto").filterIsInstance<NodeEvent.LetterReceived>().single().text)
     }
+
+    @Test
+    fun `plaza - neighbors read the message and the author sees who heard it, one hop only`() {
+        val air = Air("ana", "beto", "caro").apply { link("ana", "beto"); link("beto", "caro") }
+        air.run(1_000)
+        val id = air.node("ana").sendPlaza("¿me escuchan?")
+        air.run(3_000)
+        assertEquals("¿me escuchan?", air.events.getValue("beto").filterIsInstance<NodeEvent.PlazaReceived>().single().text)
+        assertTrue(air.events["caro"].orEmpty().none { it is NodeEvent.PlazaReceived }, "the plaza is only for those within earshot")
+        assertEquals(listOf("Beto"), air.node("ana").plaza().single { it.id == id }.heardBy)
+    }
 }

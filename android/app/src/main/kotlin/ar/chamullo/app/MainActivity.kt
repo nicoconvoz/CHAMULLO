@@ -43,6 +43,7 @@ class MainActivity : Activity() {
                 status = text("Encendiendo el grito…", 14f, Ui.MUTED)
                 addView(status)
             })
+            addView(button("La Plaza: chat de prueba con los de cerca") { startActivity(Intent(this@MainActivity, PlazaActivity::class.java)) })
             addView(title("Cerca tuyo"))
             nearby = column(); addView(nearby)
             addView(title("Contactos"))

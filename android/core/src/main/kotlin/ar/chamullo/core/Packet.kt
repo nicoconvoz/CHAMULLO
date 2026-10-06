@@ -12,6 +12,8 @@ sealed interface Packet {
         const val KIND_FRAGMENT = 0x03
         const val LINK_BEACON = 10L
         const val LINK_CARD_OFFER = 11L
+        const val LINK_PLAZA = 12L
+        const val LINK_HEARD = 13L
 
         fun isChamullo(b: ByteArray) = b.size >= 4 && b[0] == MAGIC[0] && b[1] == MAGIC[1] && b[2].toInt() == VERSION
 
@@ -26,6 +28,8 @@ sealed interface Packet {
                     when (type) {
                         LINK_BEACON -> Beacon.decode(tlv)
                         LINK_CARD_OFFER -> CardOffer.decode(tlv)
+                        LINK_PLAZA -> Plaza.decode(tlv)
+                        LINK_HEARD -> Heard.decode(tlv)
                         else -> throw WireException("unknown link message $type")
                     }
                 }
@@ -192,6 +196,58 @@ class Envelope(
             val src = r.take(32); val dst = r.take(32); val nonce = r.take(16); val ts = r.u64(); val exp = r.u64()
             val origin = r.take(r.varint().toInt()); val sig = r.take(64); val hops = r.u8(); val transit = r.take(r.varint().toInt())
             return Envelope(src, dst, nonce, ts, exp, origin, sig, hops, transit)
+        }
+    }
+}
+
+/* ======================= la plaza: an open test chat for whoever is within earshot ======================= */
+
+class Plaza(val nodeId: ByteArray, val ts: Long, val text: String, val name: String, val nonce: ByteArray, val sig: ByteArray) : Packet {
+    val id: String get() = Crypto.hash(nodeId + nonce).toHex()
+
+    private fun body() = nodeId + Tlv.u64(ts) + nonce + text.toByteArray() + 0.toByte() + name.toByteArray()
+
+    fun verify() = Identity.verify(nodeId, "PLAZA", body(), sig)
+
+    override fun encode() = Packet.link(
+        Packet.LINK_PLAZA,
+        listOf(2L to nodeId, 4L to Tlv.u64(ts), 6L to text.toByteArray(), 7L to name.toByteArray(), 8L to nonce, 10L to sig)
+    )
+
+    companion object {
+        fun of(id: Identity, text: String, now: Long): Plaza {
+            val nonce = Crypto.randomBytes(8)
+            val unsigned = Plaza(id.nodeId, now, text, id.name, nonce, ByteArray(64))
+            return Plaza(id.nodeId, now, text, id.name, nonce, id.sign("PLAZA", unsigned.body()))
+        }
+
+        fun decode(t: Map<Long, ByteArray>): Plaza {
+            Tlv.requireKnown(t, setOf(2, 4, 6, 8, 10))
+            return Plaza(t.getValue(2), Tlv.readU64(t.getValue(4)), String(t.getValue(6)), String(t[7] ?: ByteArray(0)), t.getValue(8), t.getValue(10))
+        }
+    }
+}
+
+/** "I heard it": the automatic answer to a plaza message, so its author sees who it reached. */
+class Heard(val nodeId: ByteArray, val plazaId: String, val name: String, val ts: Long, val sig: ByteArray) : Packet {
+    private fun body() = nodeId + hex(plazaId) + Tlv.u64(ts) + name.toByteArray()
+
+    fun verify() = Identity.verify(nodeId, "HEARD", body(), sig)
+
+    override fun encode() = Packet.link(
+        Packet.LINK_HEARD,
+        listOf(2L to nodeId, 4L to hex(plazaId), 6L to Tlv.u64(ts), 7L to name.toByteArray(), 10L to sig)
+    )
+
+    companion object {
+        fun of(id: Identity, plazaId: String, now: Long): Heard {
+            val unsigned = Heard(id.nodeId, plazaId, id.name, now, ByteArray(64))
+            return Heard(id.nodeId, plazaId, id.name, now, id.sign("HEARD", unsigned.body()))
+        }
+
+        fun decode(t: Map<Long, ByteArray>): Heard {
+            Tlv.requireKnown(t, setOf(2, 4, 6, 10))
+            return Heard(t.getValue(2), t.getValue(4).toHex(), String(t[7] ?: ByteArray(0)), Tlv.readU64(t.getValue(6)), t.getValue(10))
         }
     }
 }

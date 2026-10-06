@@ -41,12 +41,12 @@ class DiagActivity : Activity() {
             "Anuncios extendidos: ${yes(r.extended)}",
             "Largo alcance (Coded PHY): ${yes(r.coded)}",
             "Máximo por anuncio: ${r.maxAdvLen} bytes",
-            "Gritos enviados: ${r.shouts}",
-            "Gritos escuchados: ${r.heard}",
+            "Gritos que salieron por la radio: ${r.shouts}",
+            "Gritos escuchados por la radio: ${r.heard}",
             "Último error: ${r.lastError ?: "ninguno"}"
         ).joinToString("\n")
         Hub.ask({ n -> Triple(n.neighbors().map { "${it.name.ifBlank { "?" }} (${if (it.coded) "largo" else "normal"}, hace ${(System.currentTimeMillis() - it.lastSeen) / 1000}s)" }, n.pocketCount(), n.shoutsSent) }) { (near, pockets, sent) ->
-            nodeInfo.text = (listOf("Vecinos: ${near.size}") + near.map { "  · $it" } + listOf("Cartas en el bolsillo: $pockets", "Tramas encoladas en total: $sent")).joinToString("\n")
+            nodeInfo.text = (listOf("Vecinos: ${near.size}") + near.map { "  · $it" } + listOf("Cartas en el bolsillo: $pockets", "Tramas que preparó el nodo: $sent (salen solo con la radio encendida)")).joinToString("\n")
         }
     }
 
