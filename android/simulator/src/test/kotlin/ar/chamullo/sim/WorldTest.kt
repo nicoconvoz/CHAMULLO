@@ -65,7 +65,21 @@ class WorldTest {
         w.run(90_000)
         repeat(3) { w.send(w.phonesOf("Norte")[it], w.phonesOf("Sur")[it], "carta $it") }
         w.run(25 * 60_000)
-        assertTrue(w.furthestLetterM() > 1_000, "the letters walked east: ${w.furthestLetterM()} m")
-        assertEquals(0, w.drops().filterKeys { it != "la tiene otro" }.values.sum(), "no copy lost: ${w.drops()}")
+        assertTrue(w.report().delivered > 0 || w.furthestLetterM() > 1_000, "the letters crossed barrios: ${w.furthestLetterM()} m")
+        // A local eco that ends is how a copy finishes its search; running out of hops or time would be a loss.
+        assertEquals(0, (w.drops()["sin saltos"] ?: 0) + (w.drops()["venció"] ?: 0), "no copy lost: ${w.drops()}")
+    }
+
+    @Test
+    fun `provincia - the Internet bridge jumps the big gap and the bridges earn their Lucas`() {
+        val s = Scenarios.all.single { it.key == "provincia" }
+        val w = Scenarios.build(s, seed = 7)
+        w.run(90_000)
+        repeat(3) { w.send(w.phonesOf("Norte")[it], w.phonesOf("Sur")[it], "carta $it") }
+        w.run(20 * 60_000)
+        assertTrue(w.report().delivered >= 2, "delivered ${w.report().delivered} of 3")
+        assertTrue(w.internetBytes() > 0)
+        val share = Economy.dailyShare(Economy.national(w.report().carries).scores)
+        assertTrue(w.bridges().any { (share[it] ?: 0) > 0 }, "a bridge earned Lucas: $share")
     }
 }

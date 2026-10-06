@@ -82,27 +82,32 @@ class Card(val nodeId: ByteArray, val boxPublic: ByteArray, val tagSecret: ByteA
 /* ======================= heartbeat: who is around (Air Interface §5.3) ======================= */
 
 /** [cell]: where its owner is, to the ~100 m cell (Discovery & Routing §3, §10.2); a ferry about to sail puts its heading. */
-class Beacon(val nodeId: ByteArray, val boxPublic: ByteArray, val ts: Long, val name: String, val coded: Boolean, val sig: ByteArray, val cell: Zone? = null) : Packet {
-    private fun body() = nodeId + boxPublic + Tlv.u64(ts) + name.toByteArray() + (if (coded) 1 else 0).toByte() + (cell?.encode() ?: ByteArray(0))
+/** [bridge]: its owner lends Internet (Discovery & Routing §11). */
+class Beacon(
+    val nodeId: ByteArray, val boxPublic: ByteArray, val ts: Long, val name: String, val coded: Boolean, val sig: ByteArray,
+    val cell: Zone? = null, val bridge: Boolean = false
+) : Packet {
+    private fun body() = nodeId + boxPublic + Tlv.u64(ts) + name.toByteArray() + (if (coded) 1 else 0).toByte() + (cell?.encode() ?: ByteArray(0)) +
+        (if (bridge) byteArrayOf(1) else ByteArray(0))
 
     fun verify() = Identity.verify(nodeId, "BEACON", body(), sig)
 
     override fun encode() = Packet.link(
         Packet.LINK_BEACON,
         listOfNotNull(2L to nodeId, 4L to boxPublic, 6L to Tlv.u64(ts), 7L to name.toByteArray(), 9L to byteArrayOf(if (coded) 1 else 0), 10L to sig,
-            cell?.let { 11L to it.encode() })
+            cell?.let { 11L to it.encode() }, if (bridge) 13L to byteArrayOf(1) else null)
     )
 
     companion object {
-        fun of(id: Identity, coded: Boolean, now: Long, cell: Zone? = null): Beacon {
-            val unsigned = Beacon(id.nodeId, id.boxPublic, now, id.name, coded, ByteArray(64), cell)
-            return Beacon(id.nodeId, id.boxPublic, now, id.name, coded, id.sign("BEACON", unsigned.body()), cell)
+        fun of(id: Identity, coded: Boolean, now: Long, cell: Zone? = null, bridge: Boolean = false): Beacon {
+            val unsigned = Beacon(id.nodeId, id.boxPublic, now, id.name, coded, ByteArray(64), cell, bridge)
+            return Beacon(id.nodeId, id.boxPublic, now, id.name, coded, id.sign("BEACON", unsigned.body()), cell, bridge)
         }
 
         fun decode(t: Map<Long, ByteArray>): Beacon {
             Tlv.requireKnown(t, setOf(2, 4, 6, 10))
             return Beacon(t.getValue(2), t.getValue(4), Tlv.readU64(t.getValue(6)), String(t[7] ?: ByteArray(0)), (t[9]?.firstOrNull() ?: 0).toInt() == 1, t.getValue(10),
-                Zone.decodeOrNull(t[11]))
+                Zone.decodeOrNull(t[11]), (t[13]?.firstOrNull()?.toInt() ?: 0) == 1)
         }
     }
 }

@@ -225,4 +225,69 @@ class NodeCompassTest {
         now += Node.OFFER_TIMEOUT_MS + 1; ana.tick()
         assertEquals(1, ana.pocketCount(), "ana still has it")
     }
+
+    /* ---------- el puente por Internet (Discovery & Routing §11) ---------- */
+
+    private class Cloud(val nodes: Map<String, Node>) : Bridge {
+        val sent = mutableListOf<Pair<String, ByteArray>>()
+        override fun peersIn(zone: Zone) = nodes.values.filter { it.bridge != null && zone.contains(it.cell()!!) }.map { it.identity.nodeId }
+        override fun send(to: ByteArray, frame: ByteArray) { sent += to.toHex() to frame }
+        fun deliver() { val now = sent.toList(); sent.clear(); for ((to, f) in now) nodes.values.single { it.identity.nodeId.toHex() == to }.onFrame(f) }
+    }
+
+    @Test
+    fun `a bridge with no way forward uploads the letter, and three bridges in the barrio bring it down`() {
+        val air = Air()
+        air.add("ana", lat, -58.4300)
+        val far = (1..4).map { air.add("sur$it", lat, -58.3600 + it * 0.0005) }
+        val cloud = Cloud(air.nodes)
+        air.node("ana").bridge = cloud
+        far.forEach { it.bridge = cloud }
+        air.run(1_000)
+        air.node("ana").send(Identity.generate("Dani").card(zone = Zone.of(lat, -58.3590, Zone.BARRIO)), "por arriba")
+        air.run(1_000)
+        assertEquals(0, air.node("ana").pocketCount(), "it went up")
+        assertEquals(3, cloud.sent.size, "three bridges bring it down: diversity")
+        cloud.deliver()
+        assertEquals(3, far.count { it.pocketCount() == 1 })
+    }
+
+    @Test
+    fun `without Internet, a letter stuck for two ferry turns goes to the neighbor who has it`() {
+        val air = Air()
+        air.add("ana", lat, -58.4300)
+        air.add("beto", lat, -58.4300) // same cell: no progress, but Internet
+        air.link("ana", "beto")
+        val cloud = Cloud(air.nodes)
+        air.node("beto").bridge = cloud
+        air.run(2_000)
+        assertTrue(air.node("ana").neighbors().single().bridge, "the heartbeat says it")
+        air.node("ana").send(Identity.generate("Dani").card(zone = Zone.of(lat, -58.4190, Zone.BARRIO)), "al barrio de al lado: no es un salto grande")
+        air.run(Node.LAKE_WAIT_MS - 5_000)
+        assertEquals(1, air.node("ana").pocketCount(), "first it waits for the islands")
+        air.run(Node.RETRY_MS + 5_000)
+        assertEquals(0, air.node("ana").pocketCount())
+        assertEquals(1, air.node("beto").pocketCount(), "beto has it: no bridge down there yet, so he keeps it")
+    }
+
+    @Test
+    fun `a big jump takes the bridge at hand even if the road moves, a short one stays on the islands`() {
+        val air = Air()
+        air.add("ana", lat, -58.4300)
+        air.add("road", lat, -58.4290) // gets it closer, slowly
+        air.add("net", lat, -58.4300)  // same cell, lends Internet
+        air.link("ana", "road"); air.link("ana", "net")
+        val cloud = Cloud(air.nodes)
+        air.node("net").bridge = cloud
+        val down = air.add("sur", lat, -58.3650).also { it.bridge = cloud }
+        air.run(2_000)
+        air.node("ana").send(Identity.generate("Dani").card(zone = Zone.of(lat, -58.3650, Zone.BARRIO)), "lejos: 5 km")
+        air.run(2_000)
+        assertEquals(0, air.node("road").pocketCount(), "not by the road")
+        assertEquals(1, cloud.sent.size, "up through net, down through the only bridge there")
+        cloud.deliver(); assertEquals(1, down.pocketCount())
+        air.node("ana").send(Identity.generate("Eva").card(zone = Zone.of(lat, -58.4190, Zone.BARRIO)), "cerca: 1 km")
+        air.run(2_000)
+        assertEquals(1, air.node("road").pocketCount(), "a short jump stays on the islands")
+    }
 }

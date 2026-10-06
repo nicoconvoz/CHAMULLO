@@ -220,7 +220,7 @@ Hasta que la libreta del pueblo exista (Proof of Relay §6.4, §7), la confirmac
 - Si nada acerca, la confirmación sale en un grito a todos con a lo sumo 2 saltos.
 - Al escuchar la confirmación de una carta, el cartero suelta su copia: ya llegó.
 
-## 11. El puente por Internet (diseño del Capitán, a programar)
+## 11. El puente por Internet (diseño del Capitán)
 
 Donde hay un **salto grande** (dos zonas sin celulares que las unan), la carta toma un atajo por Internet y vuelve a la red de islas del otro lado:
 
@@ -228,9 +228,14 @@ Donde hay un **salto grande** (dos zonas sin celulares que las unan), la carta t
 red local → isla → ferry → pueblo → 🕳️ salto grande → enrutamiento auxiliar por Internet → otra zona → isla → ferry → destino
 ```
 
-- Es **auxiliar**: solo cuando la brújula no encuentra progreso por la red de islas (el lago y el ferry de necesidad no alcanzan).
+- Es **auxiliar**, y entra en dos casos:
+  - **Salto grande:** la zona destino está a más de `BIG_JUMP_M = 2,5 km`, o sea más allá del barrio vecino. Por islas Wi-Fi eso es media hora o más. Si hay un puente a mano (yo, o un vecino de mi isla), la carta sube aunque la ruta avance. El gemelo lo mostró: sin esta regla, la ruta lenta siempre ofrecía "algo" de progreso y el puente no se usaba nunca.
+  - **Trabada:** sin progreso y pasados `LAKE_WAIT_MS`, va a un vecino puente antes que al lago. Un puente trabado sube enseguida.
+- **Quién es puente:** un teléfono con Internet que lo presta. Lo anuncia en su latido (TLV `13`) y se anota con su barrio en el directorio de la nube.
+- **Bajada diversificada:** la nube la baja por `BRIDGE_PEERS = 3` puentes distintos del barrio destino, y desde ahí sigue con el eco local. El directorio rota el orden para repartir la carga.
+- **Cobro:** quien la sube escribe su renglón como cualquier cartero, y los que la bajan también, al seguir el eco. Cobran con los mismos recibos. Los pagos también cruzan por el puente.
 - **Diversificado**: la entrega se reparte entre varios caminos por Internet a la vez, para no depender de uno solo.
 - La carta sigue sellada de punta a punta (§7): el tramo por Internet ve lo mismo que un cartero, nada más.
-- Pendiente de diseñar: quién tiene Internet y se ofrece como puente, cómo se elige el punto de reentrada en la otra zona y cómo cobra el puente (Proof of Relay).
+- Implementado en el núcleo (`Bridge`, `Node`) y en el gemelo (la nube de `World`). Pendiente en la app: la nube real (un servidor o un directorio entre pares) y medir los bytes prestados.
 - El puente cobra en **Lucas** por un servicio real: eso le da a la moneda su respaldo (Economy & Governance §13).
 

@@ -5,8 +5,14 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-/** [length] > 0: the phones stand along a road going east from [cx], evenly spaced (a few meters off the line). */
-class Village(val name: String, val cx: Double, val radius: Double, val phones: Int, val walkers: Int = 0, val cy: Double = 0.0, val length: Double = 0.0)
+/**
+ * [length] > 0: the phones stand along a road going east from [cx], evenly spaced (a few meters off the line).
+ * [internet]: how many of them lend their Internet as a bridge (Discovery & Routing §11).
+ */
+class Village(
+    val name: String, val cx: Double, val radius: Double, val phones: Int, val walkers: Int = 0, val cy: Double = 0.0,
+    val length: Double = 0.0, val internet: Int = 0
+)
 
 class Scenario(val key: String, val title: String, val story: String, val villages: List<Village>, val letters: Int, val minutes: Int, val crossOnly: Boolean = false)
 
@@ -24,8 +30,9 @@ object Scenarios {
         Scenario("ciudad", "Ciudad de 1000", "1000 celulares en ocho barrios de 125 que se tocan por el borde, con 40 personas caminando.",
             (0 until 8).map { i -> Village("Barrio-${i + 1}", 100.0 + 200.0 * (i % 4), 100.0, 125, walkers = 5, cy = 100.0 + 200.0 * (i / 4)) },
             letters = 120, minutes = 20),
-        Scenario("provincia", "Provincia: tres pueblos", "Norte, Centro y Sur, a 2 km uno de otro y en barrios distintos, unidos por una ruta con un celular cada 55 m. Acá trabaja la brújula.",
-            listOf(Village("Norte", 0.0, 40.0, 25), Village("Ruta", 60.0, 4.0, 72, length = 3_880.0), Village("Centro", 2_000.0, 40.0, 25), Village("Sur", 4_000.0, 40.0, 25)),
+        Scenario("provincia", "Provincia: tres pueblos", "Norte, Centro y Sur, a 2 km uno de otro y en barrios distintos, unidos por una ruta con un celular cada 55 m. En cada pueblo, algunos prestan Internet: el puente para el salto grande.",
+            listOf(Village("Norte", 0.0, 40.0, 25, internet = 6), Village("Ruta", 60.0, 4.0, 72, length = 3_880.0),
+                Village("Centro", 2_000.0, 40.0, 25, internet = 4), Village("Sur", 4_000.0, 40.0, 25, internet = 6)),
             letters = 30, minutes = 60, crossOnly = true)
     )
 
@@ -39,7 +46,8 @@ object Scenarios {
                 return@repeat
             }
             val a = r.nextDouble() * 2 * Math.PI; val d = sqrt(r.nextDouble()) * v.radius
-            w.addPhone("${v.name}-${i + 1}", v.cx + cos(a) * d, v.cy + sin(a) * d, v.name, if (i < v.walkers) 1.4 else 0.0)
+            val name = w.addPhone("${v.name}-${i + 1}", v.cx + cos(a) * d, v.cy + sin(a) * d, v.name, if (i < v.walkers) 1.4 else 0.0)
+            if (i >= v.phones - v.internet) w.setInternet(name, true) // the last ones of each village lend Internet
         }
         // Nobody knows everybody: you know whoever you write to, and every letter carries the sender's card back.
         return w

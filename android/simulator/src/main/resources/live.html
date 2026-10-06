@@ -132,6 +132,7 @@ details.data{margin-top:8px;font-size:12px;color:var(--muted)}
           <span><b style="background:var(--muted)"></b>miembro</span>
           <span><b style="background:var(--node)"></b>sin isla o conectándose</span>
           <span><b style="border:2.5px solid var(--pocket)"></b>de ferry</span>
+          <span><b style="border:2px solid var(--grito);border-radius:2px"></b>presta Internet (puente)</span>
           <span><i></i>caño de la isla</span>
         </div>
       </section>
@@ -191,7 +192,9 @@ function render() {
     tile('Ferrys', w.ferry, 'viajes entre islas'),
     tile('Caramelos', w.candies, 'recibos verificados'),
     tile('👑 Rey nacional', esc(w.king || '—'), 'el que más aportó'),
-    tile('En bolsillos', w.phones.reduce((a, p) => a + p.b, 0), 'cartas en viaje')
+    tile('En bolsillos', w.phones.reduce((a, p) => a + p.b, 0), 'cartas en viaje'),
+    tile('🌐 Por Internet', (w.netKb ?? 0) + ' KB', `${w.phones.filter(p => p.w).length} puentes · ${w.bridgeLucas ?? 0} Lucas`),
+    tile('Precio', w.lucasPerKb ? w.lucasPerKb + ' Lucas' : '—', `por KB llevado (${(w.airKb ?? 0) + (w.netKb ?? 0)} KB)`)
   ].join('');
   const rows = [`<tr><td><b>Nacional</b></td><td class="m"><b>${esc(w.king || '—')}</b></td><td class="m">${esc(w.nobles.join(', ') || '—')}</td></tr>`]
     .concat(w.courts.map(c => `<tr><td>${esc(c.v)}</td><td class="m">${esc(c.king || '—')}</td><td class="m">${esc(c.nobles.join(', ') || '—')}</td></tr>`));
@@ -234,6 +237,7 @@ function draw(w) {
     g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2);
     g.fillStyle = !p.c || !p.i ? node : p.h ? ink : muted; g.fill();
     if (p.f) { g.strokeStyle = pocket; g.lineWidth = 2; g.beginPath(); g.arc(x, y, r + 2.5, 0, Math.PI * 2); g.stroke(); }
+    if (p.w) { g.strokeStyle = css('--grito'); g.lineWidth = 1.5; const q = r + 2; g.strokeRect(x - q, y - q, 2 * q, 2 * q); }
   }
 }
 

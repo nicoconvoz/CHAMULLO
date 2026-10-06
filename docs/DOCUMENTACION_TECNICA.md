@@ -401,12 +401,13 @@ La billetera de la app paga la recompensa en **Lucas**, la moneda propia de CHAM
 | Ruta de tres pueblos | 100 % |
 | Pueblos con viajeros | 100 % |
 | Ciudad de 1000 | 43 % (antes ~30 %) |
-| Provincia, 4 km | 0 %: llega a ~3 km y se frena |
+| Provincia, 4 km, solo islas | 0 %: llega a ~3 km y se frena |
+| Provincia con el puente por Internet | **100 %**, 11 s de mediana |
 
 **Acertijos abiertos** (son del Capitán):
 
 1. **El barrio grande:** dentro del barrio destino solo queda el eco local de 8 saltos (~400 m con Wi-Fi). La ciudad entera cae en un barrio, y en la provincia la carta entra al barrio de Sur a 1,2 km del pueblo.
-2. **El puente por Internet** para el salto grande, que además le da respaldo real a Lucas (spec 05 §11, spec 04 §13).
+2. ~~El puente por Internet~~: ya está programado (`Bridge.kt`, la nube del gemelo). Entra en un **salto grande** (más de 2,5 km) o cuando la carta queda trabada, y baja por 3 puentes del barrio destino. En la provincia, los puentes cobraron 697 de las 1000 Lucas del día, y la información costó 0,1 Lucas por KB: es la economía con respaldo real (spec 04 §13).
 
 **Pendiente en la app:** leer el GPS y llamar a `Node.locate`. Mientras no lo haga, las cartas de la app siguen con el eco de v0.1 (sin zona), igual que hoy.
 

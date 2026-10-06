@@ -29,6 +29,7 @@ class Neighbor(val beacon: Beacon, val lastSeen: Long, val beats: Int = 1) {
     val nodeId get() = beacon.nodeId
     val coded get() = beacon.coded
     val cell get() = beacon.cell
+    val bridge get() = beacon.bridge
 }
 
 /**
@@ -146,7 +147,14 @@ class Node(
         enqueue(beacon())
     }
 
-    private fun beacon() = Beacon.of(identity, coded, clock(), heading ?: cell).encode()
+    private fun beacon() = Beacon.of(identity, coded, clock(), heading ?: cell, bridge != null).encode()
+
+    /** Internet lent as a bridge (Discovery & Routing §11); null: no Internet, or not lending it. */
+    var bridge: Bridge? = null
+        set(value) { field = value; routeDirty = true }
+
+    /** Bytes this phone moved over Internet as a bridge: what the economy pays for (Economy & Governance §13). */
+    var internetBytes = 0L; private set
 
     fun pocketCount() = pockets.size
 
@@ -424,6 +432,11 @@ class Node(
         val plan = Compass.plan(cell, env.destZone, env.localTtl, env.detour, peers(), p.from, p.sealed != null, p.refused, now)
         p.stuck = false
         if (plan != Compass.Plan.Stop && plan != Compass.Plan.Hold && env.hopCount >= env.maxHops) { drop(id, "sin saltos"); return }
+        // The big jump (§11): beyond the next barrio the islands are too slow, so a bridge at hand takes it up.
+        val dest = env.destZone; val here = cell
+        if (dest != null && here != null && !dest.contains(here) && here.distanceTo(dest) > BIG_JUMP_M) {
+            if (upload(id, p) || toBridge(id, p)) return
+        }
         when (plan) {
             is Compass.Plan.Eco -> {
                 if (!fresh || p.reshouts >= MAX_RESHOUTS) return
@@ -432,15 +445,51 @@ class Node(
                 enqueue(copy.encode())
             }
             is Compass.Plan.River -> { p.stuckSince = Long.MAX_VALUE; offer(id, p, plan.takers, plan.alternatives, 0) }
-            // Nobody gets it closer: first it waits for the ferry of need (§10.6), only then the lake.
+            // Nobody gets it closer: a bridge takes it up now; anyone else waits for the ferry of need (§10.6), then
+            // hands it to a neighbor who lends Internet, and only then tries the lake.
             is Compass.Plan.Lake -> {
                 p.stuckSince = minOf(p.stuckSince, now)
-                if (now - p.stuckSince >= LAKE_WAIT_MS) offer(id, p, listOf(plan.taker), 0, plan.detour)
+                if (upload(id, p)) return
+                val waited = now - p.stuckSince >= LAKE_WAIT_MS
+                if (waited && toBridge(id, p)) return
+                if (waited) offer(id, p, listOf(plan.taker), 0, plan.detour)
                 else { p.nextTry = now + RETRY_MS; p.stuck = true }
             }
-            Compass.Plan.Hold -> { p.stuckSince = minOf(p.stuckSince, now); p.nextTry = now + RETRY_MS; p.stuck = env.destZone != null }
+            Compass.Plan.Hold -> {
+                p.stuckSince = minOf(p.stuckSince, now)
+                if (upload(id, p)) return
+                if (now - p.stuckSince >= LAKE_WAIT_MS && toBridge(id, p)) return
+                p.nextTry = now + RETRY_MS; p.stuck = env.destZone != null
+            }
             Compass.Plan.Stop -> drop(id, "eco local agotado")
         }
+    }
+
+    // The big jump (Discovery & Routing §11): up to Internet, down through three bridges of the destination barrio.
+    private fun upload(id: String, p: Pocket): Boolean {
+        val b = bridge ?: return false
+        val zone = p.env.destZone ?: return false
+        val here = cell ?: return false
+        if (zone.contains(here)) return false
+        val down = b.peersIn(zone).filter { !it.contentEquals(identity.nodeId) }.take(BRIDGE_PEERS)
+        if (down.isEmpty()) return false
+        val copy = p.env.withHop(giverOf(p), clock()).routed(emptyList(), null, 0)
+        carriedBy(p, copy)
+        val bytes = copy.encode()
+        for (peer in down) { b.send(peer, bytes); internetBytes += bytes.size }
+        pockets.remove(id); savePockets()
+        return true
+    }
+
+    // No Internet here: hand it to a neighbor who lends it.
+    private fun toBridge(id: String, p: Pocket): Boolean {
+        if (bridge != null) return false // I am one, and I could not go up: no bridge down there
+        val now = clock()
+        val b = neighbors.values.filter { n ->
+            n.bridge && (p.from == null || !n.nodeId.contentEquals(p.from)) && (p.refused[n.nodeId.toHex()]?.let { now - it < Compass.REFUSED_MS } != true)
+        }.minByOrNull { it.nodeId.toHex() } ?: return false
+        offer(id, p, listOf(Compass.Peer(b.nodeId, b.cell, b.stable)), 0, p.env.detour)
+        return true
     }
 
     private fun offer(id: String, p: Pocket, takers: List<Compass.Peer>, alternatives: Int, detour: Int) {
@@ -506,6 +555,12 @@ class Node(
 
     private fun shoutPayment(p: Payment, ttl: Int) {
         val zone = p.zone ?: return enqueue(p.routed(null, emptyList(), ttl).encode())
+        // Over the big jump too: the carriers down there earn as well.
+        val b = bridge; val here = cell
+        if (b != null && here != null && !zone.contains(here)) {
+            val bytes = p.routed(zone, emptyList(), minOf(ttl, Compass.LOCAL_TTL)).encode()
+            for (peer in b.peersIn(zone).filter { !it.contentEquals(identity.nodeId) }.take(BRIDGE_PEERS)) { b.send(peer, bytes); internetBytes += bytes.size }
+        }
         when (val plan = Compass.plan(cell, zone, null, 0, peers(), null, origin = true)) {
             is Compass.Plan.River -> enqueue(p.routed(zone, plan.takers.map { it.id }, ttl).encode())
             is Compass.Plan.Eco -> enqueue(p.routed(zone, emptyList(), minOf(ttl, Compass.LOCAL_TTL)).encode())
@@ -541,5 +596,9 @@ class Node(
         const val BEACON_REPLY_MS = 5_000L
         const val PAY_KEEP_MS = 30 * 60_000L
         const val LAKE_WAIT_MS = 2 * Islands.FERRY_TURN_MS
+        // Three bridges bring a letter down: if one fails, the others still do (the Capitán's "diversificando").
+        const val BRIDGE_PEERS = 3
+        // A big jump: farther than the next barrio (~1.8 km wide), where islands would take half an hour or more.
+        const val BIG_JUMP_M = 2_500.0
     }
 }

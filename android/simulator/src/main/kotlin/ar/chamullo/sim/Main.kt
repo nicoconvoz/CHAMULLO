@@ -58,6 +58,13 @@ private fun run(s: Scenario): String {
     sb.appendLine("| Viajes de ferry | ${rep.ferryTrips} |")
     sb.appendLine("| Caramelos cobrados (recibos verificados) | ${rep.candies.values.sum()} |")
     sb.appendLine("| Cartas en bolsillos al final | ${w.history().lastOrNull()?.pockets ?: 0} |")
+    if (w.internetBytes() > 0) {
+        val share = Economy.dailyShare(Economy.national(rep.carries).scores)
+        val kb = (w.airLetterBytes + w.internetBytes()) / 1024.0
+        sb.appendLine("| Por Internet (el puente) | ${w.internetBytes() / 1024} KB, de ${w.bridges().size} puentes |")
+        sb.appendLine("| Lucas de los puentes (bolsa diaria de 1000) | ${w.bridges().sumOf { share[it] ?: 0 }} |")
+        sb.appendLine("| Precio de la información | ${f(1000 / kb)} Lucas por KB llevado (${kb.toInt()} KB entre aire e Internet) |")
+    }
     w.drops().takeIf { it.isNotEmpty() }?.let { d -> sb.appendLine("| Copias soltadas, y por qué | ${d.entries.joinToString(", ") { "${it.key}: ${it.value}" }} |") }
     if (w.furthestLetterM() >= 0) sb.appendLine("| La carta más avanzada que sigue en camino | a ${w.furthestLetterM()} m del oeste |")
     sb.appendLine()

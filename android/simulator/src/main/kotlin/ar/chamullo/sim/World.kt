@@ -1,5 +1,6 @@
 package ar.chamullo.sim
 
+import ar.chamullo.core.Bridge
 import ar.chamullo.core.Cartel
 import ar.chamullo.core.Identity
 import ar.chamullo.core.IslandAction
@@ -30,7 +31,8 @@ class World(
     val tickMs: Long = 100,
     val areaM: Double = 400.0,
     val baseLat: Double = -34.5900,
-    val baseLon: Double = -58.4300
+    val baseLon: Double = -58.4300,
+    val cloudLatencyMs: Long = 300
 ) {
     private val mPerDegLon = 111_320.0 * cos(Math.toRadians(baseLat))
     private fun zoneAt(x: Double, y: Double) = Zone.of(baseLat + y / 111_320.0, baseLon + x / mPerDegLon)
@@ -53,6 +55,8 @@ class World(
         var boarding: IslandAction.Ferry? = null
         var boardingUntil = 0L
         var cell: Zone = zoneAt(x, y)
+        /** Lends its Internet as a bridge (Discovery & Routing §11). */
+        var internet = false
         var tx = x; var ty = y
         val connected get() = now >= busyUntil
     }
@@ -66,6 +70,43 @@ class World(
     private val byId = HashMap<String, Phone>()
     private class Delivery(val at: Long, val to: Phone, val from: Phone, val frame: ByteArray)
     private val inFlight = ArrayDeque<Delivery>() // every frame takes the same latency, so arrival order = send order
+    private val inCloud = ArrayDeque<Delivery>() // the same over Internet, with its own latency
+
+    /**
+     * The cloud of the Internet bridge: a directory of the phones lending Internet, by barrio, and a pipe between them.
+     * Each phone gets its own port, so the twin knows who moved which bytes.
+     */
+    private inner class CloudPort(val owner: Phone) : Bridge {
+        override fun peersIn(zone: Zone): List<ByteArray> {
+            val down = phones.values.filter { it.internet && it !== owner && zone.contains(it.cell) }
+            if (down.isEmpty()) return emptyList()
+            val start = (cloudTurn++ % down.size) // spread the load: each upload starts with another bridge
+            return (down.drop(start) + down.take(start)).map { it.identity.nodeId }
+        }
+
+        override fun send(to: ByteArray, frame: ByteArray) {
+            val p = byId[to.toHex().take(16)] ?: return
+            inCloud += Delivery(now + cloudLatencyMs, p, owner, frame)
+            if (frame.size > 3 && frame[3].toInt() == Packet.KIND_ENVELOPE) say("🌐 ${owner.name} sube una carta a Internet y la baja ${p.name}")
+        }
+    }
+    private var cloudTurn = 0
+
+    /** Lend (or stop lending) Internet as a bridge. */
+    fun setInternet(name: String, on: Boolean) {
+        val p = phones.getValue(name)
+        p.internet = on
+        p.node.bridge = if (on) CloudPort(p) else null
+    }
+
+    /** The phones lending Internet. */
+    fun bridges(): List<String> = phones.values.filter { it.internet }.map { it.name }
+
+    /** Bytes moved over Internet by the bridges. */
+    fun internetBytes(): Long = phones.values.sumOf { it.node.internetBytes }
+
+    /** Bytes of letters shouted over the air (Wi-Fi Direct): the other half of the information moved. */
+    var airLetterBytes = 0L; private set
 
     init { ar.chamullo.core.Crypto.rememberSignatures(true) } // see Crypto: the same frame, many listeners, one check
 
@@ -146,10 +187,14 @@ class World(
         val courts = Economy.courts(r.carries, nobles = 3)
         val ph = phones.values.joinToString(",") { p ->
             val hostName = p.island?.let { byId[it]?.name } ?: ""
-            "{\"n\":${q(p.name)},\"x\":${p.x.toInt()},\"y\":${p.y.toInt()},\"i\":${q(hostName)},\"h\":${if (p.host) 1 else 0},\"c\":${if (p.connected) 1 else 0},\"f\":${if (p.ferryHome != null) 1 else 0},\"k\":${p.node.candies},\"b\":${p.node.pocketCount()}}"
+            "{\"n\":${q(p.name)},\"x\":${p.x.toInt()},\"y\":${p.y.toInt()},\"i\":${q(hostName)},\"h\":${if (p.host) 1 else 0},\"c\":${if (p.connected) 1 else 0},\"f\":${if (p.ferryHome != null) 1 else 0},\"k\":${p.node.candies},\"b\":${p.node.pocketCount()},\"w\":${if (p.internet) 1 else 0}}"
         }
         val court = courts.entries.joinToString(",") { (v, c) -> "{\"v\":${q(v)},\"king\":${q(c.king ?: "")},\"nobles\":[${c.nobles.joinToString(",") { q(it) }}]}" }
-        return "{\"t\":$now,\"range\":$wifiRangeM,\"phones\":[$ph],\"sent\":${r.sent},\"delivered\":${r.delivered},\"p50\":${r.latencyP50s},\"ferry\":${r.ferryTrips}," +
+        val share = Economy.dailyShare(nat.scores)
+        val kb = (airLetterBytes + internetBytes()) / 1024.0
+        val bridgeLucas = phones.values.filter { it.internet }.sumOf { share[it.name] ?: 0 }
+        return "{\"t\":$now,\"range\":$wifiRangeM,\"phones\":[$ph],\"netKb\":${(internetBytes() / 1024.0).toInt()},\"airKb\":${(airLetterBytes / 1024.0).toInt()}," +
+            "\"lucasPerKb\":${if (kb > 0) "%.2f".format(java.util.Locale.ROOT, 1000 / kb) else "0"},\"bridgeLucas\":$bridgeLucas,\"sent\":${r.sent},\"delivered\":${r.delivered},\"p50\":${r.latencyP50s},\"ferry\":${r.ferryTrips}," +
             "\"candies\":${r.candies.values.sum()},\"king\":${q(nat.king ?: "")},\"nobles\":[${nat.nobles.joinToString(",") { q(it) }}],\"courts\":[$court]," +
             "\"history\":[${samples.takeLast(240).joinToString(",") { "[${it.t / 1000},${it.sent},${it.delivered},${it.pockets},${it.islands},${it.ferry},${it.candies}]" }}]," +
             "\"log\":[${log.toList().takeLast(40).reversed().joinToString(",") { q(it) }}]}"
@@ -250,9 +295,14 @@ class World(
         if (!p.connected) return
         val targets = if (p.host) members(p) else listOfNotNull(hostOf(p)?.takeIf { sees(p, it) })
         for (t in targets) if (t !== except) inFlight += Delivery(now + latencyMs, t, p, frame)
+        if (except == null && frame.size > 3 && (frame[3].toInt() == Packet.KIND_ENVELOPE || frame[3].toInt() == Packet.KIND_FRAGMENT)) airLetterBytes += frame.size
     }
 
     private fun deliver() {
+        while (inCloud.isNotEmpty() && inCloud.first().at <= now) {
+            val d = inCloud.removeFirst()
+            if (d.to.internet) collect(d.to, d.to.node.onFrame(d.frame))
+        }
         while (inFlight.isNotEmpty() && inFlight.first().at <= now) {
             val d = inFlight.removeFirst()
             if (!d.to.connected) continue
