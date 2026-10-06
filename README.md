@@ -1,5 +1,10 @@
 # CHAMULLO
 
+[![DOI](https://zenodo.org/badge/1406372843.svg)](https://zenodo.org/badge/latestdoi/1406372843)
+[![Release](https://img.shields.io/github/v/release/nicoconvoz/CHAMULLO?label=Release&color=111111)](https://github.com/nicoconvoz/CHAMULLO/releases/latest)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Licencia comercial](https://img.shields.io/badge/Licencia-comercial-1F9D43.svg)](LICENCIA-COMERCIAL.md)
+
 > *"La comunicación puede ser una infraestructura aportada por sus propios participantes."*
 
 **CHAMULLO Protocol** es una red de comunicación gratuita, distribuida y participativa. Las personas pueden desplegar un nodo y aportar capacidad de retransmisión a otros participantes, sin depender de que cada intercambio atraviese un servicio centralizado.
