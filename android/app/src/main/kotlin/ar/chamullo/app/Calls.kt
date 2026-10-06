@@ -209,7 +209,7 @@ object Calls {
         CallSession.End.HUNG_UP -> if (s.startedAt > 0) "llamada terminada (${clock(s.duration())})" else "llamada cancelada"
         CallSession.End.REJECTED -> "rechazó la llamada"
         CallSession.End.BUSY -> "está en otra llamada"
-        CallSession.End.UNREACHABLE -> "no está en tu isla: las llamadas van en vivo, solo con alguien de tu misma isla"
+        CallSession.End.UNREACHABLE -> "no contesta: las llamadas van en vivo, solo dentro de la isla. Si está cerca, probá de nuevo en unos segundos"
         CallSession.End.NO_ANSWER -> "no contesta"
         CallSession.End.MISSED -> "llamada perdida"
         CallSession.End.LOST -> "se cortó: la isla se separó"

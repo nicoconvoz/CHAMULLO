@@ -283,6 +283,7 @@ class WifiIslands(
             if (!running) return
             val now = System.currentTimeMillis()
             carteles.values.removeAll { now - it.second > CARTEL_TTL_MS }
+            tendPipes(now)
             if (!busy && ferrying == null && !wifiOff) {
                 readScan()
                 updateSeen(now)
@@ -443,18 +444,43 @@ class WifiIslands(
         p2p?.requestGroupInfo(ch) { group -> if (group == null || !group.isGroupOwner) islandLost("mi isla ya no existe") }
     }
 
+    @Volatile private var connecting = false
+    private var lastRepair = 0L
+
     private fun connectTo(owner: InetAddress) {
-        repeat(5) { attempt ->
-            runCatching {
-                val s = Socket()
-                s.connect(InetSocketAddress(owner, PORT), 4_000)
-                Link(s).apply { start(); if (ferrying != null) send(FERRY) }
-                FieldLog.add("ISLA", "en la isla: caño abierto con el anfitrión")
-                return
+        if (connecting) return
+        connecting = true
+        try {
+            repeat(5) { attempt ->
+                runCatching {
+                    val s = Socket()
+                    s.connect(InetSocketAddress(owner, PORT), 4_000)
+                    Link(s).apply { start(); if (ferrying != null) send(FERRY) }
+                    FieldLog.add("ISLA", "en la isla: caño abierto con el anfitrión")
+                    return
+                }
+                Thread.sleep(1_000L * (attempt + 1))
             }
-            Thread.sleep(1_000L * (attempt + 1))
+            FieldLog.add("ISLA", "no pude abrir el caño con el anfitrión")
+        } finally { connecting = false }
+    }
+
+    // Field test 0.9.2 (Camino y Carretera §6.10): a pipe can stall or close while the phone stays in the Wi-Fi Direct
+    // group. Every pipe beats every [LINK_BEAT_MS]; one that says nothing for [LINK_SILENT_MS] is dead and is closed.
+    // A member still in the group without a pipe to its host opens a new one: Android sends no notice for that.
+    private fun tendPipes(now: Long) {
+        for (l in links) { l.beat(); if (l.silentFor(now) > LINK_SILENT_MS) { FieldLog.add("ISLA", "un caño quedó mudo ${LINK_SILENT_MS / 1000} s: lo cierro y abro otro"); l.close() } }
+        if (host || island == null || ferrying != null || busy || connecting || links.any { it !== bridgeLink }) return
+        if (now - lastRepair < REPAIR_MS) return
+        lastRepair = now
+        val ch = channel ?: return
+        p2p?.requestConnectionInfo(ch) { info ->
+            val owner = info?.groupOwnerAddress
+            if (info != null && info.groupFormed && !info.isGroupOwner && owner != null) {
+                FieldLog.add("ISLA", "sigo en la isla pero sin caño: lo vuelvo a abrir")
+                Thread { connectTo(owner) }.apply { isDaemon = true }.start()
+            }
         }
-        FieldLog.add("ISLA", "no pude abrir el caño con el anfitrión")
     }
 
     private fun startServer() {
@@ -546,6 +572,10 @@ class WifiIslands(
 
         fun send(frame: ByteArray) { if (open && trusted) out.offer(frame) }
 
+        @Volatile private var lastHeard = System.currentTimeMillis()
+        fun silentFor(now: Long) = now - lastHeard
+        fun beat() = send(BEAT)
+
         private fun writeLoop() = runCatching {
             val w = DataOutputStream(socket.getOutputStream().buffered(256 * 1024))
             while (open) {
@@ -579,7 +609,9 @@ class WifiIslands(
                     }
                     continue
                 }
+                lastHeard = System.currentTimeMillis()
                 when {
+                    f.startsWith(BEAT) -> Unit // the pipe is alive; nothing to pass on
                     isDirect(f) -> onDirectFrame(this, f)
                     f.startsWith(FERRY) -> handler.post { ferryLinks += this }
                     f.startsWith(FULL) -> { FieldLog.add("ISLA", "la isla está llena: fundo la mía"); handler.post { island = null } }
@@ -636,6 +668,10 @@ class WifiIslands(
         const val FERRY_STAY_MS = 20_000L
         const val HANDSHAKE_MS = 10_000L
         private val FERRY = "CHFRY".toByteArray()
+        private val BEAT = "CHBEAT".toByteArray()
+        const val LINK_BEAT_MS = 5_000L
+        const val LINK_SILENT_MS = 20_000L
+        const val REPAIR_MS = 10_000L
         private val FULL = "CHFUL".toByteArray()
         private val SPEED = "CHSPD".toByteArray()
         private val SPEED_START = "CHSPS".toByteArray()

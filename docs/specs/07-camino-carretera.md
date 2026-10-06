@@ -142,6 +142,17 @@ Una isla **es** la red propia de CHAMULLO: un grupo Wi-Fi Direct (`DIRECT-CH-xxx
 - **Funda primero el que está conectado a una red Wi-Fi** (`FOUND_CONNECTED_MS = 10 s`): en el campo no vio a nadie, así que esperar no le sirve. El que está libre mira más (30 a 60 s), encuentra esa isla y se suma.
 - Si igual quedan dos islas, sigue valiendo "el que ve, se mueve" (§6.7).
 
+### 6.10 Caños mudos (0.9.3)
+
+**Lo que pasó:** con Mito adentro de la isla, dos de cada tres llamadas dijeron "no está en tu isla": su caño estaba trabado y no pasaba nada. Después el caño se cerró y Mito quedó **conectado a la isla pero sin caño**. Android no avisa nada en ese caso, así que nadie lo volvía a abrir, y Mito desapareció del radar.
+
+| Pieza | Regla |
+|---|---|
+| Latido del caño | Cada `LINK_BEAT_MS = 5 s` cada caño manda `CHBEAT` (6 bytes), que no se reenvía. También mantiene despierto el Wi-Fi del otro celular |
+| Caño mudo | Si por un caño no llega nada durante `LINK_SILENT_MS = 20 s`, se cierra |
+| Reparar | Un miembro que sigue en el grupo Wi-Fi Direct pero no tiene caño con el anfitrión abre uno nuevo (como mucho cada `REPAIR_MS = 10 s`), sin esperar el aviso de Android |
+| Llamar | La llamada espera hasta 20 s un "está sonando" (antes 12) y, si no llega, dice "no contesta… probá de nuevo", sin afirmar que no está en la isla |
+
 ## 7. Llamadas y videollamadas en la isla (0.8.0)
 
 Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en celular. Por eso anda **solo dentro de la isla** (o por un puente fijo), donde todo está a uno o dos saltos por Wi-Fi Direct.
@@ -150,7 +161,7 @@ Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en
 |---|---|
 | Con quién | Solo con contactos. Todo pedazo va sellado con las claves de caja de las dos tarjetas: llamar es probar que tengo mi tarjeta y la suya |
 | Por dónde | LINK 19 `CALL` por los caños de la isla, nunca por el Bluetooth. El anfitrión pasa cada pedazo solo al miembro al que va y no puede escuchar |
-| Sonar | `RING` (dice si es video) cada 2 s hasta que vuelve `RINGING`. Sin `RINGING` en 12 s: "no está en tu isla". Sonando 45 s sin atender: "no contesta" y llamada perdida del otro lado |
+| Sonar | `RING` (dice si es video) cada 2 s hasta que vuelve `RINGING`. Sin `RINGING` en 20 s: "no contesta". Sonando 45 s sin atender: "no contesta" y llamada perdida del otro lado |
 | Atender | `ANSWER`, `REJECT`, `BUSY` (ya estoy en otra), `HANGUP` |
 | Voz | `AUDIO`: 20 ms de PCM 16 kHz mono de 16 bits (640 B, 256 kbit/s), sin códec, con el cancelador de eco y el supresor de ruido del celular. Del otro lado, a lo sumo 160 ms en cola: si se junta más, se tira lo viejo |
 | Video | `VIDEO`: H.264 640×480, 15 cuadros por segundo, 800 kbit/s, con el codificador y el decodificador del propio celular. Cada pedazo lleva banderas (configuración, cuadro clave, cámara apagada, "mandame un cuadro clave") y el giro de la cámara. La configuración viaja antes de cada cuadro clave |

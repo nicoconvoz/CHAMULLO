@@ -135,8 +135,11 @@ class CallSession(val id: Long, val peer: ByteArray, val outgoing: Boolean, val 
     }
 
     companion object {
-        /** Without a "ringing" back in this time, the contact is not in my island. */
-        const val REACH_MS = 12_000L
+        /**
+         * Without a "ringing" back in this time, the contact is not reachable now. 20 s, not 12: in the field a stalled
+         * pipe took longer than that to be replaced (Camino y Carretera §6.10).
+         */
+        const val REACH_MS = 20_000L
         const val RING_EVERY_MS = 2_000L
         const val RING_MS = 45_000L
         const val SILENT_MS = 15_000L
