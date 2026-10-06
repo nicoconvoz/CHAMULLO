@@ -106,9 +106,12 @@ class CardOffer(val from: ByteArray, val to: ByteArray, val fromBox: ByteArray, 
     }
 
     companion object {
-        fun to(me: Identity, neighbor: Beacon, now: Long): CardOffer {
+        fun to(me: Identity, neighbor: Beacon, now: Long): CardOffer = to(me, neighbor.nodeId, neighbor.boxPublic, now)
+
+        /** Seals my card for whoever owns [nodeId] / [boxPublic]: a neighbor's heartbeat or a card already received. */
+        fun to(me: Identity, nodeId: ByteArray, boxPublic: ByteArray, now: Long): CardOffer {
             val nonce = Crypto.randomBytes(24)
-            return CardOffer(me.nodeId, neighbor.nodeId, me.boxPublic, nonce, Crypto.box(me.card(now).encode(), nonce, neighbor.boxPublic, me.boxSecret))
+            return CardOffer(me.nodeId, nodeId, me.boxPublic, nonce, Crypto.box(me.card(now).encode(), nonce, boxPublic, me.boxSecret))
         }
 
         fun decode(t: Map<Long, ByteArray>): CardOffer {

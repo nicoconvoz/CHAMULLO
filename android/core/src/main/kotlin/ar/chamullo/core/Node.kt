@@ -41,6 +41,10 @@ class Node(
     private var lastBeacon = Long.MIN_VALUE / 2
     private var newNeighbor = false
     private class PlazaEntry(val id: String, val name: String, val text: String, val ts: Long, val mine: Boolean, val heardBy: LinkedHashSet<String> = LinkedHashSet())
+    // Letters that matter are repeated until confirmed: a plaza message until someone hears it, a card until theirs arrives.
+    private class Retry(val frame: ByteArray, var left: Int, var nextAt: Long)
+    private val plazaRetries = LinkedHashMap<String, Retry>()
+    private val cardRetries = LinkedHashMap<String, Retry>()
     private val plaza = ArrayList<PlazaEntry>().apply {
         for (l in store.loadPlaza()) add(PlazaEntry(l.id, l.name, l.text, l.ts, l.mine, LinkedHashSet(l.heardBy)))
     }
@@ -59,21 +63,29 @@ class Node(
         if (now - lastBeacon >= BEACON_MS) { lastBeacon = now; enqueue(Beacon.of(identity, coded, now).encode()) }
         neighbors.values.removeAll { now - it.lastSeen > NEIGHBOR_TTL_MS }
         pockets.values.removeAll { it.env.expired(now) }
+        for (r in plazaRetries.values + cardRetries.values) if (r.left > 0 && now >= r.nextAt) { r.left--; r.nextAt = now + RETRY_MS; enqueue(r.frame) }
+        plazaRetries.values.removeAll { it.left == 0 }
+        cardRetries.values.removeAll { it.left == 0 }
         if (newNeighbor) {
             newNeighbor = false
             for (p in pockets.values) if (p.reshouts < MAX_RESHOUTS) { p.reshouts++; enqueue(p.env.encode()) }
         }
     }
 
-    fun offerCard(neighbor: Neighbor) {
-        offeredTo += neighbor.nodeId.toHex()
-        enqueue(CardOffer.to(identity, neighbor.beacon, clock()).encode())
-    }
+    fun offerCard(neighbor: Neighbor) = offerTo(neighbor.nodeId, neighbor.beacon.boxPublic)
 
+    // Accepting answers with my card, built from the card just received: it does not matter whether I hear them now.
     fun acceptCard(card: Card) {
         store.saveContact(card)
-        val key = card.nodeId.toHex()
-        if (key !in offeredTo) neighbors[key]?.let { offerCard(it) }
+        if (card.nodeId.toHex() !in offeredTo) offerTo(card.nodeId, card.boxPublic)
+    }
+
+    private fun offerTo(nodeId: ByteArray, boxPublic: ByteArray) {
+        val key = nodeId.toHex()
+        offeredTo += key
+        val frame = CardOffer.to(identity, nodeId, boxPublic, clock()).encode()
+        if (store.contact(nodeId) == null) cardRetries[key] = Retry(frame, CARD_RETRIES, clock() + RETRY_MS)
+        enqueue(frame)
     }
 
     fun send(to: Card, text: String, maxHops: Int = 8): String {
@@ -92,7 +104,9 @@ class Node(
     fun sendPlaza(text: String): String {
         val p = Plaza.of(identity, text, clock())
         keepPlaza(PlazaEntry(p.id, identity.name, text, p.ts, true))
-        enqueue(p.encode())
+        val frame = p.encode()
+        plazaRetries[p.id] = Retry(frame, PLAZA_RETRIES, clock() + RETRY_MS)
+        enqueue(frame)
         return p.id
     }
 
@@ -121,7 +135,8 @@ class Node(
     }
 
     private fun onPlaza(p: Plaza): List<NodeEvent> {
-        if (p.nodeId.contentEquals(identity.nodeId) || !p.verify() || plaza.any { it.id == p.id }) return emptyList()
+        if (p.nodeId.contentEquals(identity.nodeId) || !p.verify()) return emptyList()
+        if (plaza.any { it.id == p.id }) { enqueue(Heard.of(identity, p.id, clock()).encode()); return emptyList() } // my "heard" got lost: say it again
         keepPlaza(PlazaEntry(p.id, p.name, p.text, p.ts, false))
         enqueue(Heard.of(identity, p.id, clock()).encode())
         return listOf(NodeEvent.PlazaReceived(p.id, p.name, p.text))
@@ -129,7 +144,9 @@ class Node(
 
     private fun onHeard(h: Heard): List<NodeEvent> {
         val mine = plaza.firstOrNull { it.mine && it.id == h.plazaId } ?: return emptyList()
-        if (!h.verify() || !mine.heardBy.add(h.name.ifBlank { h.nodeId.toHex().take(8) })) return emptyList()
+        if (!h.verify()) return emptyList()
+        plazaRetries.remove(h.plazaId)
+        if (!mine.heardBy.add(h.name.ifBlank { h.nodeId.toHex().take(8) })) return emptyList()
         store.savePlaza(plaza())
         return listOf(NodeEvent.PlazaHeard(h.plazaId, h.name))
     }
@@ -137,6 +154,7 @@ class Node(
     private fun onCardOffer(o: CardOffer): List<NodeEvent> {
         val card = o.open(identity) ?: return emptyList()
         val key = card.nodeId.toHex()
+        cardRetries.remove(key)
         if (key in offeredTo) { store.saveContact(card); return listOf(NodeEvent.CardReceived(card)) } // mutual tap: saved right away
         return listOf(NodeEvent.CardReceived(card))
     }
@@ -188,5 +206,8 @@ class Node(
         const val MAX_RESHOUTS = 5
         const val MAX_SEEN = 4_000
         const val MAX_OUTBOX = 400
+        const val RETRY_MS = 6_000L
+        const val PLAZA_RETRIES = 3
+        const val CARD_RETRIES = 5
     }
 }

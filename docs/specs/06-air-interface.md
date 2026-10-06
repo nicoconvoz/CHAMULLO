@@ -76,6 +76,19 @@ GRITO =
 - Android admite hasta **1650 bytes** de datos en *extended advertising* no conectable. Se encadenan varios paquetes de radio (`AUX_CHAIN`).
 - A 125 kbit/s, 1650 bytes ocupan el aire más de 100 ms y aumentan las colisiones. El grito DEBERÍA limitarse a **≈ 250 bytes por paquete de radio**. Lo que no entra se trocea (§6.2).
 
+### 4.3 Grito universal y comodines (v0.1.8)
+
+La primera prueba de campo mostró que no todos los teléfonos pueden enviar *extended advertising*. Por eso toda trama viaja también en **micros** dentro de anuncios clásicos de 31 bytes, que cualquier teléfono envía y escucha (Manufacturer Specific Data, compañía `0xFFFF`):
+
+```text
+MICRO = MARK(0xC5) | id(2) | índice(1) | n(1) | g(1) | pedazo(16)
+```
+
+- La trama, precedida por su largo de 2 bytes, se corta en `n` pedazos de datos.
+- Se agregan `g = ⌈n/4⌉` **comodines** de paridad: el comodín `j` es el XOR de todos los pedazos `i` con `i mod g = j`.
+- El receptor reconstruye **un pedazo perdido por grupo**. La radio ya descarta por CRC los paquetes dañados, así que lo que hay que reparar son **pérdidas**, no bits cambiados.
+- Costo: ≈ 25 % más de aire. Las cartas importantes, además, se repiten hasta recibir confirmación (mensajes de la plaza y tarjetas).
+
 ## 5. Acceso al medio (MAC): los turnos, estilo *sidelink* 3GPP
 
 El *sidelink* de 3GPP en modo autónomo resuelve el mismo problema que CHAMULLO: equipos sin torre que comparten el aire. CHAMULLO toma su lógica y la adapta a los tiempos gruesos que permite una app.

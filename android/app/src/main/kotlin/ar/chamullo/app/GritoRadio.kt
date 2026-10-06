@@ -56,6 +56,7 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) : R
     override var heard = 0L; private set
     override var lastError: String? = null; private set
     var lastHeardAt = 0L; private set
+    var assembled = 0L; private set
 
     val enabled get() = adapter?.isEnabled == true
     val extended get() = adapter?.isLeExtendedAdvertisingSupported == true
@@ -202,7 +203,7 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) : R
         while (recent.size > 1024) recent.remove(recent.keys.first())
         heard++
         lastHeardAt = now
-        if (micro != null) micros.accept(micro)?.let(onFrame) else onFrame(bytes)
+        if (micro != null) micros.accept(micro)?.let { assembled++; onFrame(it) } else { assembled++; onFrame(bytes) }
     }
 
     companion object {

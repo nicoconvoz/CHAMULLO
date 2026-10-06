@@ -145,4 +145,52 @@ class NodeTest {
         assertEquals("¿me escuchan?", line.text)
         assertEquals(listOf("Beto"), line.heardBy)
     }
+
+    @Test
+    fun `cards - accepting sends my card back even if I never heard the other phone's heartbeat`() {
+        var now = 0L
+        val ana = Node(Identity.generate("Ana"), MemoryStore()) { now }
+        val beto = Node(Identity.generate("Beto"), MemoryStore()) { now }
+        ana.tick(); for (f in ana.drainOutbox()) beto.onFrame(f) // beto hears ana; ana never hears beto
+        ana.offerCard(beto.neighbors().single().let { Neighbor(Beacon.of(beto.identity, false, now), now) })
+        val card = ana.drainOutbox().flatMap { beto.onFrame(it) }.filterIsInstance<NodeEvent.CardReceived>().single().card
+        beto.acceptCard(card)
+        val back = beto.drainOutbox().flatMap { ana.onFrame(it) }
+        assertTrue(back.any { it is NodeEvent.CardReceived }, "ana gets beto's card")
+        assertEquals(listOf("Beto"), ana.store.contacts().map { it.name })
+    }
+
+    @Test
+    fun `plaza - a message nobody heard is shouted again, at most three times`() {
+        var now = 0L
+        val ana = Node(Identity.generate("Ana"), MemoryStore()) { now }
+        ana.sendPlaza("¿hay alguien?")
+        var shouts = ana.drainOutbox().size
+        repeat(30) { now += 1_000; ana.tick(); shouts += ana.drainOutbox().count { Packet.parseOrNull(it) is Plaza } }
+        assertEquals(1 + Node.PLAZA_RETRIES, shouts)
+    }
+
+    @Test
+    fun `plaza - once someone heard it, it is not shouted again`() {
+        val air = Air("ana", "beto").apply { link("ana", "beto") }
+        air.node("ana").sendPlaza("hola")
+        air.run(1_000)
+        val before = air.shouts
+        air.run(20_000)
+        val plazasAfter = air.shouts - before
+        assertTrue(plazasAfter < 10, "only heartbeats keep going: $plazasAfter shouts")
+    }
+
+    @Test
+    fun `cards - an offer is repeated until the other card arrives`() {
+        var now = 0L
+        val ana = Node(Identity.generate("Ana"), MemoryStore()) { now }
+        val beto = Identity.generate("Beto")
+        val r = Reassembler()
+        val offersIn = { frames: List<ByteArray> -> frames.mapNotNull { r.accept(it) }.count { Packet.parseOrNull(it) is CardOffer } } // a card travels in fragments
+        ana.offerCard(Neighbor(Beacon.of(beto, false, now), now))
+        var offers = offersIn(ana.drainOutbox())
+        repeat(60) { now += 1_000; ana.tick(); offers += offersIn(ana.drainOutbox()) }
+        assertEquals(1 + Node.CARD_RETRIES, offers)
+    }
 }
