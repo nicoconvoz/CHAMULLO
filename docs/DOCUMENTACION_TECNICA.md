@@ -411,3 +411,35 @@ La billetera de la app paga la recompensa en **Lucas**, la moneda propia de CHAM
 
 **Pendiente en la app:** leer el GPS y llamar a `Node.locate`. Mientras no lo haga, las cartas de la app siguen con el eco de v0.1 (sin zona), igual que hoy.
 
+## Versión 0.5.0: vamos por todo
+
+| Pieza | Qué es | Dónde |
+|---|---|---|
+| 🏘️ El barrio grande | En medio de una multitud la tarjeta apunta a la manzana (~400 m) | spec 05 §2.1, `Node` |
+| 🧭 GPS en la app | `Locator` le da la celda al nodo; ferry con rumbo y celdas en los carteles | `Locator`, `WifiIslands` |
+| ☁️ El relé | Nube que cualquiera aloja: directorio de puentes por manzana y buzones firmados | `android/relay`, `RelayBridge`, spec 05 §11.1 |
+| 🧾 Cobrar | El cartero guarda la llave de su renglón; `Journey` y `Claim` según Proof of Relay §6-§7 | `Receipts.kt` |
+| 📒 La libreta | Páginas encadenadas; Rey y más de 2/3 de la Nobleza; génesis, destronamiento, reparto por escasez y diversidad, sueldo de la Corte, cámara compensadora | `Ledger.kt`, spec 04 §9.4 |
+| 🗣️ La libreta en los celulares | Asientos de boca en boca, el Rey escribe, la Nobleza endosa, el que llega tarde se pone al día, las páginas cruzan por los puentes y se guardan en disco | `Node` |
+| 🛒 Gastar Lucas | Prioridad paga (mitad se quema, mitad para los carteros) con carril gratis de un tercio; Tienda de Lucas | `Node`, `StoreActivity`, spec 04 §6 |
+| 🌉 Puente fijo | Un miembro queda en dos islas a la vez (Wi-Fi Direct + Wi-Fi común solo local) | `Islands`, `WifiIslands`, spec 07 §6.2 |
+
+**Resultados del gemelo** (`docs/SIMULACION.md`):
+
+| Escenario | Entregadas |
+|---|---|
+| Plaza | 100 % |
+| Dos pueblos | 100 % |
+| Ruta de tres pueblos | 100 % |
+| Pueblos con viajeros | 100 % |
+| Ciudad de 1000 | 81 %, libreta igual en 997 de 1000 celulares, Corte por regla |
+| Provincia | 100 % por el puente |
+
+**Lo que queda fuera de este repo:**
+- Probar en el campo con celulares de verdad.
+- La app de iPhone (necesita Mac y Xcode).
+- Alojar un relé, que cualquiera puede levantar con `./gradlew :relay:run`.
+- Que el Capitán cargue su clave de fundador en Diagnóstico.
+
+En el puente fijo, Android le pide permiso al dueño la primera vez, y eso todavía no se probó en celulares reales.
+
