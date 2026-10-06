@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-CHAMULLO-Commercial
+// Copyright (C) 2026 Jesús Nicolás Astorga y RESOURCES OPEN DOORS S.A.S
 package ar.chamullo.app
 
 import android.Manifest
@@ -271,6 +273,10 @@ class MainActivity : Activity() {
         page.addView(title("Versión"))
         page.addView(text("CHAMULLO ${WebVersion.installed(this)}", 14f, Ui.MUTED))
         page.addView(button("Ver la página de descarga", primary = false) { web(WebVersion.DOWNLOAD_PAGE) })
+        // AGPL §13: whoever uses CHAMULLO can see its license and get its source code.
+        page.addView(title("Licencia"))
+        page.addView(text("© 2026 Jesús Nicolás Astorga y RESOURCES OPEN DOORS S.A.S\nSoftware libre bajo la licencia GNU AGPL 3.0 o posterior, o con licencia comercial de sus titulares.", 13f, Ui.MUTED))
+        page.addView(button("Ver el código fuente", primary = false) { web(SOURCE_URL) })
     }
 
     private fun radioStatus(): String {
@@ -354,6 +360,7 @@ class MainActivity : Activity() {
             runCatching { c.startActivity(panel.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         }
 
+        const val SOURCE_URL = "https://github.com/nicoconvoz/CHAMULLO"
         const val ICEBREAK_URL = "https://nicoconvoz.github.io/icebreak-web/"
         const val ICEBREAK_APK = "https://nicoconvoz.github.io/icebreak-web/android.html"
         private const val REQ_PERMS = 7

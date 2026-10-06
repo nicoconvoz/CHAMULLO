@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-CHAMULLO-Commercial
+// Copyright (C) 2026 Jesús Nicolás Astorga y RESOURCES OPEN DOORS S.A.S
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createSim: create, withConfig: withCfg, DEFAULT_CONFIG } = require('./core.js');

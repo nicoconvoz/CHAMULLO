@@ -13,8 +13,8 @@ android {
         applicationId = "ar.chamullo.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 33
-        versionName = "0.8.2"
+        versionCode = 34
+        versionName = "0.9.0"
     }
 
     // The release key lives outside the repo (GRADLE_USER_HOME/gradle.properties: CHAMULLO_STORE_FILE and friends).

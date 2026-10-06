@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-CHAMULLO-Commercial
+# Copyright (C) 2026 Jesús Nicolás Astorga y RESOURCES OPEN DOORS S.A.S
 # Builds the release APK and publishes it on the download page (../Chamullo-web, GitHub Pages),
 # writing version.txt so installed apps show the "new version" notice. Same flow as ICEBREAK's web page.
 set -euo pipefail

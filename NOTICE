@@ -1,0 +1,72 @@
+CHAMULLO
+========
+
+Copyright (C) 2026  Jesús Nicolás Astorga
+Copyright (C) 2026  RESOURCES OPEN DOORS S.A.S
+
+
+EL CÓDIGO
+---------
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+El texto completo está en el archivo LICENSE.
+
+
+EL ARTÍCULO 13, QUE ACÁ NOS TOCA
+--------------------------------
+
+CHAMULLO es una red: la sección 13 de la AGPL obliga a que quien use el programa
+por red pueda obtener su código fuente. La app lo cumple en Configuración →
+Licencia → "Ver el código fuente", que lleva a:
+
+    https://github.com/nicoconvoz/CHAMULLO
+
+El relé propio (android/relay) también es un servicio de red: quien lo aloje
+con cambios debe ofrecer su código a quienes lo usen.
+
+
+LICENCIA COMERCIAL
+------------------
+
+Si estos términos no te sirven —producto cerrado, servicio sin abrir tu código—
+existe una licencia comercial que te exime de la AGPL.
+Ver LICENCIA-COMERCIAL.md.
+
+
+EL CONTENIDO
+------------
+
+Las especificaciones y la documentación de docs/ NO están bajo AGPL: van bajo
+Creative Commons Attribution 4.0 International (CC BY 4.0). Ver docs/LICENSE.
+
+
+LAS VERSIONES ANTERIORES
+------------------------
+
+Las versiones publicadas hasta la 0.8.2 inclusive se distribuyeron bajo la
+Apache License 2.0. Esa licencia es irrevocable para quien recibió esas copias.
+Desde la 0.9.0 rige la AGPL-3.0-or-later, o la licencia comercial.
+
+
+LOS NOMBRES
+-----------
+
+"CHAMULLO", su logo y la moneda "Lucas" son signos distintivos de los titulares.
+Ninguna licencia de código otorga derecho a usarlos en productos derivados.
+
+
+FINANCIAMIENTO
+--------------
+
+Financiado por Open Doors (RESOURCES OPEN DOORS S.A.S).

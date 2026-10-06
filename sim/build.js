@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-CHAMULLO-Commercial
+// Copyright (C) 2026 Jesús Nicolás Astorga y RESOURCES OPEN DOORS S.A.S
 // Builds lab.html: the lab page with the simulator core inlined, so it opens from anywhere (file, preview, artifact).
 const fs = require('node:fs');
 const path = require('node:path');

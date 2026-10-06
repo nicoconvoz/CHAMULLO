@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "Si usás CHAMULLO, citalo así."
+title: "CHAMULLO — una red de celulares que se pasan cartas sin torres ni Internet"
+abstract: >-
+  Una red de teléfonos multi-salto y gratuita que funciona sin torres ni
+  Internet: los celulares arman islas Wi-Fi Direct y se pasan cartas selladas de
+  mano en mano. Incluye el protocolo, la economía de la moneda Lucas, el túnel de
+  datos, las llamadas dentro de la isla y la app Android de referencia.
+type: software
+authors:
+  - family-names: Astorga
+    given-names: "Jesús Nicolás"
+    email: mza.nicolas.astorga@gmail.com
+  - name: "RESOURCES OPEN DOORS S.A.S"
+license: AGPL-3.0-or-later
+repository-code: "https://github.com/nicoconvoz/CHAMULLO"
+url: "https://nicoconvoz.github.io/chamullo-web/"
+version: "v0.9.0"
+keywords:
+  - mesh-network
+  - delay-tolerant-networking
+  - wifi-direct
+  - proof-of-relay
+  - offline-communication
+  - android

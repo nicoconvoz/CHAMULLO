@@ -60,5 +60,12 @@ Pendiente de formalizar: formato de paquetes, descubrimiento, routing, Proof of 
 
 ## Licencia
 
-- **Código**: [Apache License 2.0](LICENSE).
+Copyright (C) 2026 **Jesús Nicolás Astorga** y **RESOURCES OPEN DOORS S.A.S**
+
+- **Código**: doble licencia. Se elige una de dos:
+  - [GNU AGPL-3.0-or-later](LICENSE): libre, con la obligación de publicar el código de toda obra derivada, también si se ofrece como servicio por red.
+  - [Licencia comercial](LICENCIA-COMERCIAL.md): para integrar CHAMULLO en productos cerrados, por contrato con los titulares.
 - **Especificaciones y documentación** (`docs/`): [Creative Commons Attribution 4.0 International](docs/LICENSE).
+- Las versiones hasta la 0.8.2 se publicaron bajo Apache 2.0; desde la 0.9.0 rige la doble licencia. Detalles en [NOTICE](NOTICE).
+- Para colaborar hay que aceptar el acuerdo de [CONTRIBUTING.md](CONTRIBUTING.md).
+- Para citar el proyecto: [CITATION.cff](CITATION.cff).

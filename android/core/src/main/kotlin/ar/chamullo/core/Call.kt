@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-CHAMULLO-Commercial
+// Copyright (C) 2026 Jesús Nicolás Astorga y RESOURCES OPEN DOORS S.A.S
 package ar.chamullo.core
 
 /** A frame for one phone of the island, passed on by the host only to it: the data tunnel and calls. */

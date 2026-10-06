@@ -1,0 +1,26 @@
+{
+  "title": "CHAMULLO — una red de celulares que se pasan cartas sin torres ni Internet",
+  "description": "<p>CHAMULLO es una red de teléfonos multi-salto y gratuita que funciona sin torres ni Internet: los celulares arman islas Wi-Fi Direct y se pasan cartas selladas de mano en mano.</p><p><strong>Qué incluye:</strong> el protocolo completo (Proof of Relay con saltos firmados por las dos partes, brújula de zonas, islas con ferrys y puentes fijos), la economía de la moneda Lucas con su libreta por pueblo, el túnel de datos para navegar con Internet prestado, las llamadas y videollamadas dentro de la isla, el puente por Nostr para los saltos grandes, el gemelo digital y la app Android de referencia.</p><p><strong>Licencias:</strong> el código bajo AGPL-3.0-or-later (con licencia comercial disponible); las especificaciones y la documentación bajo CC BY 4.0.</p>",
+  "upload_type": "software",
+  "language": "spa",
+  "license": "AGPL-3.0-or-later",
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "Astorga, Jesús Nicolás"
+    },
+    {
+      "name": "RESOURCES OPEN DOORS S.A.S"
+    }
+  ],
+  "keywords": [
+    "red mesh",
+    "redes tolerantes a demoras",
+    "Wi-Fi Direct",
+    "proof of relay",
+    "comunicación sin Internet",
+    "Android",
+    "Kotlin"
+  ],
+  "notes": "Financiado por RESOURCES OPEN DOORS S.A.S."
+}

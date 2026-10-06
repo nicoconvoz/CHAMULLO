@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-CHAMULLO-Commercial
+// Copyright (C) 2026 Jesús Nicolás Astorga y RESOURCES OPEN DOORS S.A.S
 // Scenario: phones clustered in Argentine cities; distant cities connect only through members with internet.
 // Usage: node argentina.js [phonesPerCity] [internetShare] [letters] [seed] [zoneLevel]
 const { createSim, withConfig } = require('./core.js');
