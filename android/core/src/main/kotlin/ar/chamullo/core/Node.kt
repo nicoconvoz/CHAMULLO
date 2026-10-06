@@ -118,6 +118,19 @@ class Node(
     private val journeys = ArrayList<Journey>()
     private val claims = ArrayList<Pair<Claim, Journey>>()
 
+    /**
+     * The ledger of my pueblo (Economy & Governance §9), if this phone keeps one. Every phone of the pueblo keeps a copy:
+     * entries spread by word of mouth, the king writes pages, the nobility endorses them, latecomers catch up.
+     */
+    var ledger: Ledger? = null
+    private val ledgerPool = LinkedHashMap<String, ByteArray>() // entries waiting for a page
+    private val ledgerSeen = LinkedHashSet<String>()
+    private class Keep(val msg: LedgerMsg, val at: Long, var reshouts: Int = 0)
+    private val ledgerKeep = LinkedHashMap<String, Keep>()
+    private var proposal: Page? = null
+    private var proposalAt = 0L
+    private var lastPageTry = Long.MIN_VALUE / 2
+
     /** Journeys confirmed and claims ready since the last call: the ledger layer publishes them. */
     fun takeForLedger(): Pair<List<Journey>, List<Pair<Claim, Journey>>> =
         (journeys.toList() to claims.toList()).also { journeys.clear(); claims.clear() }
@@ -233,6 +246,7 @@ class Node(
             else { for (t in h.takers) p.refused[t] = now; p.nextTry = now }
         }
         val fresh = newNeighbor
+        ledger?.let { l -> ledgerTick(l, now, fresh) }
         val all = newNeighbor || routeDirty
         newNeighbor = false; routeDirty = false
         if (fresh) for (k in payPockets.values) if (k.reshouts < MAX_RESHOUTS) { k.reshouts++; shoutPayment(k.p, k.ttl) }
@@ -320,6 +334,7 @@ class Node(
             is Payment -> onPayment(p)
             is Offer -> onOffer(p)
             is Accept -> onAccept(p)
+            is LedgerMsg -> onLedger(p)
             else -> emptyList()
         }
     }
@@ -601,6 +616,109 @@ class Node(
         }
     }
 
+    /* ---------- the ledger in the phones (Economy & Governance §8-§9) ---------- */
+
+    private fun ledgerTick(l: Ledger, now: Long, fresh: Boolean) {
+        val (js, cs) = takeForLedger()
+        for (j in js) submit(Entry.journey(j).encode())
+        for ((c, _) in cs) submit(Entry.claim(c).encode())
+        if (fresh) {
+            enqueue(LedgerMsg(LedgerMsg.HAVE, Tlv.u64(l.pages.size.toLong()), 1).encode()) // tell the newcomer how far I am
+            for (k in ledgerKeep.values) if (k.reshouts < MAX_RESHOUTS && now - k.at < LEDGER_KEEP_MS) { k.reshouts++; enqueue(k.msg.encode()) }
+        }
+        if (now - lastPageTry >= LEDGER_PAGE_MS) { lastPageTry = now; kingWork(l, now) }
+    }
+
+    private fun submit(entry: ByteArray) {
+        ledgerPool.putIfAbsent(Crypto.hash(entry).toHex(), entry)
+        gossip(LedgerMsg.ENTRY, entry)
+    }
+
+    // Spread by word of mouth inside the pueblo, and kept a while for whoever shows up (like letters and payments).
+    private fun gossip(kind: Int, payload: ByteArray, ttl: Int = LEDGER_TTL) {
+        val key = Crypto.hash(byteArrayOf(kind.toByte()) + payload).toHex()
+        ledgerSeen += key
+        while (ledgerSeen.size > MAX_SEEN * 2) ledgerSeen.remove(ledgerSeen.first())
+        val m = LedgerMsg(kind, payload, ttl)
+        enqueue(m.encode())
+        ledgerKeep[key] = Keep(m, clock())
+        while (ledgerKeep.size > 300) ledgerKeep.remove(ledgerKeep.keys.first())
+    }
+
+    private fun onLedger(m: LedgerMsg): List<NodeEvent> {
+        val l = ledger ?: return emptyList()
+        if (m.kind == LedgerMsg.HAVE) {
+            // Someone is behind: hand it the pages it misses, ten at a time.
+            val have = runCatching { Tlv.readU64(m.payload).toInt() }.getOrDefault(Int.MAX_VALUE)
+            for (p in l.pages.drop(have).take(10)) enqueue(LedgerMsg(LedgerMsg.PAGE, p.encode(), 1).encode())
+            return emptyList()
+        }
+        val key = Crypto.hash(byteArrayOf(m.kind.toByte()) + m.payload).toHex()
+        if (m.kind == LedgerMsg.PAGE) {
+            val page = runCatching { Page.decode(m.payload) }.getOrNull() ?: return emptyList()
+            if (page.index < l.pages.size) return emptyList() // already in my book
+            if (l.accept(page)) { forget(page); proposal = null; ledgerSeen += key; return relay(m, key) }
+            if (page.index > l.pages.size) enqueue(LedgerMsg(LedgerMsg.HAVE, Tlv.u64(l.pages.size.toLong()), 1).encode())
+            return emptyList()
+        }
+        if (!ledgerSeen.add(key)) return emptyList()
+        when (m.kind) {
+            LedgerMsg.ENTRY -> ledgerPool.putIfAbsent(Crypto.hash(m.payload).toHex(), m.payload)
+            LedgerMsg.PROPOSAL -> {
+                val page = runCatching { Page.decode(m.payload) }.getOrNull()
+                if (page != null && l.court().nobles.any { it.contentEquals(identity.nodeId) } && l.wouldAccept(page))
+                    gossip(LedgerMsg.ENDORSE, page.hash() + identity.nodeId + identity.sign("PAGE", page.hash()))
+            }
+            LedgerMsg.ENDORSE -> proposal?.let { p ->
+                val h = m.payload.copyOfRange(0, 32); val who = m.payload.copyOfRange(32, 64); val sig = m.payload.copyOfRange(64, m.payload.size)
+                if (h.contentEquals(p.hash()) && p.endorsements.none { it.first.contentEquals(who) }) {
+                    val endorsed = Page(p.pueblo, p.index, p.prev, p.ts, p.entries, p.king, p.kingSig, p.endorsements + (who to sig))
+                    proposal = endorsed
+                    if (l.accept(endorsed)) sealed(endorsed)
+                }
+            }
+        }
+        return relay(m, key)
+    }
+
+    private fun relay(m: LedgerMsg, key: String): List<NodeEvent> {
+        if (m.ttl > 1) {
+            val next = LedgerMsg(m.kind, m.payload, m.ttl - 1)
+            enqueue(next.encode())
+            ledgerKeep[key] = Keep(next, clock())
+        }
+        return emptyList()
+    }
+
+    // The king's work: a page with what is waiting. The close of a period goes alone, computed on the book as it is.
+    private fun kingWork(l: Ledger, now: Long) {
+        val court = l.court()
+        if (court.king?.contentEquals(identity.nodeId) != true) { proposal = null; return }
+        if (proposal != null && now - proposalAt < PROPOSAL_MS) return
+        val entries: List<Entry> = if (l.canClose(now)) listOf(l.closePeriod(now)) else {
+            val ok = ArrayList<Entry>()
+            for (bytes in ledgerPool.values.toList()) {
+                val e = Entry.parse(bytes) ?: continue
+                if (l.wouldAccept(l.propose(identity, ok + e, now))) ok += e
+                if (ok.size >= PAGE_ENTRIES) break
+            }
+            ok
+        }
+        if (entries.isEmpty()) return
+        val page = l.propose(identity, entries, now)
+        if (court.nobles.isEmpty()) { if (l.accept(page)) sealed(page); return } // genesis: the founder alone
+        proposal = page; proposalAt = now
+        gossip(LedgerMsg.PROPOSAL, page.encode())
+    }
+
+    private fun sealed(page: Page) {
+        forget(page)
+        proposal = null
+        gossip(LedgerMsg.PAGE, page.encode())
+    }
+
+    private fun forget(page: Page) { for (e in page.entries) ledgerPool.remove(Crypto.hash(e).toHex()) }
+
     private fun remember(id: String) {
         seen += id
         if (seen.size > MAX_SEEN) seen.remove(seen.first())
@@ -629,6 +747,12 @@ class Node(
         const val BEACON_REPLY_MS = 5_000L
         const val PAY_KEEP_MS = 30 * 60_000L
         const val LAKE_WAIT_MS = 2 * Islands.FERRY_TURN_MS
+        // The ledger: a page every 10 s at most, up to 50 entries; word of mouth up to 16 hops, kept 10 min for newcomers.
+        const val LEDGER_PAGE_MS = 10_000L
+        const val PROPOSAL_MS = 30_000L
+        const val PAGE_ENTRIES = 50
+        const val LEDGER_TTL = 16
+        const val LEDGER_KEEP_MS = 10 * 60_000L
         // How many different phones heard in my manzana in the last hour make a crowd to hide in (k-anonymity).
         const val CROWD_MIN = 20
         const val CROWD_WINDOW_MS = 60 * 60_000L

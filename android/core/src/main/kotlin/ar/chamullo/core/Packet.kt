@@ -19,6 +19,7 @@ sealed interface Packet {
         const val LINK_OFFER = 8L
         const val LINK_ACCEPT = 9L
         const val LINK_CLAIM = 16L
+        const val LINK_LEDGER = 17L
 
         fun isChamullo(b: ByteArray) = b.size >= 4 && b[0] == MAGIC[0] && b[1] == MAGIC[1] && b[2].toInt() == VERSION
 
@@ -40,6 +41,7 @@ sealed interface Packet {
                         LINK_OFFER -> Offer.decode(tlv)
                         LINK_ACCEPT -> Accept.decode(tlv)
                         LINK_CLAIM -> Claim.decode(tlv)
+                        LINK_LEDGER -> LedgerMsg.decode(tlv)
                         else -> throw WireException("unknown link message $type")
                     }
                 }
@@ -536,3 +538,22 @@ class Accept(val taker: ByteArray, val giver: ByteArray, val msgId: ByteArray, v
     }
 }
 
+/* ======================= the ledger travelling between phones (Economy & Governance §9) ======================= */
+
+/** An entry, a proposed page, an endorsement, a sealed page, or "I have up to page n". [ttl]: hops left, not signed. */
+class LedgerMsg(val kind: Int, val payload: ByteArray, val ttl: Int) : Packet {
+    override fun encode() = Packet.link(Packet.LINK_LEDGER, listOf(2L to byteArrayOf(kind.toByte()), 4L to payload, 5L to byteArrayOf(ttl.toByte())))
+
+    companion object {
+        const val ENTRY = 1
+        const val PROPOSAL = 2
+        const val ENDORSE = 3
+        const val PAGE = 4
+        const val HAVE = 5
+
+        fun decode(t: Map<Long, ByteArray>): LedgerMsg {
+            Tlv.requireKnown(t, setOf(2, 4))
+            return LedgerMsg(t.getValue(2)[0].toInt(), t.getValue(4), (t[5]?.firstOrNull()?.toInt() ?: 1) and 0xff)
+        }
+    }
+}
