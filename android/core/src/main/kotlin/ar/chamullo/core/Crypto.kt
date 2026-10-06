@@ -53,6 +53,8 @@ object Crypto {
     /* ---------- hashing ---------- */
     fun sha512(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-512").digest(data)
 
+    fun sha256(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(data)
+
     fun hash(data: ByteArray): ByteArray = sha512(data).copyOf(32)
 
     /* ---------- box ---------- */

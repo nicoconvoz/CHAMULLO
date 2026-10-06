@@ -19,7 +19,7 @@ object Hub {
 
     @Volatile var node: Node? = null
     @Volatile var radios: List<Radio> = emptyList()
-    @Volatile var relay: ar.chamullo.core.RelayBridge? = null
+    @Volatile var relay: ar.chamullo.core.NostrBridge? = null
     val pendingCards = mutableListOf<Card>()
     val listeners = CopyOnWriteArraySet<(NodeEvent?) -> Unit>()
 

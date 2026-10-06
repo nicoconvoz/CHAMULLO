@@ -250,6 +250,22 @@ red local → isla → ferry → pueblo → 🕳️ salto grande → enrutamient
 - La carta sigue sellada de punta a punta (§7): el tramo por Internet ve lo mismo que un cartero, nada más.
 - Implementado en el núcleo (`Bridge`, `Node`), en el gemelo (la nube de `World`) y en la app, con el relé de §11.1.
 
+### 11.2 El puente por Nostr (idea del Capitán): sin servidor propio
+
+La nube del puente es **Nostr**: miles de relés públicos que no son de nadie, donde cualquiera publica eventos firmados y se suscribe a los que le interesan. Es el transporte por defecto de la app, y la red se arma sola: no hay nada que alojar ni que escribir.
+
+| Pieza | Cómo |
+|---|---|
+| Llave de Nostr | Schnorr BIP-340 sobre secp256k1, derivada de las mismas 16 palabras: `d = SHA-256("CHAMULLO/1/NOSTR" 0x00 semilla) mod n`. Probada contra los vectores oficiales de BIP-340 y contra eventos reales de relés públicos |
+| Directorio | Evento NIP-78 (tipo `30078`, reemplazable, `d = chamullo-bridge`) con etiquetas `t = chamullo`, `g` = manzana y `g` = barrio (zona codificada en hex), `n` = id CHAMULLO y `expiration` (NIP-40) a 30 min. Se repite cada 10 min |
+| Atadura | El contenido del directorio es la firma CHAMULLO (`sig_node("NOSTR", llave Nostr)`). Así nadie se anota a nombre de otro |
+| Buscar puentes | `REQ` con `#g` = la zona (y su barrio si es una manzana) y `#t = chamullo`, abierto en vivo |
+| Mandar una trama | Evento tipo `4078` con `p` = la llave Nostr del puente destino, `t = chamullo` y `expiration` a 1 h. El contenido es la trama en base64, ya sellada |
+| Recibir | Cada puente escucha `#p` = su llave en todos sus relés. Si el mismo evento llega por varios relés, se procesa una vez |
+| Diversificado | Publica en todos los relés a la vez: damus, nos.lol, primal, nostr.mom, snort y offchain, probados el 2026-10-06. La página puede sumar más con `wss://…` en `relays.txt` |
+
+El relé propio de §11.1 queda para quien quiera alojar el suyo.
+
 ### 11.1 El relé: la nube que cualquiera puede alojar
 
 Un servidor chico (`android/relay`, `./gradlew :relay:run`, puerto 47475). No depende de ningún proveedor: lo levanta quien quiera.

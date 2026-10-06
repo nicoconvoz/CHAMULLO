@@ -71,8 +71,8 @@ class DiagActivity : Activity() {
             else "$founder\nPáginas: ${l.pages.size}\nRey: ${l.court().king?.toHex()?.take(8) ?: "—"}${if (l.court().nobles.isEmpty()) " (génesis)" else " · ${l.court().nobles.size} nobles"}\nMis Lucas: $lucas\nMi clave: $me"
         }
         val r = Hub.relay
-        bridgeInfo.text = if (r == null) (if (Settings.lendInternet(this)) "Buscando el relé de CHAMULLO…" else "Apagado.") else
-            "Prestando Internet.\n  Llevé por Internet: ${r.sentBytes / 1024} KB\n  Último aviso: ${r.lastError ?: "ninguno"}"
+        bridgeInfo.text = if (r == null) (if (Settings.lendInternet(this)) "Conectando con Nostr…" else "Apagado.") else
+            "Prestando Internet por Nostr.\n  Relés conectados: ${r.connected()}\n  Llevé por Internet: ${r.sentBytes / 1024} KB\n  Último aviso: ${r.lastError ?: "ninguno"}"
         val radios = Hub.radios
         radioInfo.text = if (radios.isEmpty()) "El grito no está encendido." else radios.joinToString("\n\n") { r ->
             listOfNotNull(

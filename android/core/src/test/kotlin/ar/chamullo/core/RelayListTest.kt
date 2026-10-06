@@ -13,9 +13,10 @@ class RelayListTest {
 
             esto no es una dirección
             ftp://otra.cosa
+            wss://nostr.ejemplo.ar
             https://rele.chamullo.ar
         """.trimIndent()
-        assertEquals(listOf("https://rele.chamullo.ar", "http://200.1.2.3:47475"), Relay.parseList(text))
+        assertEquals(listOf("https://rele.chamullo.ar", "http://200.1.2.3:47475", "wss://nostr.ejemplo.ar"), Relay.parseList(text))
         assertEquals(emptyList<String>(), Relay.parseList(""))
     }
 }
