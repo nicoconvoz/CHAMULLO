@@ -34,13 +34,12 @@ import java.util.concurrent.atomic.AtomicLong
  * - **Lender** (with "Prestar Internet" on and Internet at hand): answers, opens the sockets to the web for the buyer,
  *   serves on [Tunnel.CREDIT] and sends the best receipt of each session to the pueblo's ledger.
  *
- * Every piece travels as a LINK 18 frame over the island's pipes ([WifiIslands.sendTunnel]), sealed for the other end.
+ * Every piece travels as a LINK 18 frame over the island's pipes ([WifiIslands.sendDirect]), sealed for the other end.
  */
 class DataTunnel(private val context: Context, private val identity: Identity, private val islands: WifiIslands) {
     @Volatile private var running = true
 
     fun start() {
-        islands.onTunnel = { m -> runCatching { onMsg(m) } }
         Thread {
             while (running) { runCatching { tick() }; Thread.sleep(1_000) }
         }.apply { isDaemon = true; name = "tunnel" }.start()
@@ -48,16 +47,15 @@ class DataTunnel(private val context: Context, private val identity: Identity, p
 
     fun stop() {
         running = false
-        islands.onTunnel = {}
         lender = null
         buyerStreams.values.forEach { it.end(false) }; buyerStreams.clear()
         lent.values.forEach { it.close() }; lent.clear()
         flushReceipts(force = true)
     }
 
-    private fun send(m: TunnelMsg) = islands.sendTunnel(m.encode(), m.to)
+    private fun send(m: TunnelMsg) = islands.sendDirect(m.encode(), m.to)
 
-    private fun onMsg(m: TunnelMsg) {
+    fun onMsg(m: TunnelMsg) {
         when (m.op) {
             TunnelMsg.ASK -> onAsk(m)
             TunnelMsg.LEND -> onLend(m)

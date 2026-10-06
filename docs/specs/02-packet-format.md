@@ -204,6 +204,7 @@ Los mensajes `LINK` nunca salen del enlace en el que se crearon.
 | `16` | `CLAIM` | El cobro de un cartero con sus cinco pruebas (Proof of Relay §7) |
 | `17` | `LEDGER` | La libreta del pueblo de boca en boca: asiento, página propuesta, endoso, página sellada o "tengo hasta la n" (Economy & Governance §9.4) |
 | `18` | `TUNNEL` | Un pedazo del túnel de datos (Discovery & Routing §11.3): `2` de, `4` para (vacío = "¿quién presta?"), `6` operación, `8` corriente, `10` nonce, `12` contenido. `ASK` y `LEND` llevan la clave de caja firmada; las demás van selladas para la otra punta, con la operación y la corriente adentro |
+| `19` | `CALL` | Un pedazo de una llamada (Camino y Carretera §7): `2` de, `4` para, `6` operación, `8` llamada, `10` nonce, `12` contenido, **siempre** sellado con las claves de caja de las dos tarjetas, con la operación y el número de llamada adentro |
 
 La **tarjeta de contacto** lleva su zona (manzana o barrio, Discovery & Routing §2.1) en el TLV `11`, impar y firmado: una tarjeta vieja sin zona sigue sirviendo. El contenido sellado de cada carta lleva la tarjeta actual del remitente en el TLV interno `21` (Discovery & Routing §5).
 

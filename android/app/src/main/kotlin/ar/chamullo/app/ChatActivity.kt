@@ -124,11 +124,9 @@ class ChatActivity : Activity() {
         setOnClickListener { onClick() }
     }
 
+    // Calls go live, so only inside the island (Camino y Carretera §7): the call screen says so if the contact is not here.
     private fun call(video: Boolean) {
-        AlertDialog.Builder(this)
-            .setTitle(if (video) "Videollamada" else "Llamada")
-            .setMessage("Las llamadas van en vivo, así que solo funcionan cuando $name está en tu misma isla o al alcance del Wi-Fi: saltar de celular en celular tarda segundos. Llegan en la próxima versión.")
-            .setPositiveButton("Entendido", null).show()
+        startActivity(Intent(this, CallActivity::class.java).putExtra(CallActivity.EXTRA_PEER, peer).putExtra(CallActivity.EXTRA_VIDEO, video))
     }
 
     private fun deleteContact() {

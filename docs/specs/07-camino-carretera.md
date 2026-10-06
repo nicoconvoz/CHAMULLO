@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Estado | Borrador, implementado en la app 0.2.0 |
-| Fecha | 2026-10-06 (islas con brújula, §6.1) |
+| Fecha | 2026-10-06 (islas con brújula §6.1, llamadas §7) |
 | Depende de | Air Interface v0.1, Discovery & Routing v0.1 |
 
 Diseño del Capitán del proyecto.
@@ -106,3 +106,20 @@ Con la depuración USB del Moto E7 Plus del Capitán (Android 10), Android lo di
 - **Arreglo:** el servicio declara el tipo `location` además de `connectedDevice` (manifiesto, `FOREGROUND_SERVICE_LOCATION` y `startForeground`). Así conserva la ubicación "mientras se usa" estando de fondo.
 - **Comprobado en el celular:** de fondo, sin rechazos de permiso, con la búsqueda corriendo (`mDiscoveryStarted true`) y la isla en pie.
 
+## 7. Llamadas y videollamadas en la isla (0.8.0)
+
+Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en celular. Por eso anda **solo dentro de la isla** (o por un puente fijo), donde todo está a uno o dos saltos por Wi-Fi Direct.
+
+| Pieza | Regla |
+|---|---|
+| Con quién | Solo con contactos. Todo pedazo va sellado con las claves de caja de las dos tarjetas: llamar es probar que tengo mi tarjeta y la suya |
+| Por dónde | LINK 19 `CALL` por los caños de la isla, nunca por el Bluetooth. El anfitrión pasa cada pedazo solo al miembro al que va y no puede escuchar |
+| Sonar | `RING` (dice si es video) cada 2 s hasta que vuelve `RINGING`. Sin `RINGING` en 12 s: "no está en tu isla". Sonando 45 s sin atender: "no contesta" y llamada perdida del otro lado |
+| Atender | `ANSWER`, `REJECT`, `BUSY` (ya estoy en otra), `HANGUP` |
+| Voz | `AUDIO`: 20 ms de PCM 16 kHz mono de 16 bits (640 B, 256 kbit/s), sin códec, con el cancelador de eco y el supresor de ruido del celular. Del otro lado, a lo sumo 160 ms en cola: si se junta más, se tira lo viejo |
+| Video | `VIDEO`: H.264 640×480, 15 cuadros por segundo, 800 kbit/s, con el codificador y el decodificador del propio celular. Cada pedazo lleva banderas (configuración, cuadro clave, cámara apagada, "mandame un cuadro clave") y el giro de la cámara. La configuración viaja antes de cada cuadro clave |
+| Vida | `PING` cada 2 s. Sin voz ni señales en 15 s: "se cortó" |
+
+- La pantalla es oscura como la de ICEBREAK: atender o rechazar; durante la llamada, micrófono, altavoz, cámara, girar y colgar. Suena aunque el celular esté bloqueado.
+- Las reglas viven en el núcleo (`CallSession`, `CallMsg` en `Call.kt`, con pruebas en `CallTest.kt`); la voz y el video, en la app (`AudioEngine`, `VideoEngine`).
+- Límites conocidos: no salta entre islas por el ferry (tarda demasiado); falta medir en campo la calidad con dos celulares.

@@ -8,6 +8,7 @@
     <!-- Hearing el grito: Android only delivers beacon-like advertisements to apps that hold location permission
          (with neverForLocation it filters them out). CHAMULLO never reads the location. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- The Wi-Fi shout: Wi-Fi Aware, phone to phone, without joining any network. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
@@ -24,12 +25,21 @@
     <!-- Wi-Fi Direct search and the Wi-Fi list need location; without this type Android cuts it when the app is in the back. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Calls inside the island: the voice, the camera, ringing over the lock screen, and the speaker. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <!-- version.txt and the catalog from the page; the Nostr bridge and the data tunnel when the owner lends Internet. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-feature android:name="android.hardware.wifi.aware" android:required="false" />
     <uses-feature android:name="android.hardware.wifi.direct" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
         android:allowBackup="false"
@@ -49,6 +59,8 @@
         <activity android:name=".DiagActivity" android:exported="false" />
         <activity android:name=".PlazaActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".StoreActivity" android:exported="false" />
+        <activity android:name=".CallActivity" android:exported="false" android:launchMode="singleTop"
+            android:screenOrientation="portrait" android:showWhenLocked="true" android:turnScreenOn="true" />
 
         <!-- "Navegar con mis datos": a VPN that only points apps to CHAMULLO's local proxy (the data tunnel). -->
         <service
@@ -62,6 +74,6 @@
         <service
             android:name=".GritoService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice|location" />
+            android:foregroundServiceType="connectedDevice|location|microphone|camera" />
     </application>
 </manifest>

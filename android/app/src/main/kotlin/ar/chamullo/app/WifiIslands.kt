@@ -46,7 +46,9 @@ import java.util.concurrent.LinkedBlockingQueue
  * - Members talk to the host over TCP; the host repeats every frame to the other members, so an island is one hop.
  * - The ferry leaves for a neighboring island for [FERRY_STAY_MS]; the node's pockets shout again when it lands there.
  */
+// Android 10+ only: [supported] keeps it off on older phones, which use the Bluetooth fallback.
 @SuppressLint("MissingPermission")
+@android.annotation.TargetApi(29)
 class WifiIslands(
     private val context: Context,
     private val identity: Identity,
@@ -92,8 +94,8 @@ class WifiIslands(
     /** From the node, every tick: where I am, and where a letter nobody here gets closer wants to go (§10.6). */
     @Volatile var myCell: Zone? = null
     @Volatile var stuck: Zone? = null
-    /** Pieces of the data tunnel addressed to me or to everyone (Discovery & Routing §11.3). */
-    var onTunnel: (ar.chamullo.core.TunnelMsg) -> Unit = {}
+    /** Frames for one phone (the data tunnel, calls) addressed to me or to everyone (Discovery & Routing §11.3, Camino y Carretera §7). */
+    var onDirect: (ar.chamullo.core.Addressed) -> Unit = {}
     /** Tells the node a ferry heading (boarding) or that it arrived (null). */
     var onHeading: (Zone?) -> Unit = {}
 
@@ -401,26 +403,26 @@ class WifiIslands(
     }
 
     /**
-     * A piece of the data tunnel: only to the island, never to the Bluetooth fallback. A host sends it straight to the
-     * member it is for; a member hands it to its host, which does the same.
+     * A frame for one phone (the data tunnel, a call): only to the island, never to the Bluetooth fallback. A host sends
+     * it straight to the member it is for; a member hands it to its host, which does the same.
      */
-    fun sendTunnel(frame: ByteArray, to: ByteArray) {
+    fun sendDirect(frame: ByteArray, to: ByteArray) {
         val direct = if (host) links.firstOrNull { it.peer?.contentEquals(to) == true } else null
         if (direct != null) direct.send(frame) else for (l in links) l.send(frame)
     }
 
-    private fun isTunnel(f: ByteArray) = f.size > 5 && f[0] == 0x43.toByte() && f[1] == 0x48.toByte() && f[3].toInt() == 0x01 &&
-        f[4].toLong() == ar.chamullo.core.Packet.LINK_TUNNEL
+    private fun isDirect(f: ByteArray) = f.size > 5 && f[0] == 0x43.toByte() && f[1] == 0x48.toByte() && f[3].toInt() == 0x01 &&
+        (f[4].toLong() == ar.chamullo.core.Packet.LINK_TUNNEL || f[4].toLong() == ar.chamullo.core.Packet.LINK_CALL)
 
-    // The host passes tunnel pieces only to the member they are for (to everyone if it is a "who lends?").
-    private fun onTunnelFrame(from: Link, f: ByteArray) {
-        val m = ar.chamullo.core.Packet.parseOrNull(f) as? ar.chamullo.core.TunnelMsg ?: return
+    // The host passes these only to the member they are for (to everyone if it is a "who lends?").
+    private fun onDirectFrame(from: Link, f: ByteArray) {
+        val m = ar.chamullo.core.Packet.parseOrNull(f) as? ar.chamullo.core.Addressed ?: return
         val forMe = m.to.isEmpty() || m.to.contentEquals(identity.nodeId)
         if (host && !m.to.contentEquals(identity.nodeId)) {
             val target = if (m.to.isEmpty()) null else links.firstOrNull { it !== from && it.peer?.contentEquals(m.to) == true }
             if (target != null) target.send(f) else if (m.to.isEmpty()) for (l in links) if (l !== from) l.send(f)
         }
-        if (forMe) onTunnel(m)
+        if (forMe) onDirect(m)
     }
 
     /** Sends [megabytes] of test data to everyone connected; the receivers measure and answer. */
@@ -498,7 +500,7 @@ class WifiIslands(
                     continue
                 }
                 when {
-                    isTunnel(f) -> onTunnelFrame(this, f)
+                    isDirect(f) -> onDirectFrame(this, f)
                     f.startsWith(FERRY) -> handler.post { ferryLinks += this }
                     f.startsWith(FULL) -> { FieldLog.add("ISLA", "la isla está llena: fundo la mía"); handler.post { island = null } }
                     f.startsWith(SPEED_START) -> { speedExpected = intOf(f, SPEED_START.size); speedGot = 0; speedStart = System.nanoTime() }

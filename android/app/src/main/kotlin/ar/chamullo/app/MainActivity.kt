@@ -263,7 +263,7 @@ class MainActivity : Activity() {
 
     private fun radioStatus(): String {
         val radios = Hub.radios
-        val locationOff = !(getSystemService(android.location.LocationManager::class.java)?.isLocationEnabled ?: true)
+        val locationOff = android.os.Build.VERSION.SDK_INT >= 28 && !(getSystemService(android.location.LocationManager::class.java)?.isLocationEnabled ?: true)
         val warning = if (locationOff) "⚠ Prendé la Ubicación: Android la exige para encontrar islas.\n" else ""
         return warning + if (radios.isEmpty()) "El grito está apagado: falta dar permisos." else radios.joinToString("\n") { r ->
             when {

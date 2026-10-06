@@ -122,7 +122,7 @@ class Usage(private val me: Identity, val lender: ByteArray, val session: ByteAr
  * LINK 18: one piece of the tunnel. ASK ("who lends?", to everyone) and LEND carry the sender's box key, signed; every
  * other op is sealed for the other end, header included, so the island's host only sees who talks to whom.
  */
-class TunnelMsg(val from: ByteArray, val to: ByteArray, val op: Int, val stream: Long, val nonce: ByteArray, val payload: ByteArray) : Packet {
+class TunnelMsg(override val from: ByteArray, override val to: ByteArray, val op: Int, val stream: Long, val nonce: ByteArray, val payload: ByteArray) : Addressed {
     override fun encode() = Packet.link(Packet.LINK_TUNNEL, listOf(
         2L to from, 4L to to, 6L to byteArrayOf(op.toByte()), 8L to Tlv.u64(stream), 10L to nonce, 12L to payload
     ))
@@ -138,11 +138,7 @@ class TunnelMsg(val from: ByteArray, val to: ByteArray, val op: Int, val stream:
     fun open(me: Identity, theirBox: ByteArray): ByteArray? = openWith(Crypto.boxShared(theirBox, me.boxSecret))
 
     /** Opens with a shared key already computed ([Crypto.boxShared]), checking the header was not changed on the way. */
-    fun openWith(key: ByteArray): ByteArray? {
-        val plain = Crypto.secretboxOpen(payload, nonce, key) ?: return null
-        if (plain.size < 9 || plain[0].toInt() != op || Reader(plain, 1).u64() != stream) return null
-        return plain.copyOfRange(9, plain.size)
-    }
+    fun openWith(key: ByteArray): ByteArray? = Direct.open(key, nonce, payload, op, stream)
 
     companion object {
         const val ASK = 1
@@ -170,9 +166,8 @@ class TunnelMsg(val from: ByteArray, val to: ByteArray, val op: Int, val stream:
             sealWith(Crypto.boxShared(theirBox, me.boxSecret), me.nodeId, to, op, stream, data)
 
         fun sealWith(key: ByteArray, from: ByteArray, to: ByteArray, op: Int, stream: Long, data: ByteArray): TunnelMsg {
-            val nonce = Crypto.randomBytes(24)
-            val plain = Writer().u8(op).u64(stream).raw(data).bytes()
-            return TunnelMsg(from, to, op, stream, nonce, Crypto.secretbox(plain, nonce, key))
+            val (nonce, payload) = Direct.seal(key, op, stream, data)
+            return TunnelMsg(from, to, op, stream, nonce, payload)
         }
 
         fun decode(t: Map<Long, ByteArray>): TunnelMsg {

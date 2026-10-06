@@ -35,9 +35,7 @@ class GritoService : Service() {
         // Location too: Android only lets Wi-Fi Direct search and read the Wi-Fi list with location, and a service in the
         // back keeps "while in use" location only if it says so. Field test 0.5.6: without it, no island was ever found.
         val located = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (Build.VERSION.SDK_INT >= 29) startForeground(ID_RUN, ongoing,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or (if (located) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0))
-        else startForeground(ID_RUN, ongoing)
+        declare(ongoing, located, talking = false, video = false)
 
         val identity = Vault(this).identity() ?: run { stopSelf(); return }
         val incoming: (ByteArray) -> Unit = { frame -> Hub.worker.post { handle(frame) } }
@@ -54,6 +52,16 @@ class GritoService : Service() {
         islands.onHeading = { heading -> Hub.post { it.setHeading(heading) } }
         // El túnel de datos (Discovery & Routing §11.3): browse through a neighbor's Internet, or lend mine.
         tunnel = DataTunnel(this, identity, islands).also { it.start(); Hub.tunnel = it }
+        // Calls inside the island (Camino y Carretera §7). Both ride the same pipes: frames for one phone.
+        Calls.attach(this, identity, islands)
+        islands.onDirect = { m ->
+            when (m) {
+                is ar.chamullo.core.TunnelMsg -> runCatching { tunnel?.onMsg(m) }
+                is ar.chamullo.core.CallMsg -> runCatching { Calls.onMsg(m) }
+            }
+        }
+        // While a call talks, Android 11+ wants the service to say it uses the microphone (and the camera).
+        Calls.onTalking = { talking, video -> declare(ongoing, located, talking, video) }
         radios.forEach { it.start() }
         locator = Locator(this) { lat, lon -> Hub.post { it.locate(lat, lon) } }.also { it.start() }
         // The Internet bridge (Discovery & Routing §11): only if the owner lends it and there is a relé to talk to.
@@ -86,6 +94,20 @@ class GritoService : Service() {
         })
         Thread { while (running) { checkVersion(); Thread.sleep(WebVersion.CHECK_EVERY_MS) } }.apply { isDaemon = true }.start()
     }
+
+    private fun declare(ongoing: Notification, located: Boolean, talking: Boolean, video: Boolean) {
+        if (Build.VERSION.SDK_INT < 29) { startForeground(ID_RUN, ongoing); return }
+        var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or (if (located) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0)
+        if (Build.VERSION.SDK_INT >= 30 && talking) {
+            if (granted(android.Manifest.permission.RECORD_AUDIO)) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            if (video && granted(android.Manifest.permission.CAMERA)) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+        }
+        runCatching { startForeground(ID_RUN, ongoing, types) }.onFailure {
+            runCatching { startForeground(ID_RUN, ongoing, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE) }
+        }
+    }
+
+    private fun granted(p: String) = checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
     // The same frame may arrive by Wi-Fi and by Bluetooth: only the first copy reaches the node.
     private fun handle(frame: ByteArray) {
@@ -146,6 +168,7 @@ class GritoService : Service() {
         locator?.stop()
         relay?.stop(); Hub.relay = null
         tunnel?.stop(); Hub.tunnel = null
+        Calls.detach()
         radios.forEach { it.stop() }
         Hub.node = null
         super.onDestroy()
