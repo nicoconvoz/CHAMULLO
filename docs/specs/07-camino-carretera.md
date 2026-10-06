@@ -61,7 +61,7 @@ como respaldo para teléfonos sin Wi-Fi Direct.
 | Lugar del ferry | El anfitrión deja libre `FERRY_SEATS = 1` lugar: un recién llegado se suma solo si quedan dos o más; el último es para ferrys |
 | Puente | Un miembro que ve gente de otra isla pero no a su anfitrión funda una isla chica en el borde y no la abandona mientras vea a esos vecinos |
 | Anfitrión = aire | El anfitrión repite **toda** trama de un miembro a los demás (latidos, ofertas y sobres). Cartero, solo si lo eligen |
-| Puente fijo (futuro) | Miembro de su isla y cliente Wi-Fi común de la otra a la vez (concurrencia), con sockets atados a cada red |
+| Puente fijo | Miembro de su isla y cliente Wi-Fi común de la otra a la vez (concurrencia), con sockets atados a cada red (§6.2) |
 
 Implementación de referencia de las decisiones: `android/core/.../Islands.kt` (`Islands.decide`), con pruebas en
 `IslandsTest.kt`.
@@ -73,3 +73,12 @@ Implementación de referencia de las decisiones: `android/core/.../Islands.kt` (
 - Embarque: anuncia ese rumbo en su latido y espera `FERRY_BOARDING_MS = 3 s`; los miembros le dan las cartas que acercan en esa dirección. Mientras viaja, lleva y no reparte.
 - Al llegar: latido con su celda real, la isla le responde con los suyos (`BEACON_REPLY_MS`) y reparte con la brújula. A los 20 s vuelve a casa con lo que no pudo dejar.
 - En la app: `Locator` le da la ubicación al nodo cada 15 s o 20 m (GPS o red); `WifiIslands` cuelga la celda en el cartel del anfitrión, le pasa al `decide` la celda y la carta trabada, y avisa el rumbo al nodo al embarcar y al llegar.
+
+### 6.2 El puente fijo: un pie en cada isla
+
+- **Quién:** un miembro (nunca un anfitrión) cuyo celular puede tener dos conexiones Wi-Fi a la vez y que ve al anfitrión de una isla vecina con lugar. En Android 10+ la segunda conexión es una red Wi-Fi común solo local, pedida con `WifiNetworkSpecifier`. El sistema le pregunta al dueño una vez.
+- **Uno por par de islas:** el puente cuelga `b` (la isla a la que llega) en su cartel. Nadie más de su isla arma otro puente a esa misma isla. Si dos arrancan a la vez, el de id mayor suelta (`Unbridge`).
+- **Qué hace:** el anfitrión de la otra isla lo cuenta como miembro (ocupa un lugar). Sus tramas salen por los dos caños y oye a las dos islas, así que la brújula ve a los vecinos de ambas. Un puente no hace de ferry.
+- **Se cae:** si deja de ver a ese anfitrión, si deja su isla o si Android pierde la red.
+- **En el gemelo:** la mitad de los celulares puede hacerlo (depende del modelo). Dos pueblos que se tocan por el borde cruzan una carta en menos de un minuto, sin ferry.
+

@@ -9,28 +9,29 @@ lo simulado es la radio: alcance Wi-Fi 80 m, 3 s para sumarse a una isla, 30 ms 
 
 | Resultado | Valor |
 |---|---|
-| Islas formadas en 90 s | 3 (8 celulares · 8 celulares · 3 celulares) |
+| Islas formadas en 90 s | 4 (7 celulares · 3 celulares · 7 celulares · 7 celulares) |
 | Cartas entregadas | **30 de 30** (100 %) |
-| Entre islas distintas | 19 de 19 |
-| Demora p50 / p95 | 10.5 s / 38.4 s |
-| Viajes de ferry | 154 |
-| Caramelos cobrados (recibos verificados) | 19 |
-| Cartas en bolsillos al final | 575 |
-| La libreta | 20 páginas, igual en 20 de 20 celulares |
+| Entre islas distintas | 25 de 25 |
+| Demora p50 / p95 | 0.5 s / 0.6 s |
+| Viajes de ferry | 38 |
+| Puentes fijos (un pie en cada isla) | 7 en pie al final, 8 armados |
+| Caramelos cobrados (recibos verificados) | 17 |
+| Cartas en bolsillos al final | 570 |
+| La libreta | 31 páginas, igual en 20 de 20 celulares |
 | 👑 Rey de la libreta | Plaza-1 (génesis: escribe el fundador) |
-| Lucas pagadas por la libreta | 1993 (los que más: Plaza-6 484, Plaza-17 314, Plaza-18 266) |
+| Lucas pagadas por la libreta | 1996 (los que más: Plaza-1 918, Plaza-7 740, Plaza-3 338) |
 | La carta más avanzada que sigue en camino | a 24 m del oeste |
 
 **La Corte** (puntaje = diversidad × escasez, spec 04):
 
 | Pueblo | 👑 Rey | 🎩 Nobleza | Puntaje del Rey |
 |---|---|---|---|
-| Plaza | Plaza-6 | Plaza-18, Plaza-13 | 12.0 |
-| **Nacional** | **Plaza-6** | Plaza-18, Plaza-13, Plaza-17 | 12.0 |
+| Plaza | Plaza-1 | Plaza-7, Plaza-3 | 24.0 |
+| **Nacional** | **Plaza-1** | Plaza-7, Plaza-3 | 24.0 |
 
-Reparto de una bolsa diaria de 1000 Lucas: Plaza-6 211, Plaza-18 158, Plaza-13 158, Plaza-17 105, Plaza-19 105.
+Reparto de una bolsa diaria de 1000 Lucas: Plaza-1 471, Plaza-7 412, Plaza-3 118.
 
-_Tiempo de cómputo: 3.5 s._
+_Tiempo de cómputo: 3.9 s._
 
 ## Dos pueblos que se tocan por el borde
 
@@ -38,29 +39,30 @@ Pueblos de 8 celulares, bordes a ~70 m. Las cartas cruzan solo con el ferry.
 
 | Resultado | Valor |
 |---|---|
-| Islas formadas en 90 s | 2 (6 celulares · 7 celulares) |
-| Cartas entregadas | **17 de 20** (85 %) |
-| Entre islas distintas | 17 de 20 |
-| Demora p50 / p95 | 50.5 s / 94.0 s |
-| Viajes de ferry | 152 |
-| Caramelos cobrados (recibos verificados) | 6 |
-| Cartas en bolsillos al final | 388 |
-| La libreta | 7 páginas, igual en 16 de 16 celulares |
+| Islas formadas en 90 s | 4 (3 celulares · 6 celulares · 5 celulares · 5 celulares) |
+| Cartas entregadas | **20 de 20** (100 %) |
+| Entre islas distintas | 20 de 20 |
+| Demora p50 / p95 | 0.6 s / 1.4 s |
+| Viajes de ferry | 54 |
+| Puentes fijos (un pie en cada isla) | 4 en pie al final, 4 armados |
+| Caramelos cobrados (recibos verificados) | 26 |
+| Cartas en bolsillos al final | 300 |
+| La libreta | 22 páginas, igual en 16 de 16 celulares |
 | 👑 Rey de la libreta | Norte-1 (génesis: escribe el fundador) |
-| Lucas pagadas por la libreta | 1999 (los que más: Sur-3 1143, Norte-3 408, Norte-2 245) |
+| Lucas pagadas por la libreta | 1019 (los que más: Norte-1 380, Norte-3 344, Sur-2 295) |
 | La carta más avanzada que sigue en camino | a 110 m del oeste |
 
 **La Corte** (puntaje = diversidad × escasez, spec 04):
 
 | Pueblo | 👑 Rey | 🎩 Nobleza | Puntaje del Rey |
 |---|---|---|---|
-| Norte | Norte-3 | Norte-1, Norte-8 | 27.0 |
-| Sur | Sur-3 | Sur-4, Sur-1 | 9.0 |
-| **Nacional** | **Norte-3** | Norte-1, Sur-3, Norte-8 | 27.0 |
+| Norte | Norte-3 | Norte-1 | 30.0 |
+| Sur | Sur-2 | — | 30.0 |
+| **Nacional** | **Norte-3** | Sur-2, Norte-1 | 30.0 |
 
-Reparto de una bolsa diaria de 1000 Lucas: Norte-3 360, Norte-1 280, Sur-3 120, Norte-8 80, Sur-4 40.
+Reparto de una bolsa diaria de 1000 Lucas: Norte-3 385, Sur-2 385, Norte-1 231.
 
-_Tiempo de cómputo: 1.8 s._
+_Tiempo de cómputo: 1.7 s._
 
 ## Ruta de tres pueblos
 
@@ -68,30 +70,31 @@ Norte y Sur no se ven: todo pasa por el pueblo del medio, y su gente cobra por e
 
 | Resultado | Valor |
 |---|---|
-| Islas formadas en 90 s | 5 (6 celulares · 2 celulares · 1 celulares · 4 celulares · 1 celulares) |
-| Cartas entregadas | **19 de 20** (95 %) |
-| Entre islas distintas | 19 de 20 |
-| Demora p50 / p95 | 348.2 s / 563.1 s |
-| Viajes de ferry | 103 |
-| Caramelos cobrados (recibos verificados) | 29 |
-| Cartas en bolsillos al final | 381 |
-| La libreta | 12 páginas, igual en 10 de 16 celulares |
+| Islas formadas en 90 s | 6 (3 celulares · 3 celulares · 3 celulares · 4 celulares · 5 celulares · 2 celulares) |
+| Cartas entregadas | **20 de 20** (100 %) |
+| Entre islas distintas | 20 de 20 |
+| Demora p50 / p95 | 1.4 s / 1.7 s |
+| Viajes de ferry | 48 |
+| Puentes fijos (un pie en cada isla) | 5 en pie al final, 7 armados |
+| Caramelos cobrados (recibos verificados) | 74 |
+| Cartas en bolsillos al final | 282 |
+| La libreta | 23 páginas, igual en 16 de 16 celulares |
 | 👑 Rey de la libreta | Norte-1 (génesis: escribe el fundador) |
-| Lucas pagadas por la libreta | 2018 (los que más: Medio-1 1076, Norte-3 268, Medio-2 193) |
+| Lucas pagadas por la libreta | 1037 (los que más: Medio-2 230, Medio-1 230, Norte-3 212) |
 | La carta más avanzada que sigue en camino | a 200 m del oeste |
 
 **La Corte** (puntaje = diversidad × escasez, spec 04):
 
 | Pueblo | 👑 Rey | 🎩 Nobleza | Puntaje del Rey |
 |---|---|---|---|
-| Norte | Norte-1 | Norte-3, Norte-2 | 30.0 |
-| Medio | Medio-2 | Medio-3, Medio-4 | 36.0 |
-| Sur | Sur-1 | Sur-4, Sur-2 | 30.0 |
-| **Nacional** | **Medio-2** | Medio-3, Medio-4, Norte-1 | 36.0 |
+| Medio | Medio-2 | Medio-1 | 60.0 |
+| Sur | Sur-3 | — | 36.0 |
+| Norte | Norte-3 | Norte-1 | 51.0 |
+| **Nacional** | **Medio-2** | Medio-1, Norte-3, Sur-3 | 60.0 |
 
-Reparto de una bolsa diaria de 1000 Lucas: Medio-2 160, Medio-3 147, Medio-4 147, Norte-1 133, Sur-1 133.
+Reparto de una bolsa diaria de 1000 Lucas: Medio-2 270, Medio-1 270, Norte-3 230, Sur-3 162, Norte-1 68.
 
-_Tiempo de cómputo: 2.0 s._
+_Tiempo de cómputo: 1.9 s._
 
 ## Pueblos con viajeros
 
@@ -99,29 +102,30 @@ Dos pueblos lejos (200 m); tres personas caminan entre ellos y llevan las cartas
 
 | Resultado | Valor |
 |---|---|
-| Islas formadas en 90 s | 4 (1 celulares · 4 celulares · 1 celulares · 5 celulares) |
+| Islas formadas en 90 s | 4 (4 celulares · 3 celulares · 2 celulares · 4 celulares) |
 | Cartas entregadas | **20 de 20** (100 %) |
-| Entre islas distintas | 16 de 16 |
-| Demora p50 / p95 | 92.7 s / 153.0 s |
-| Viajes de ferry | 89 |
-| Caramelos cobrados (recibos verificados) | 23 |
-| Cartas en bolsillos al final | 234 |
-| La libreta | 11 páginas, igual en 12 de 12 celulares |
+| Entre islas distintas | 19 de 19 |
+| Demora p50 / p95 | 68.8 s / 138.6 s |
+| Viajes de ferry | 50 |
+| Puentes fijos (un pie en cada isla) | 2 en pie al final, 24 armados |
+| Caramelos cobrados (recibos verificados) | 13 |
+| Cartas en bolsillos al final | 292 |
+| La libreta | 9 páginas, igual en 12 de 12 celulares |
 | 👑 Rey de la libreta | Este-1 (génesis: escribe el fundador) |
-| Lucas pagadas por la libreta | 2017 (los que más: Este-1 710, Este-2 650, Oeste-1 494) |
-| La carta más avanzada que sigue en camino | a 218 m del oeste |
+| Lucas pagadas por la libreta | 2018 (los que más: Oeste-4 1048, Este-3 350, Este-1 266) |
+| La carta más avanzada que sigue en camino | a 207 m del oeste |
 
 **La Corte** (puntaje = diversidad × escasez, spec 04):
 
 | Pueblo | 👑 Rey | 🎩 Nobleza | Puntaje del Rey |
 |---|---|---|---|
-| Este | Este-1 | Este-2, Este-6 | 21.0 |
-| Oeste | Oeste-1 | Oeste-6 | 21.0 |
-| **Nacional** | **Este-1** | Oeste-1, Este-2, Este-6 | 21.0 |
+| Este | Este-3 | Este-1, Este-4 | 36.0 |
+| Oeste | Oeste-1 | Oeste-4, Oeste-6 | 36.0 |
+| **Nacional** | **Este-3** | Oeste-1, Este-1, Oeste-4 | 36.0 |
 
-Reparto de una bolsa diaria de 1000 Lucas: Este-1 259, Oeste-1 259, Este-2 222, Este-6 185, Oeste-6 37.
+Reparto de una bolsa diaria de 1000 Lucas: Este-3 286, Oeste-1 286, Este-1 262, Oeste-4 119, Oeste-6 24.
 
-_Tiempo de cómputo: 1.3 s._
+_Tiempo de cómputo: 1.1 s._
 
 ## Ciudad de 1000
 
@@ -129,36 +133,37 @@ _Tiempo de cómputo: 1.3 s._
 
 | Resultado | Valor |
 |---|---|
-| Islas formadas en 90 s | 141 (8 celulares · 4 celulares · 7 celulares · 6 celulares · 2 celulares · 4 celulares · 8 celulares · 7 celulares · 2 celulares · 5 celulares · 7 celulares · 4 celulares · 3 celulares · 2 celulares · 5 celulares · 7 celulares · 8 celulares · 3 celulares · 4 celulares · 7 celulares · 8 celulares · 7 celulares · 7 celulares · 8 celulares · 1 celulares · 7 celulares · 8 celulares · 8 celulares · 6 celulares · 7 celulares · 4 celulares · 7 celulares · 6 celulares · 5 celulares · 8 celulares · 5 celulares · 6 celulares · 6 celulares · 5 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 3 celulares · 2 celulares · 4 celulares · 8 celulares · 6 celulares · 8 celulares · 5 celulares · 7 celulares · 6 celulares · 5 celulares · 3 celulares · 2 celulares · 3 celulares · 4 celulares · 3 celulares · 2 celulares · 4 celulares · 6 celulares · 8 celulares · 8 celulares · 8 celulares · 8 celulares · 8 celulares · 7 celulares · 6 celulares · 1 celulares · 6 celulares · 5 celulares · 2 celulares · 1 celulares · 8 celulares · 5 celulares · 7 celulares · 7 celulares · 2 celulares · 4 celulares · 6 celulares · 2 celulares · 7 celulares · 7 celulares · 8 celulares · 7 celulares · 6 celulares · 7 celulares · 8 celulares · 8 celulares · 7 celulares · 1 celulares · 8 celulares · 7 celulares · 3 celulares · 7 celulares · 6 celulares · 7 celulares · 8 celulares · 7 celulares · 8 celulares · 4 celulares · 8 celulares · 5 celulares · 6 celulares · 8 celulares · 1 celulares · 2 celulares · 5 celulares · 8 celulares · 3 celulares · 5 celulares · 6 celulares · 2 celulares · 2 celulares · 3 celulares · 8 celulares · 5 celulares · 5 celulares · 5 celulares · 3 celulares · 7 celulares · 8 celulares · 5 celulares · 7 celulares · 7 celulares · 7 celulares · 4 celulares · 8 celulares · 7 celulares · 7 celulares · 3 celulares · 6 celulares · 7 celulares · 2 celulares · 7 celulares · 1 celulares · 7 celulares · 8 celulares · 5 celulares · 6 celulares · 8 celulares) |
-| Cartas entregadas | **78 de 120** (65 %) |
-| Entre islas distintas | 74 de 115 |
-| Demora p50 / p95 | 163.9 s / 384.9 s |
-| Viajes de ferry | 14319 |
-| Caramelos cobrados (recibos verificados) | 85 |
-| Cartas en bolsillos al final | 32900 |
-| La libreta | 24 páginas, igual en 1000 de 1000 celulares |
-| 👑 Rey de la libreta | Barrio-6-85 y 20 nobles |
-| Lucas pagadas por la libreta | 1995 (los que más: Barrio-8-56 166, Barrio-8-98 166, Barrio-8-97 166) |
-| Copias soltadas, y por qué | eco local agotado: 6807, la tiene otro: 9928, promesa sin carta: 39 |
+| Islas formadas en 90 s | 199 (7 celulares · 7 celulares · 7 celulares · 6 celulares · 8 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 8 celulares · 7 celulares · 2 celulares · 7 celulares · 7 celulares · 7 celulares · 6 celulares · 8 celulares · 7 celulares · 6 celulares · 1 celulares · 7 celulares · 6 celulares · 7 celulares · 1 celulares · 7 celulares · 2 celulares · 6 celulares · 7 celulares · 6 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 8 celulares · 8 celulares · 6 celulares · 8 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 8 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 6 celulares · 8 celulares · 7 celulares · 7 celulares · 5 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 5 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 6 celulares · 8 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 5 celulares · 7 celulares · 6 celulares · 7 celulares · 7 celulares · 8 celulares · 7 celulares · 6 celulares · 6 celulares · 7 celulares · 8 celulares · 6 celulares · 7 celulares · 7 celulares · 6 celulares · 5 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 5 celulares · 8 celulares · 7 celulares · 7 celulares · 6 celulares · 5 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 6 celulares · 7 celulares · 7 celulares · 6 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 8 celulares · 4 celulares · 7 celulares · 6 celulares · 7 celulares · 7 celulares · 7 celulares · 8 celulares · 7 celulares · 7 celulares · 7 celulares · 6 celulares · 7 celulares · 7 celulares · 8 celulares · 7 celulares · 7 celulares · 8 celulares · 7 celulares · 8 celulares · 7 celulares · 6 celulares · 1 celulares · 7 celulares · 6 celulares · 7 celulares · 7 celulares · 6 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 8 celulares · 7 celulares · 7 celulares · 6 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 6 celulares · 8 celulares · 7 celulares · 7 celulares · 7 celulares · 3 celulares · 7 celulares · 7 celulares · 2 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 4 celulares · 7 celulares · 7 celulares · 7 celulares · 2 celulares · 5 celulares · 8 celulares · 7 celulares · 7 celulares · 7 celulares · 8 celulares · 7 celulares · 8 celulares · 7 celulares · 6 celulares · 8 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares · 7 celulares) |
+| Cartas entregadas | **97 de 120** (81 %) |
+| Entre islas distintas | 96 de 119 |
+| Demora p50 / p95 | 8.6 s / 264.4 s |
+| Viajes de ferry | 3444 |
+| Puentes fijos (un pie en cada isla) | 409 en pie al final, 1088 armados |
+| Caramelos cobrados (recibos verificados) | 353 |
+| Cartas en bolsillos al final | 78052 |
+| La libreta | 74 páginas, igual en 997 de 1000 celulares |
+| 👑 Rey de la libreta | Barrio-6-2 y 20 nobles |
+| Lucas pagadas por la libreta | 3864 (los que más: Barrio-6-2 106, Barrio-8-28 100, Barrio-4-81 69) |
+| Copias soltadas, y por qué | eco local agotado: 23532, la tiene otro: 15225, promesa sin carta: 28 |
 | La carta más avanzada que sigue en camino | a 795 m del oeste |
 
 **La Corte** (puntaje = diversidad × escasez, spec 04):
 
 | Pueblo | 👑 Rey | 🎩 Nobleza | Puntaje del Rey |
 |---|---|---|---|
-| Barrio-8 | Barrio-8-3 | Barrio-8-98, Barrio-8-97 | 9.0 |
-| Barrio-1 | Barrio-1-2 | Barrio-1-18, Barrio-1-36 | 7.0 |
-| Barrio-5 | Barrio-5-105 | Barrio-5-70, Barrio-5-58 | 12.0 |
-| Barrio-2 | Barrio-2-84 | Barrio-2-43, Barrio-2-68 | 12.0 |
-| Barrio-7 | Barrio-7-65 | Barrio-7-46, Barrio-7-17 | 10.5 |
-| Barrio-6 | Barrio-6-112 | Barrio-6-14, Barrio-6-99 | 12.0 |
-| Barrio-3 | Barrio-3-19 | Barrio-3-18, Barrio-3-26 | 12.0 |
-| Barrio-4 | Barrio-4-105 | Barrio-4-100, Barrio-4-54 | 12.0 |
-| **Nacional** | **Barrio-2-84** | Barrio-5-105, Barrio-5-70, Barrio-3-19 | 12.0 |
+| Barrio-3 | Barrio-3-27 | Barrio-3-43, Barrio-3-82 | 13.5 |
+| Barrio-7 | Barrio-7-33 | Barrio-7-65, Barrio-7-53 | 15.0 |
+| Barrio-6 | Barrio-6-123 | Barrio-6-102, Barrio-6-33 | 12.0 |
+| Barrio-1 | Barrio-1-83 | Barrio-1-23, Barrio-1-25 | 15.0 |
+| Barrio-8 | Barrio-8-2 | Barrio-8-47, Barrio-8-61 | 12.0 |
+| Barrio-4 | Barrio-4-81 | Barrio-4-107, Barrio-4-52 | 12.0 |
+| Barrio-2 | Barrio-2-106 | Barrio-2-33, Barrio-2-93 | 14.1 |
+| Barrio-5 | Barrio-5-23 | Barrio-5-29, Barrio-5-69 | 18.0 |
+| **Nacional** | **Barrio-5-23** | Barrio-7-33, Barrio-1-83, Barrio-1-23 | 18.0 |
 
-Reparto de una bolsa diaria de 1000 Lucas: Barrio-2-84 6, Barrio-5-105 6, Barrio-5-70 6, Barrio-2-43 6, Barrio-3-19 6.
+Reparto de una bolsa diaria de 1000 Lucas: Barrio-5-23 10, Barrio-7-33 9, Barrio-1-83 9, Barrio-1-23 9, Barrio-5-29 8.
 
-_Tiempo de cómputo: 220.1 s._
+_Tiempo de cómputo: 563.4 s._
 
 ## Provincia: tres pueblos
 
@@ -166,31 +171,33 @@ Norte, Centro y Sur, a 2 km uno de otro y en barrios distintos, unidos por una r
 
 | Resultado | Valor |
 |---|---|
-| Islas formadas en 90 s | 47 (7 celulares · 3 celulares · 6 celulares · 3 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 2 celulares · 2 celulares · 2 celulares · 3 celulares · 2 celulares · 2 celulares · 2 celulares · 2 celulares · 1 celulares · 6 celulares · 5 celulares · 3 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 1 celulares · 2 celulares · 3 celulares · 2 celulares · 6 celulares · 7 celulares · 1 celulares · 2 celulares · 5 celulares · 7 celulares · 7 celulares) |
-| Cartas entregadas | **29 de 30** (97 %) |
-| Entre islas distintas | 29 de 30 |
-| Demora p50 / p95 | 14.2 s / 49.5 s |
-| Viajes de ferry | 5213 |
-| Caramelos cobrados (recibos verificados) | 40 |
-| Cartas en bolsillos al final | 1921 |
-| La libreta | 24 páginas, igual en 29 de 147 celulares |
+| Islas formadas en 90 s | 48 (5 celulares · 8 celulares · 8 celulares · 8 celulares · 7 celulares · 3 celulares · 2 celulares · 2 celulares · 2 celulares · 1 celulares · 3 celulares · 2 celulares · 3 celulares · 3 celulares · 3 celulares · 3 celulares · 2 celulares · 1 celulares · 3 celulares · 3 celulares · 2 celulares · 7 celulares · 2 celulares · 2 celulares · 3 celulares · 3 celulares · 3 celulares · 2 celulares · 3 celulares · 2 celulares · 1 celulares · 2 celulares · 2 celulares · 1 celulares · 1 celulares · 2 celulares · 3 celulares · 3 celulares · 3 celulares · 7 celulares · 7 celulares · 5 celulares · 8 celulares · 6 celulares · 6 celulares · 7 celulares · 8 celulares · 7 celulares) |
+| Cartas entregadas | **30 de 30** (100 %) |
+| Entre islas distintas | 30 de 30 |
+| Demora p50 / p95 | 1.5 s / 13.1 s |
+| Viajes de ferry | 1273 |
+| Puentes fijos (un pie en cada isla) | 49 en pie al final, 58 armados |
+| Caramelos cobrados (recibos verificados) | 54 |
+| Cartas en bolsillos al final | 2154 |
+| La libreta | 34 páginas, igual en 68 de 147 celulares |
 | 👑 Rey de la libreta | Norte-1 (génesis: escribe el fundador) |
-| Lucas pagadas por la libreta | 2177 (los que más: Norte-25 849, Norte-23 402, Norte-24 326) |
-| Por Internet (el puente) | 1110 KB, de 16 puentes |
-| Lucas de los puentes (bolsa diaria de 1000) | 745 |
-| Precio de la información | 0.0 Lucas por KB llevado (20075 KB entre aire e Internet) |
-| Copias soltadas, y por qué | la tiene otro: 29, eco local agotado: 10, promesa sin carta: 2 |
+| Lucas pagadas por la libreta | 2175 (los que más: Norte-25 597, Norte-23 394, Norte-7 318) |
+| Por Internet (el puente) | 4528 KB, de 16 puentes |
+| Lucas de los puentes (bolsa diaria de 1000) | 791 |
+| Precio de la información | 0.0 Lucas por KB llevado (23397 KB entre aire e Internet) |
+| Copias soltadas, y por qué | la tiene otro: 15, eco local agotado: 33 |
 | La carta más avanzada que sigue en camino | a 4034 m del oeste |
 
 **La Corte** (puntaje = diversidad × escasez, spec 04):
 
 | Pueblo | 👑 Rey | 🎩 Nobleza | Puntaje del Rey |
 |---|---|---|---|
-| Sur | Sur-20 | Sur-21, Sur-23 | 24.0 |
-| Norte | Norte-25 | Norte-23, Norte-22 | 27.0 |
-| **Nacional** | **Norte-25** | Sur-20, Sur-21, Sur-23 | 27.0 |
+| Sur | Sur-23 | Sur-22, Sur-21 | 27.0 |
+| Norte | Norte-25 | Norte-20, Norte-23 | 24.0 |
+| Ruta | Ruta-1 | — | 3.0 |
+| **Nacional** | **Sur-23** | Norte-25, Sur-22, Norte-20 | 27.0 |
 
-Reparto de una bolsa diaria de 1000 Lucas: Norte-25 164, Sur-20 145, Sur-21 127, Sur-23 73, Norte-23 73.
+Reparto de una bolsa diaria de 1000 Lucas: Sur-23 155, Norte-25 138, Sur-22 103, Norte-20 86, Norte-23 86.
 
-_Tiempo de cómputo: 26.0 s._
+_Tiempo de cómputo: 19.1 s._
 

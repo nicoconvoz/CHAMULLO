@@ -82,4 +82,17 @@ class WorldTest {
         val share = Economy.dailyShare(Economy.national(w.report().carries).scores)
         assertTrue(w.bridges().any { (share[it] ?: 0) > 0 }, "a bridge earned Lucas: $share")
     }
+
+    @Test
+    fun `a fixed bridge stands with one foot in each island, and letters cross through it`() {
+        val w = World(seed = 3)
+        repeat(4) { w.addPhone("a$it", 10.0 * it, 0.0, village = "A") }
+        repeat(4) { w.addPhone("b$it", 100.0 + 10.0 * it, 0.0, village = "B") }
+        (w.phonesOf("A") + w.phonesOf("B")).forEach { w.setCanBridge(it, true) }
+        w.run(90_000)
+        assertTrue(w.fixedBridges() >= 1, "a bridge stands: ${w.islands()}")
+        w.send(w.phonesOf("A").first(), w.phonesOf("B").last(), "por el puente")
+        w.run(60_000)
+        assertEquals(1.0, w.report().deliveryRatio, "crossed in a minute")
+    }
 }

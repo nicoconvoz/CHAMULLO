@@ -168,4 +168,35 @@ class IslandsTest {
         val busy = Islands.decide("aaaa", IslandState("aaaa", true, listOf("m1")), listOf(host("aaaa", listOf("m1")), east), now = 0, myCell = here, stuck = eastward)
         assertEquals(IslandAction.Stay, busy)
     }
+
+    /* ---------- el puente fijo (Camino y Carretera §6.2): one foot in each island ---------- */
+
+    @Test
+    fun `fixed bridge - a member that can hold two connections stays in both islands`() {
+        val roster = listOf("m1", "m2")
+        val a = Islands.decide("m1", IslandState("aaaa", false, roster, canBridge = true), listOf(host("aaaa", roster), host("bbbb")), now = 0)
+        assertEquals(IslandAction.Bridge("bbbb", "DIRECT-CH-bbbb", "clave-bbbb"), a)
+    }
+
+    @Test
+    fun `fixed bridge - one per pair of islands, and without the capability it is the ferry as always`() {
+        val roster = listOf("m1", "m2")
+        val already = member("m2", "aaaa").copy(bridgeTo = "bbbb")
+        assertTrue(Islands.decide("m1", IslandState("aaaa", false, roster, canBridge = true), listOf(host("aaaa", roster), host("bbbb"), already), now = 0) !is IslandAction.Bridge)
+        assertTrue(Islands.decide("m1", IslandState("aaaa", false, roster), listOf(host("aaaa", roster), host("bbbb")), now = 0) !is IslandAction.Bridge)
+    }
+
+    @Test
+    fun `fixed bridge - two that started at once, the bigger id lets go`() {
+        val roster = listOf("m1", "m2")
+        val smaller = member("m1", "aaaa").copy(bridgeTo = "bbbb")
+        assertEquals(IslandAction.Unbridge, Islands.decide("m2", IslandState("aaaa", false, roster, bridging = "bbbb", canBridge = true), listOf(host("aaaa", roster), host("bbbb"), smaller), now = 0))
+        assertEquals(IslandAction.Stay, Islands.decide("m1", IslandState("aaaa", false, roster, bridging = "bbbb", canBridge = true), listOf(host("aaaa", roster), host("bbbb"), member("m2", "aaaa").copy(bridgeTo = "bbbb")), now = 0))
+    }
+
+    @Test
+    fun `fixed bridge - the cartel carries it`() {
+        val c = Cartel("0123456789abcdef", "Hermano", "aaaa", "", "", host = false, roster = emptyList(), bridgeTo = "bbbbbbbbbbbbbbbb")
+        assertEquals(c, Cartel.fromTxt(c.toTxt()))
+    }
 }

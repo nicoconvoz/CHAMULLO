@@ -130,4 +130,27 @@ class LedgerTest {
         val owed = mapOf(("Mendoza" to "Junín") to 500L, ("Junín" to "Mendoza") to 300L, ("Junín" to "Ushuaia") to 50L)
         assertEquals(setOf(Clearing.Transfer("Mendoza", "Junín", 200), Clearing.Transfer("Junín", "Ushuaia", 50)), Clearing.net(owed).toSet())
     }
+
+    @Test
+    fun `a journey is collectable for two periods, then it leaves the state - the book does not grow forever`() {
+        val l = Ledger(params)
+        val (j, c) = delivery(listOf(Identity.generate("Beto"), Identity.generate("Caro")))
+        assertTrue(l.accept(l.write(founder, listOf(Entry.journey(j)), 10)))
+        assertTrue(l.accept(l.write(founder, listOf(l.closePeriod(60_001)), 60_001)))
+        assertTrue(l.accept(l.write(founder, listOf(Entry.claim(c[0])), 60_002)), "the next period it is still collectable")
+        assertTrue(l.accept(l.write(founder, listOf(l.closePeriod(120_001)), 120_001)))
+        assertFalse(l.accept(l.write(founder, listOf(Entry.claim(c[1])), 120_002)), "too late to collect")
+        assertEquals(0, l.journeysKept())
+    }
+
+    @Test
+    fun `in the twin, phones share the pages they decode - one copy in memory, not a thousand`() {
+        Ledger.share(true)
+        try {
+            val page = Ledger(params).propose(founder, emptyList(), 10).encode()
+            assertTrue(Page.decode(page) === Page.decode(page.copyOf()))
+        } finally { Ledger.share(false) }
+        val page = Ledger(params).propose(founder, emptyList(), 10).encode()
+        assertFalse(Page.decode(page) === Page.decode(page))
+    }
 }

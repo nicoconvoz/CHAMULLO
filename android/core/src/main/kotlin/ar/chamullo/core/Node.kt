@@ -674,8 +674,7 @@ class Node(
         while (ledgerSeen.size > MAX_SEEN * 2) ledgerSeen.remove(ledgerSeen.first())
         val m = LedgerMsg(kind, payload, ttl)
         enqueue(m.encode())
-        ledgerKeep[key] = Keep(m, clock())
-        while (ledgerKeep.size > 300) ledgerKeep.remove(ledgerKeep.keys.first())
+        keep(key, m)
     }
 
     private fun onLedger(m: LedgerMsg): List<NodeEvent> {
@@ -718,9 +717,16 @@ class Node(
         if (m.ttl > 1) {
             val next = LedgerMsg(m.kind, m.payload, m.ttl - 1)
             enqueue(next.encode())
-            ledgerKeep[key] = Keep(next, clock())
+            keep(key, next)
         }
         return emptyList()
+    }
+
+    // Only entries and endorsements are kept to repeat: pages are big, and whoever is behind asks for them (HAVE).
+    private fun keep(key: String, m: LedgerMsg) {
+        if (m.kind != LedgerMsg.ENTRY && m.kind != LedgerMsg.ENDORSE) return
+        ledgerKeep[key] = Keep(m, clock())
+        while (ledgerKeep.size > 100) ledgerKeep.remove(ledgerKeep.keys.first())
     }
 
     // The king's work: a page with what is waiting. The close of a period goes alone, computed on the book as it is.

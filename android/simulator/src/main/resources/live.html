@@ -133,7 +133,7 @@ details.data{margin-top:8px;font-size:12px;color:var(--muted)}
           <span><b style="background:var(--node)"></b>sin isla o conectándose</span>
           <span><b style="border:2.5px solid var(--pocket)"></b>de ferry</span>
           <span><b style="border:2px solid var(--grito);border-radius:2px"></b>presta Internet (puente)</span>
-          <span><i></i>caño de la isla</span>
+          <span><i></i>caño de la isla (dos caños: puente fijo)</span>
         </div>
       </section>
       <section class="card"><h2>Cómo va <span class="r">una muestra cada 10 s simulados</span></h2>
@@ -230,6 +230,7 @@ function draw(w) {
   g.strokeStyle = muted; g.lineWidth = 1; g.globalAlpha = many ? 0.35 : 0.6;
   g.beginPath();
   for (const p of w.phones) { if (p.h || !p.c || !p.i) continue; const h = byName.get(p.i); if (!h) continue; g.moveTo(X(p.x), Y(p.y)); g.lineTo(X(h.x), Y(h.y)); }
+  for (const p of w.phones) { if (!p.j) continue; const h = byName.get(p.j); if (!h) continue; g.moveTo(X(p.x), Y(p.y)); g.lineTo(X(h.x), Y(h.y)); } // fixed bridges: one foot in each island
   g.stroke(); g.globalAlpha = 1;
   const r0 = many ? 1.6 : 4;
   for (const p of w.phones) {

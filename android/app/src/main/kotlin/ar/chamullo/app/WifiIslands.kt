@@ -6,6 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.net.wifi.WifiNetworkSpecifier
 import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pManager
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo
@@ -83,6 +88,13 @@ class WifiIslands(
     @Volatile var stuck: Zone? = null
     /** Tells the node a ferry heading (boarding) or that it arrived (null). */
     var onHeading: (Zone?) -> Unit = {}
+
+    // El puente fijo (Camino y Carretera §6.2): besides my Wi-Fi Direct group, a second, local-only Wi-Fi connection to a
+    // neighboring island's group. Android 10+ can request it with a network specifier (the phone asks its owner once).
+    private val canBridge = Build.VERSION.SDK_INT >= 29
+    @Volatile var bridgingTo: String? = null; private set
+    private var bridgeCallback: ConnectivityManager.NetworkCallback? = null
+    private var bridgeLink: Link? = null
     val cartelesSeen get() = carteles.size
     val memberCount get() = if (host) members.size else 0
     val islandName get() = island?.let { id -> if (id == me) "mía" else carteles[id]?.first?.name?.ifBlank { id.take(6) } ?: id.take(6) }
@@ -107,7 +119,7 @@ class WifiIslands(
     /* ---------- carteles ---------- */
 
     private fun cartel() = Cartel(me, myName, island ?: "", if (host) ssid else "", if (host) passphrase else "", host,
-        if (host) members.values.toList() else emptyList(), if (host) myCell else null)
+        if (host) members.values.toList() else emptyList(), if (host) myCell else null, bridgingTo ?: "")
 
     private fun publishCartel() {
         val ch = channel ?: return
@@ -141,7 +153,7 @@ class WifiIslands(
             if (!running) return
             val now = System.currentTimeMillis()
             carteles.values.removeAll { now - it.second > CARTEL_TTL_MS }
-            if (!busy && ferrying == null) act(Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn),
+            if (!busy && ferrying == null) act(Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn, bridgingTo, canBridge),
                 carteles.values.map { it.first }, now, myCell, stuck))
             handler.postDelayed(this, DECIDE_MS)
         }
@@ -155,6 +167,8 @@ class WifiIslands(
             IslandAction.Host -> found()
             is IslandAction.Join -> join(a)
             is IslandAction.Ferry -> ferry(a)
+            is IslandAction.Bridge -> bridge(a)
+            IslandAction.Unbridge -> unbridge()
         }
     }
 
@@ -188,6 +202,42 @@ class WifiIslands(
                 })
             }
         })
+    }
+
+    // A fixed bridge: join the neighbor's group as a plain local Wi-Fi client while staying in mine, and open a pipe there.
+    private fun bridge(a: IslandAction.Bridge) {
+        if (bridgeCallback != null) return
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return
+        val spec = WifiNetworkSpecifier.Builder().setSsid(a.ssid).setWpa2Passphrase(a.passphrase).build()
+        val request = NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).setNetworkSpecifier(spec).build()
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                Thread {
+                    runCatching {
+                        val s = network.socketFactory.createSocket()
+                        s.connect(InetSocketAddress(GROUP_OWNER, PORT), 4_000)
+                        bridgeLink = Link(s).apply { start() }
+                        bridgingTo = a.island
+                        handler.post { publishCartel() }
+                        FieldLog.add("ISLA", "🌉 puente fijo: también estoy en la isla ${a.island.take(6)}")
+                    }.onFailure { FieldLog.add("ISLA", "el puente fijo no abrió el caño: ${it.message}"); handler.post { unbridge() } }
+                }.apply { isDaemon = true }.start()
+            }
+            override fun onLost(network: Network) { handler.post { unbridge() } }
+            override fun onUnavailable() { bridgeCallback = null; FieldLog.add("ISLA", "el puente fijo no se pudo armar (el celular no lo permite o no se aceptó)") }
+        }
+        bridgeCallback = cb
+        runCatching { cm.requestNetwork(request, cb) }.onFailure { bridgeCallback = null; lastError = "puente fijo: ${it.message}" }
+    }
+
+    private fun unbridge() {
+        bridgeCallback?.let { cb -> runCatching { context.getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
+        bridgeCallback = null
+        bridgeLink?.close(); bridgeLink = null
+        if (bridgingTo != null) FieldLog.add("ISLA", "suelto el puente fijo")
+        bridgingTo = null
+        publishCartel()
     }
 
     // The ferry (Camino y Carretera §6.1): announce the heading, wait while letters going that way board, sail, hand them
@@ -382,6 +432,8 @@ class WifiIslands(
 
     companion object {
         const val PORT = 47_474
+        // A Wi-Fi Direct group owner answers at this address on its own network, also to plain Wi-Fi clients.
+        const val GROUP_OWNER = "192.168.49.1"
         const val MAX_FRAME = 1_048_576
         const val DISCOVER_MS = 15_000L
         const val DECIDE_MS = 5_000L

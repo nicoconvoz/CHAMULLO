@@ -58,6 +58,7 @@ private fun run(s: Scenario): String {
     if (rep.crossSent > 0) sb.appendLine("| Entre islas distintas | ${rep.crossDelivered} de ${rep.crossSent} |")
     sb.appendLine("| Demora p50 / p95 | ${f(rep.latencyP50s)} s / ${f(rep.latencyP95s)} s |")
     sb.appendLine("| Viajes de ferry | ${rep.ferryTrips} |")
+    sb.appendLine("| Puentes fijos (un pie en cada isla) | ${w.fixedBridges()} en pie al final, ${w.bridgesBuilt} armados |")
     sb.appendLine("| Caramelos cobrados (recibos verificados) | ${rep.candies.values.sum()} |")
     sb.appendLine("| Cartas en bolsillos al final | ${w.history().lastOrNull()?.pockets ?: 0} |")
     w.book()?.let { b ->

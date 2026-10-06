@@ -23,7 +23,8 @@ interface Store {
     fun loadPages(): List<ByteArray> = emptyList()
 }
 
-class MemoryStore : Store {
+/** [keepPages]: false in the twin, where a thousand phones share one process and nobody restarts. */
+class MemoryStore(private val keepPages: Boolean = true) : Store {
     private val contacts = LinkedHashMap<String, Card>()
     private val messages = mutableListOf<Message>()
     private var plaza = emptyList<PlazaLine>()
@@ -37,7 +38,7 @@ class MemoryStore : Store {
     override fun saveCandies(n: Int) { candies = n }
     override fun loadCandies() = candies
     private val pages = ArrayList<ByteArray>()
-    override fun appendPage(page: ByteArray) { pages += page }
+    override fun appendPage(page: ByteArray) { if (keepPages) pages += page }
     override fun loadPages() = pages.toList()
     override fun saveContact(card: Card) { contacts[card.nodeId.toHex()] = card }
     override fun contacts() = contacts.values.toList()

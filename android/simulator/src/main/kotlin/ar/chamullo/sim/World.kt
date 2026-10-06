@@ -43,7 +43,7 @@ class World(
     inner class Phone(val name: String, var x: Double, var y: Double, val village: String, val speed: Double) {
         val identity = Identity.generate(name)
         val id = identity.nodeId.toHex().take(16)
-        val node = Node(identity, MemoryStore(), 60_000) { now }
+        val node = Node(identity, MemoryStore(keepPages = false), 60_000) { now }
         var island: String? = null
         var host = false
         var busyUntil = 0L
@@ -57,6 +57,11 @@ class World(
         var cell: Zone = zoneAt(x, y)
         /** Lends its Internet as a bridge (Discovery & Routing §11). */
         var internet = false
+        /** Can hold two Wi-Fi connections at once (half of the phones, like in real life), and the island it bridges to. */
+        var canBridge = random.nextBoolean()
+        var bridgeTo: String? = null
+        var bridgePending: String? = null
+        var bridgeAt = 0L
         var tx = x; var ty = y
         val connected get() = now >= busyUntil
     }
@@ -121,6 +126,9 @@ class World(
 
     fun nameOf(id: ByteArray?): String? = id?.let { byId[it.toHex().take(16)]?.name }
 
+    /** Whether a phone can hold two Wi-Fi connections at once (for probes and tests). */
+    fun setCanBridge(name: String, on: Boolean) { phones.getValue(name).canBridge = on }
+
     /** The phones lending Internet. */
     fun bridges(): List<String> = phones.values.filter { it.internet }.map { it.name }
 
@@ -130,13 +138,19 @@ class World(
     /** Bytes of letters shouted over the air (Wi-Fi Direct): the other half of the information moved. */
     var airLetterBytes = 0L; private set
 
-    init { ar.chamullo.core.Crypto.rememberSignatures(true) } // see Crypto: the same frame, many listeners, one check
+    init {
+        ar.chamullo.core.Crypto.rememberSignatures(true) // see Crypto: the same frame, many listeners, one check
+        ar.chamullo.core.Ledger.share(true)              // see Ledger: the same page, a thousand books, one copy in memory
+    }
 
     // What happened, for the report.
     private val sentAt = HashMap<String, Long>()
     private val deliveredAt = HashMap<String, Long>()
     private val crossIsland = HashSet<String>()
     var ferryTrips = 0; private set
+    /** Fixed bridges built, and how many stand right now. */
+    var bridgesBuilt = 0; private set
+    fun fixedBridges(): Int = phones.values.count { it.bridgeTo != null }
     private val carries = ArrayList<Carry>()
     /** What is happening, newest last: for the live screen. */
     val log = ArrayDeque<String>()
@@ -189,12 +203,18 @@ class World(
         for (p in phones.values) grid.getOrPut(cell(p.x, p.y)) { ArrayList() } += p
         membersByHost = HashMap()
         for (p in phones.values) if (!p.host && p.connected) p.island?.let { id -> byId[id]?.takeIf { h -> h.host && sees(p, h) }?.let { membersByHost.getOrPut(id) { ArrayList() } += p } }
+        // A fixed bridge is a member of its second island too, while it still sees that host and is still in its own.
+        for (p in phones.values) p.bridgeTo?.let { id ->
+            val h = byId[id]
+            if (h == null || !h.host || !sees(p, h) || p.island == null || p.host) p.bridgeTo = null
+            else membersByHost.getOrPut(id) { ArrayList() } += p
+        }
     }
 
     private fun hostOf(p: Phone): Phone? = p.island?.let { byId[it] }?.takeIf { it.host && it !== p }
 
     private fun cartel(p: Phone) = Cartel(p.id, p.name, p.island ?: "", if (p.host) "DIRECT-CH-${p.id.take(6)}" else "", if (p.host) "clave" else "",
-        p.host, if (p.host) members(p).map { it.id.take(8) } else emptyList(), if (p.host) p.cell else null)
+        p.host, if (p.host) members(p).map { it.id.take(8) } else emptyList(), if (p.host) p.cell else null, p.bridgeTo ?: "")
 
     /** Islands as they are now: island id → names of the host and its connected members. */
     fun islands(): Map<String, List<String>> = phones.values.filter { it.host }.associate { h -> h.id to (listOf(h.name) + members(h).map { it.name }) }
@@ -209,7 +229,7 @@ class World(
         val courts = Economy.courts(r.carries, nobles = 3)
         val ph = phones.values.joinToString(",") { p ->
             val hostName = p.island?.let { byId[it]?.name } ?: ""
-            "{\"n\":${q(p.name)},\"x\":${p.x.toInt()},\"y\":${p.y.toInt()},\"i\":${q(hostName)},\"h\":${if (p.host) 1 else 0},\"c\":${if (p.connected) 1 else 0},\"f\":${if (p.ferryHome != null) 1 else 0},\"k\":${p.node.candies},\"b\":${p.node.pocketCount()},\"w\":${if (p.internet) 1 else 0}}"
+            "{\"n\":${q(p.name)},\"x\":${p.x.toInt()},\"y\":${p.y.toInt()},\"i\":${q(hostName)},\"h\":${if (p.host) 1 else 0},\"c\":${if (p.connected) 1 else 0},\"f\":${if (p.ferryHome != null) 1 else 0},\"k\":${p.node.candies},\"b\":${p.node.pocketCount()},\"w\":${if (p.internet) 1 else 0},\"j\":${q(p.bridgeTo?.let { byId[it]?.name } ?: "")}}"
         }
         val court = courts.entries.joinToString(",") { (v, c) -> "{\"v\":${q(v)},\"king\":${q(c.king ?: "")},\"nobles\":[${c.nobles.joinToString(",") { q(it) }}]}" }
         val share = Economy.dailyShare(nat.scores)
@@ -272,8 +292,10 @@ class World(
         if (!p.connected || p.ferryBackAt != null || p.boarding != null) return
         val visible = near(p).map { cartel(it) }
         val roster = if (p.host) members(p).map { it.id.take(8) } else hostOf(p)?.let { h -> members(h).map { it.id.take(8) } } ?: emptyList()
-        when (val a = Islands.decide(p.id, IslandState(p.island, p.host, roster, p.ferriedTurn), visible, now, p.cell, p.node.stuckZone())) {
+        when (val a = Islands.decide(p.id, IslandState(p.island, p.host, roster, p.ferriedTurn, p.bridgeTo, p.canBridge), visible, now, p.cell, p.node.stuckZone())) {
             IslandAction.Stay -> Unit
+            is IslandAction.Bridge -> { p.bridgePending = a.island; p.bridgeAt = now + connectMs }
+            IslandAction.Unbridge -> { say("🌉 ${p.name} suelta su puente a la isla de ${byId[p.bridgeTo ?: ""]?.name}"); p.bridgeTo = null }
             IslandAction.Host -> { p.host = true; p.island = p.id; say("🏝 ${p.name} funda una isla") }
             is IslandAction.Join -> connect(p, a.island, ferry = false)
             is IslandAction.Ferry -> {
@@ -290,6 +312,16 @@ class World(
     }
 
     private fun finishConnect(p: Phone) {
+        p.bridgePending?.let { island ->
+            if (now < p.bridgeAt) return@let
+            p.bridgePending = null
+            val h = byId[island]
+            if (h != null && h.host && sees(p, h) && members(h).size < Islands.MAX_MEMBERS - Islands.FERRY_SEATS && p.island != null && !p.host) {
+                p.bridgeTo = island; bridgesBuilt++
+                membersByHost.getOrPut(island) { ArrayList() } += p
+                say("🌉 ${p.name} queda de puente fijo entre la isla de ${hostOf(p)?.name} y la de ${h.name}")
+            }
+        }
         p.boarding?.let { a ->
             if (now < p.boardingUntil) return@let
             p.boarding = null
@@ -319,7 +351,7 @@ class World(
     // A frame goes over the island links: a member to its host, a host to all its members.
     private fun emit(p: Phone, frame: ByteArray, except: Phone? = null) {
         if (!p.connected) return
-        val targets = if (p.host) members(p) else listOfNotNull(hostOf(p)?.takeIf { sees(p, it) })
+        val targets = if (p.host) members(p) else listOfNotNull(hostOf(p)?.takeIf { sees(p, it) }, p.bridgeTo?.let { byId[it] }?.takeIf { it.host && sees(p, it) })
         for (t in targets) if (t !== except) inFlight += Delivery(now + latencyMs, t, p, frame)
         if (except == null && frame.size > 3 && (frame[3].toInt() == Packet.KIND_ENVELOPE || frame[3].toInt() == Packet.KIND_FRAGMENT)) airLetterBytes += frame.size
     }

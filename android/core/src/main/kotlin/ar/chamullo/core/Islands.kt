@@ -16,12 +16,15 @@ data class Cartel(
     val host: Boolean,
     val roster: List<String>,
     /** The island's cell (Camino y Carretera §6.1): where a ferry that sails there is heading. Only hosts hang it. */
-    val cell: Zone? = null
+    val cell: Zone? = null,
+    /** A member that is also a fixed bridge (§6.2) says to which island: one bridge per pair of islands. */
+    val bridgeTo: String = ""
 ) {
     /** DNS-SD TXT record: short keys, fits the ~255 bytes a Wi-Fi Direct service record allows. */
     fun toTxt(): Map<String, String> = buildMap {
         put("i", nodeId); put("n", name.take(12)); put("l", island); put("h", if (host) "1" else "0")
         if (host) { put("s", ssid); put("p", passphrase); put("r", roster.joinToString(",") { it.take(8) }); cell?.let { put("c", it.encode().toHex()) } }
+        if (bridgeTo.isNotEmpty()) put("b", bridgeTo)
     }
 
     companion object {
@@ -31,13 +34,17 @@ data class Cartel(
             val host = t["h"] == "1"
             return Cartel(id, t["n"] ?: "", island, t["s"] ?: "", t["p"] ?: "", host,
                 t["r"]?.split(',')?.filter { it.isNotEmpty() } ?: emptyList(),
-                t["c"]?.let { c -> runCatching { Zone.decode(hex(c)) }.getOrNull() })
+                t["c"]?.let { c -> runCatching { Zone.decode(hex(c)) }.getOrNull() }, t["b"] ?: "")
         }
     }
 }
 
 /** [ferriedTurn]: the ferry turn in which this phone already made its trip (one trip per turn). */
-data class IslandState(val island: String?, val host: Boolean, val members: List<String>, val ferriedTurn: Long = -1)
+data class IslandState(
+    val island: String?, val host: Boolean, val members: List<String>, val ferriedTurn: Long = -1,
+    /** The island I also stand in as a fixed bridge, and whether this phone can hold two Wi-Fi connections at once. */
+    val bridging: String? = null, val canBridge: Boolean = false
+)
 
 sealed interface IslandAction {
     data object Stay : IslandAction
@@ -45,6 +52,10 @@ sealed interface IslandAction {
     data class Join(val island: String, val ssid: String, val passphrase: String) : IslandAction
     /** [cell]: where the target island is, the heading the ferry announces while letters board it. */
     data class Ferry(val island: String, val ssid: String, val passphrase: String, val cell: Zone? = null) : IslandAction
+    /** Stay in my island and also join that one (Camino y Carretera §6.2): a fixed bridge. */
+    data class Bridge(val island: String, val ssid: String, val passphrase: String) : IslandAction
+    /** Leave the second island: another member already bridges that pair. */
+    data object Unbridge : IslandAction
 }
 
 object Islands {
@@ -89,6 +100,18 @@ object Islands {
             if (strangers.isNotEmpty()) return IslandAction.Stay // a bridge keeps its post at the border
             val merge = best.roster.isNotEmpty() || best.island < me
             return if (merge) IslandAction.Join(best.island, best.ssid, best.passphrase) else IslandAction.Stay
+        }
+
+        // El puente fijo (§6.2): a member that can hold two connections stays in its island and joins a neighbor too.
+        // One per pair of islands: if two started at once, the bigger id lets go. A bridge does not need to ferry.
+        if (state.bridging != null) {
+            val rival = carteles.any { !it.host && it.island == state.island && it.bridgeTo == state.bridging && it.nodeId < me }
+            return if (rival) IslandAction.Unbridge else IslandAction.Stay
+        }
+        if (state.canBridge) {
+            val taken = carteles.filter { !it.host && it.island == state.island && it.bridgeTo.isNotEmpty() }.map { it.bridgeTo }.toSet()
+            hosts.filter { it.roster.size < MAX_MEMBERS - FERRY_SEATS && it.island !in taken }.minByOrNull { it.island }
+                ?.let { return IslandAction.Bridge(it.island, it.ssid, it.passphrase) }
         }
 
         // A member: in each turn one member of the roster is the ferry to a neighboring island, a different one each turn.

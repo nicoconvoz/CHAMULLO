@@ -55,7 +55,9 @@ sealed interface Entry {
         fun depose(king: ByteArray, ts: Long, nobles: List<Identity>) =
             Depose(king, ts, nobles.map { it.nodeId to it.sign("DEPOSE", deposeBody(king, ts)) })
 
-        fun parse(bytes: ByteArray): Entry? = runCatching {
+        fun parse(bytes: ByteArray): Entry? = Ledger.shared("E", bytes) { parseFresh(bytes) }
+
+        private fun parseFresh(bytes: ByteArray): Entry? = runCatching {
             val rest = bytes.copyOfRange(1, bytes.size)
             when (bytes[0]) {
                 J -> OfJourney(Journey.decode(rest))
@@ -92,7 +94,9 @@ class Page(
     ))
 
     companion object {
-        fun decode(bytes: ByteArray): Page {
+        fun decode(bytes: ByteArray): Page = Ledger.shared("P", bytes) { decodeFresh(bytes) }!!
+
+        private fun decodeFresh(bytes: ByteArray): Page {
             val t = Tlv.decode(bytes)
             val e = Reader(t.getValue(10)); val n = Reader(t.getValue(16))
             return Page(Zone.decode(t.getValue(2)), Tlv.readU64(t.getValue(4)).toInt(), t.getValue(6), Tlv.readU64(t.getValue(8)),
@@ -126,6 +130,7 @@ class Ledger(val params: Params) {
     private class State {
         val balances = HashMap<String, Long>()
         val journeys = HashMap<String, Journey>()
+        val journeyPeriod = HashMap<String, Long>()
         val claimed = HashSet<String>()
         val carries = ArrayList<Carry>()            // of the open period
         val claimants = HashMap<String, HashSet<String>>() // msg id → who claimed it, for priority escrow
@@ -136,7 +141,7 @@ class Ledger(val params: Params) {
         var deposed: String? = null
 
         fun copy() = State().also { s ->
-            s.balances += balances; s.journeys += journeys; s.claimed += claimed; s.carries += carries
+            s.balances += balances; s.journeys += journeys; s.journeyPeriod += journeyPeriod; s.claimed += claimed; s.carries += carries
             claimants.forEach { (k, v) -> s.claimants[k] = HashSet(v) }; s.firstSeen += firstSeen; s.escrow += escrow
             s.period = period; s.lastScores = lastScores; s.deposed = deposed
         }
@@ -147,6 +152,9 @@ class Ledger(val params: Params) {
     val pages: List<Page> get() = book
 
     fun balance(id: ByteArray): Long = state.balances[id.toHex()] ?: 0
+
+    /** How many journeys the state keeps open for claims. */
+    fun journeysKept(): Int = state.journeys.size
     fun balances(): Map<String, Long> = state.balances.toMap()
 
     /** Every Lucas in the pueblo: balances plus what waits in priority escrow. */
@@ -202,7 +210,7 @@ class Ledger(val params: Params) {
     private fun apply(s: State, e: Entry, ts: Long): Boolean = when (e) {
         is Entry.OfJourney -> {
             val id = e.journey.msgId.toHex()
-            if (id in s.journeys || !e.journey.verify()) false else { s.journeys[id] = e.journey; true }
+            if (id in s.journeys || !e.journey.verify()) false else { s.journeys[id] = e.journey; s.journeyPeriod[id] = s.period; true }
         }
         is Entry.OfClaim -> {
             val id = runCatching { e.claim.msgId().toHex() }.getOrNull()
@@ -241,6 +249,11 @@ class Ledger(val params: Params) {
                 }
                 s.lastScores = scoresOf(s, ts)
                 s.carries.clear()
+                // A journey can be collected during its period and the next; after that it leaves the state.
+                for ((id, p) in s.journeyPeriod.entries.toList()) if (p < s.period) { // before the period number moves on
+                    s.journeys.remove(id); s.journeyPeriod.remove(id); s.claimants.remove(id)
+                    s.claimed.removeAll { it.startsWith("$id:") }
+                }
                 s.deposed = null
                 s.period++
                 true
@@ -294,6 +307,27 @@ class Ledger(val params: Params) {
     }
 
     companion object {
+        /**
+         * For the digital twin only: a thousand phones share one process, and every one decodes the same pages. With
+         * this on, they share the decoded objects (they never change), like [Crypto.rememberSignatures]. A real phone
+         * keeps one copy and leaves it off.
+         */
+        fun share(on: Boolean) { cache = if (on) object : LinkedHashMap<String, Any>() {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Any>) = size > 20_000
+        } else null }
+
+        @Volatile private var cache: LinkedHashMap<String, Any>? = null
+
+        @Suppress("UNCHECKED_CAST")
+        internal fun <T : Any> shared(kind: String, bytes: ByteArray, make: () -> T?): T? {
+            val c = cache ?: return make()
+            val key = kind + Crypto.hash(bytes).toHex()
+            synchronized(c) { c[key]?.let { return it as T } }
+            val made = make() ?: return null
+            synchronized(c) { c[key] = made }
+            return made
+        }
+
         const val KING_WAGE = 20L
         const val NOBLE_WAGE = 2L
         private const val ECO = "eco"
