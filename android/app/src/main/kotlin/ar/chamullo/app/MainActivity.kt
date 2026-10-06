@@ -159,7 +159,7 @@ class MainActivity : Activity() {
     /* ---------- permissions and start ---------- */
     private fun needed(): Array<String> = buildList {
         if (Build.VERSION.SDK_INT >= 31) { add(Manifest.permission.BLUETOOTH_SCAN); add(Manifest.permission.BLUETOOTH_ADVERTISE); add(Manifest.permission.BLUETOOTH_CONNECT) }
-        add(Manifest.permission.ACCESS_FINE_LOCATION) // Android hands beacon-like shouts only to apps with it; never read
+        add(Manifest.permission.ACCESS_FINE_LOCATION) // the compass: only the ~50 m cell leaves the phone (Discovery & Routing §2)
         if (Build.VERSION.SDK_INT >= 33) { add(Manifest.permission.NEARBY_WIFI_DEVICES); add(Manifest.permission.POST_NOTIFICATIONS) }
     }.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }.toTypedArray()
 

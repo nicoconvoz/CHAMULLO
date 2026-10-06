@@ -20,6 +20,7 @@ class GritoService : Service() {
     private val recent = LinkedHashMap<String, Long>()
     private var lastHello = 0L
     private var running = false
+    private var locator: Locator? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -44,7 +45,9 @@ class GritoService : Service() {
         val node = Node(identity, FileStore(this), ROAD_FRAME, useBluetooth && bluetooth.coded) { System.currentTimeMillis() }
         Hub.radios = radios
         Hub.worker.post { Hub.node = node }
+        islands.onHeading = { heading -> Hub.post { it.setHeading(heading) } }
         radios.forEach { it.start() }
+        locator = Locator(this) { lat, lon -> Hub.post { it.locate(lat, lon) } }.also { it.start() }
         running = true
         Hub.worker.post(object : Runnable {
             override fun run() {
@@ -55,6 +58,7 @@ class GritoService : Service() {
                     if (useBluetooth && now - lastHello >= HELLO_MS) { lastHello = now; bluetooth.sayHello(n.hello()) }
                     val on = radios.filter { it.active }
                     for (f in n.drainOutbox()) on.forEach { it.shout(f) }
+                    islands.myCell = n.cell(); islands.stuck = n.stuckZone()
                 }
                 Hub.worker.postDelayed(this, TICK_MS)
             }
@@ -118,6 +122,7 @@ class GritoService : Service() {
 
     override fun onDestroy() {
         running = false
+        locator?.stop()
         radios.forEach { it.stop() }
         Hub.node = null
         super.onDestroy()

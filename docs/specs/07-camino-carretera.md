@@ -72,3 +72,4 @@ Implementación de referencia de las decisiones: `android/core/.../Islands.kt` (
 - El ferry del turno elige la isla vecina con lugar de índice `turno mod cantidad`, en orden de id.
 - Embarque: anuncia ese rumbo en su latido y espera `FERRY_BOARDING_MS = 3 s`; los miembros le dan las cartas que acercan en esa dirección. Mientras viaja, lleva y no reparte.
 - Al llegar: latido con su celda real, la isla le responde con los suyos (`BEACON_REPLY_MS`) y reparte con la brújula. A los 20 s vuelve a casa con lo que no pudo dejar.
+- En la app: `Locator` le da la ubicación al nodo cada 15 s o 20 m (GPS o red); `WifiIslands` cuelga la celda en el cartel del anfitrión, le pasa al `decide` la celda y la carta trabada, y avisa el rumbo al nodo al embarcar y al llegar.

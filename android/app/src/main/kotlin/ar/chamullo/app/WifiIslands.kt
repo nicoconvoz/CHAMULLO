@@ -18,6 +18,7 @@ import ar.chamullo.core.Crypto
 import ar.chamullo.core.Handshake
 import ar.chamullo.core.Identity
 import ar.chamullo.core.IslandAction
+import ar.chamullo.core.Zone
 import ar.chamullo.core.IslandState
 import ar.chamullo.core.Islands
 import ar.chamullo.core.toHex
@@ -77,6 +78,11 @@ class WifiIslands(
     override val peers get() = links.size
     override var lastError: String? = null; private set
     @Volatile var lastSpeed: String? = null; private set
+    /** From the node, every tick: where I am, and where a letter nobody here gets closer wants to go (§10.6). */
+    @Volatile var myCell: Zone? = null
+    @Volatile var stuck: Zone? = null
+    /** Tells the node a ferry heading (boarding) or that it arrived (null). */
+    var onHeading: (Zone?) -> Unit = {}
     val cartelesSeen get() = carteles.size
     val memberCount get() = if (host) members.size else 0
     val islandName get() = island?.let { id -> if (id == me) "mía" else carteles[id]?.first?.name?.ifBlank { id.take(6) } ?: id.take(6) }
@@ -101,7 +107,7 @@ class WifiIslands(
     /* ---------- carteles ---------- */
 
     private fun cartel() = Cartel(me, myName, island ?: "", if (host) ssid else "", if (host) passphrase else "", host,
-        if (host) members.values.toList() else emptyList())
+        if (host) members.values.toList() else emptyList(), if (host) myCell else null)
 
     private fun publishCartel() {
         val ch = channel ?: return
@@ -135,7 +141,8 @@ class WifiIslands(
             if (!running) return
             val now = System.currentTimeMillis()
             carteles.values.removeAll { now - it.second > CARTEL_TTL_MS }
-            if (!busy && ferrying == null) act(Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland()), carteles.values.map { it.first }, now))
+            if (!busy && ferrying == null) act(Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn),
+                carteles.values.map { it.first }, now, myCell, stuck))
             handler.postDelayed(this, DECIDE_MS)
         }
     }
@@ -183,20 +190,33 @@ class WifiIslands(
         })
     }
 
-    // The ferry: go to the neighboring island, stay a while so pockets are delivered there, then come home.
+    // The ferry (Camino y Carretera §6.1): announce the heading, wait while letters going that way board, sail, hand them
+    // out with the compass on arrival, then come home. A lonely bridge host that sails out of need stays there as a member.
     private fun ferry(a: IslandAction.Ferry) {
         val current = island ?: return
-        val back = carteles[current]?.first ?: return
-        home = IslandAction.Join(current, back.ssid, back.passphrase)
+        ferriedTurn = Islands.turnOf(System.currentTimeMillis())
+        val target = IslandAction.Join(a.island, a.ssid, a.passphrase)
         ferrying = a.island
-        FieldLog.add("ISLA", "me toca el ferry: voy a la isla ${a.island.take(6)}")
-        join(IslandAction.Join(a.island, a.ssid, a.passphrase)) {
-            handler.postDelayed({
-                FieldLog.add("ISLA", "vuelvo del ferry a mi isla")
-                home?.let { join(it) { ferrying = null } } ?: run { ferrying = null }
-            }, FERRY_STAY_MS)
+        onHeading(a.cell)
+        if (host) {
+            FieldLog.add("ISLA", "soy un puente solo con cartas trabadas: me mudo a la isla ${a.island.take(6)}")
+            handler.postDelayed({ join(target) { ferrying = null; onHeading(null) } }, Islands.FERRY_BOARDING_MS)
+            return
         }
+        val back = carteles[current]?.first ?: run { ferrying = null; onHeading(null); return }
+        home = IslandAction.Join(current, back.ssid, back.passphrase)
+        FieldLog.add("ISLA", "me toca el ferry: embarco cartas y voy a la isla ${a.island.take(6)}")
+        handler.postDelayed({
+            join(target) {
+                onHeading(null) // arrived: hand out with the compass
+                handler.postDelayed({
+                    FieldLog.add("ISLA", "vuelvo del ferry a mi isla")
+                    home?.let { join(it) { ferrying = null } } ?: run { ferrying = null }
+                }, FERRY_STAY_MS)
+            }
+        }, Islands.FERRY_BOARDING_MS)
     }
+    private var ferriedTurn = -1L
 
     // When the group forms as a member, open the pipe to the host.
     private val connectionReceiver = object : BroadcastReceiver() {
