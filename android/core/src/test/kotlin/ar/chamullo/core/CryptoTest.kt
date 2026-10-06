@@ -66,4 +66,22 @@ class CryptoTest {
         assertEquals("70788f1a0cea001a2631dae5d05dbd062008d5b30f50b9e29beb2a7822289044", x.toHex())
         assertEquals("4a3807d064d077181cc070989e76891d20dca5559548dc2c77c1a50273882b38", Crypto.boxPublicKey(x).toHex())
     }
+
+    @Test
+    fun `remembered signatures still reject a forged message or signature`() {
+        val seed = Crypto.randomBytes(32); val pk = Crypto.signPublicKey(seed)
+        val msg = "carta".toByteArray(); val sig = Crypto.sign(seed, msg)
+        Crypto.rememberSignatures(true)
+        try {
+            assertTrue(Crypto.verify(pk, msg, sig))
+            assertTrue(Crypto.verify(pk, msg, sig)) // second time comes from memory
+            assertFalse(Crypto.verify(pk, "cartas".toByteArray(), sig))
+            assertFalse(Crypto.verify(pk, msg, sig.copyOf().also { it[0] = (it[0] + 1).toByte() }))
+            assertFalse(Crypto.verify(Crypto.signPublicKey(Crypto.randomBytes(32)), msg, sig))
+            assertEquals(4, Crypto.rememberedSignatures())
+        } finally {
+            Crypto.rememberSignatures(false)
+        }
+        assertEquals(0, Crypto.rememberedSignatures())
+    }
 }

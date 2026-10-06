@@ -43,4 +43,16 @@ class WorldTest {
         assertEquals(1.0, w.report().deliveryRatio, "delivered across islands")
         assertTrue(w.report().ferryTrips > 0)
     }
+
+    @Test
+    fun `a city of 1000 phones forms islands and keeps a history for the charts, in reasonable time`() {
+        val w = Scenarios.build(Scenarios.all.single { it.key == "ciudad" }, seed = 1)
+        val t0 = System.currentTimeMillis()
+        w.run(3 * 60_000)
+        val took = System.currentTimeMillis() - t0
+        val islands = w.islands()
+        assertTrue(islands.size >= 1000 / (ar.chamullo.core.Islands.MAX_MEMBERS + 1), "islands: ${islands.size}")
+        assertTrue(w.history().size >= 15, "one sample every 10 s")
+        assertTrue(took < 60_000, "3 simulated minutes took ${took} ms")
+    }
 }

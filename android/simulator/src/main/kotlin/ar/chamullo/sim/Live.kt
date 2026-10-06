@@ -23,6 +23,7 @@ fun main(args: Array<String>) {
         live.control(q)
         reply(ex, "application/json; charset=utf-8", live.state().toByteArray())
     }
+    server.executor = java.util.concurrent.Executors.newFixedThreadPool(4)
     server.start()
     println("Laboratorio CHAMULLO en vivo: http://localhost:$port")
     live.loop()
@@ -45,14 +46,33 @@ class LiveRun {
     @Volatile private var paused = false
     private var nextLetterAt = 90_000L
 
+    // The page reads a cached copy, so a big world never makes it wait for the simulation.
+    @Volatile private var cached = ""
+    private var cachedAt = 0L
+
+    /**
+     * Advances the world one tick at a time, releasing the lock between ticks, and never spends more than ~40 ms of
+     * each 50 ms slot computing: with 1000 phones the twin runs as fast as the computer allows instead of freezing.
+     */
     fun loop() {
         while (true) {
-            Thread.sleep(50)
-            if (paused) continue
-            synchronized(lock) {
-                world.run(50L * speed)
-                if (world.now >= nextLetterAt) { letter(); nextLetterAt = world.now + 8_000 }
+            val slot = System.currentTimeMillis()
+            if (!paused) {
+                val target = synchronized(lock) { world.now + 50L * speed }
+                while (System.currentTimeMillis() - slot < 40) {
+                    val done = synchronized(lock) {
+                        if (world.now >= target) true
+                        else {
+                            world.run(world.tickMs)
+                            if (world.now >= nextLetterAt) { letter(); nextLetterAt = world.now + 8_000 }
+                            false
+                        }
+                    }
+                    if (done) break
+                }
             }
+            if (System.currentTimeMillis() - cachedAt > 300) { cached = build(); cachedAt = System.currentTimeMillis() }
+            Thread.sleep((50 - (System.currentTimeMillis() - slot)).coerceAtLeast(5))
         }
     }
 
@@ -71,6 +91,7 @@ class LiveRun {
         q["letter"]?.let { letter() }
         q["scenario"]?.let { key -> Scenarios.all.firstOrNull { it.key == key }?.let { scenario = it; restart() } }
         q["reset"]?.let { restart() }
+        cached = build(); cachedAt = System.currentTimeMillis()
     }
 
     private fun restart() {
@@ -79,7 +100,9 @@ class LiveRun {
         nextLetterAt = 90_000L
     }
 
-    fun state(): String = synchronized(lock) {
+    fun state(): String = cached.ifEmpty { build() }
+
+    private fun build(): String = synchronized(lock) {
         val list = Scenarios.all.joinToString(",") { "{\"key\":\"${it.key}\",\"title\":\"${it.title}\"}" }
         "{\"scenario\":\"${scenario.key}\",\"title\":\"${scenario.title}\",\"story\":\"${scenario.story}\",\"speed\":$speed,\"paused\":$paused,\"scenarios\":[$list],\"world\":${world.snapshotJson()}}"
     }

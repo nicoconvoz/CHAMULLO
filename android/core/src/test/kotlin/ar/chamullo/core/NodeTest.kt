@@ -215,6 +215,18 @@ class NodeTest {
     }
 
     @Test
+    fun `housekeeping - expired neighbors are swept once a second, not on every tick`() {
+        var now = 0L
+        val ana = Node(Identity.generate("Ana"), MemoryStore()) { now }
+        ana.onHello(Hello.of(Identity.generate("Eli"), coded = false))
+        now = Node.NEIGHBOR_TTL_MS - 200; ana.tick() // a sweep: Eli is still fresh
+        now = Node.NEIGHBOR_TTL_MS + 1; ana.tick() // Eli has expired, but the last sweep was 201 ms ago
+        assertEquals(listOf("Eli"), ana.nearby().map { it.name })
+        now = Node.NEIGHBOR_TTL_MS - 200 + Node.SWEEP_MS; ana.tick() // a second later: swept
+        assertTrue(ana.nearby().isEmpty())
+    }
+
+    @Test
     fun `hello - my own hello is not someone nearby`() {
         val ana = Node(Identity.generate("Ana"), MemoryStore()) { 0 }
         ana.onHello(ana.hello())

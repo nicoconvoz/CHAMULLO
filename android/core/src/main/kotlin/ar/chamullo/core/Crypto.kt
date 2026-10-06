@@ -24,9 +24,31 @@ object Crypto {
     fun sign(seed: ByteArray, message: ByteArray): ByteArray =
         ByteArray(64).also { Ed25519.sign(seed, 0, message, 0, message.size, it, 0) }
 
-    fun verify(publicKey: ByteArray, message: ByteArray, signature: ByteArray): Boolean =
-        publicKey.size == 32 && signature.size == 64 &&
-            runCatching { Ed25519.verify(signature, 0, publicKey, 0, message, 0, message.size) }.getOrDefault(false)
+    fun verify(publicKey: ByteArray, message: ByteArray, signature: ByteArray): Boolean {
+        if (publicKey.size != 32 || signature.size != 64) return false
+        val memo = memo ?: return checkSignature(publicKey, message, signature)
+        val key = hash(publicKey + signature + message).toHex() // the whole triple: a forged message never hits
+        return synchronized(memo) { memo[key] } ?: checkSignature(publicKey, message, signature).also { synchronized(memo) { memo[key] = it } }
+    }
+
+    private fun checkSignature(publicKey: ByteArray, message: ByteArray, signature: ByteArray) =
+        runCatching { Ed25519.verify(signature, 0, publicKey, 0, message, 0, message.size) }.getOrDefault(false)
+
+    /**
+     * For the digital twin only: a thousand simulated phones share one process, so the same frame gets its signature
+     * checked once per listener. Remembering the answer (keyed by key, signature and message) gives the same result
+     * faster. A real phone has nothing to share and leaves this off.
+     */
+    @Volatile private var memo: LinkedHashMap<String, Boolean>? = null
+    private const val MEMO_SIZE = 200_000
+
+    fun rememberSignatures(on: Boolean) {
+        memo = if (on) object : LinkedHashMap<String, Boolean>() {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>) = size > MEMO_SIZE
+        } else null
+    }
+
+    fun rememberedSignatures(): Int = memo?.let { synchronized(it) { it.size } } ?: 0
 
     /* ---------- hashing ---------- */
     fun sha512(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-512").digest(data)

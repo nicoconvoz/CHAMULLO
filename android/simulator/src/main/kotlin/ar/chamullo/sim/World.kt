@@ -47,9 +47,16 @@ class World(
     }
 
     private val phones = LinkedHashMap<String, Phone>()
+    // Per tick: a grid sized to the Wi-Fi reach (neighbors without comparing everyone) and each island's members.
+    private var grid = HashMap<Long, MutableList<Phone>>()
+    private var membersByHost = HashMap<String, MutableList<Phone>>()
+    private val samples = ArrayList<Sample>()
+    class Sample(val t: Long, val sent: Int, val delivered: Int, val pockets: Int, val islands: Int, val ferry: Int, val candies: Int)
     private val byId = HashMap<String, Phone>()
     private class Delivery(val at: Long, val to: Phone, val from: Phone, val frame: ByteArray)
-    private val inFlight = ArrayList<Delivery>()
+    private val inFlight = ArrayDeque<Delivery>() // every frame takes the same latency, so arrival order = send order
+
+    init { ar.chamullo.core.Crypto.rememberSignatures(true) } // see Crypto: the same frame, many listeners, one check
 
     // What happened, for the report.
     private val sentAt = HashMap<String, Long>()
@@ -72,7 +79,8 @@ class World(
     }
 
     fun befriendAll() {
-        for (a in phones.values) for (b in phones.values) if (a !== b) a.node.store.saveContact(b.identity.card())
+        val cards = phones.values.associateWith { it.identity.card() } // sign each card once, not once per pair
+        for (a in phones.values) for ((b, card) in cards) if (a !== b) a.node.store.saveContact(card)
     }
 
     fun send(from: String, to: String, text: String): String {
@@ -90,7 +98,23 @@ class World(
     private fun dist(a: Phone, b: Phone) = hypot(a.x - b.x, a.y - b.y)
     private fun sees(a: Phone, b: Phone) = a !== b && dist(a, b) <= wifiRangeM
 
-    private fun members(h: Phone) = phones.values.filter { it.island == h.id && !it.host && it.connected && sees(it, h) }
+    private fun members(h: Phone): List<Phone> = membersByHost[h.id] ?: emptyList()
+
+    private fun cell(x: Double, y: Double) = (Math.floorDiv(x.toLong(), wifiRangeM.toLong()) shl 32) + Math.floorDiv(y.toLong(), wifiRangeM.toLong())
+
+    private fun near(p: Phone): List<Phone> {
+        val cx = Math.floorDiv(p.x.toLong(), wifiRangeM.toLong()); val cy = Math.floorDiv(p.y.toLong(), wifiRangeM.toLong())
+        val out = ArrayList<Phone>()
+        for (dx in -1L..1L) for (dy in -1L..1L) grid[((cx + dx) shl 32) + (cy + dy)]?.let { for (q in it) if (sees(p, q)) out += q }
+        return out
+    }
+
+    private fun reindex() {
+        grid = HashMap()
+        for (p in phones.values) grid.getOrPut(cell(p.x, p.y)) { ArrayList() } += p
+        membersByHost = HashMap()
+        for (p in phones.values) if (!p.host && p.connected) p.island?.let { id -> byId[id]?.takeIf { h -> h.host && sees(p, h) }?.let { membersByHost.getOrPut(id) { ArrayList() } += p } }
+    }
 
     private fun hostOf(p: Phone): Phone? = p.island?.let { byId[it] }?.takeIf { it.host && it !== p }
 
@@ -110,11 +134,12 @@ class World(
         val courts = Economy.courts(r.carries, nobles = 3)
         val ph = phones.values.joinToString(",") { p ->
             val hostName = p.island?.let { byId[it]?.name } ?: ""
-            "{\"n\":${q(p.name)},\"x\":${p.x},\"y\":${p.y},\"v\":${q(p.village)},\"i\":${q(hostName)},\"h\":${p.host},\"c\":${p.connected},\"f\":${p.ferryHome != null},\"k\":${p.node.candies},\"b\":${p.node.pocketCount()}}"
+            "{\"n\":${q(p.name)},\"x\":${p.x.toInt()},\"y\":${p.y.toInt()},\"i\":${q(hostName)},\"h\":${if (p.host) 1 else 0},\"c\":${if (p.connected) 1 else 0},\"f\":${if (p.ferryHome != null) 1 else 0},\"k\":${p.node.candies},\"b\":${p.node.pocketCount()}}"
         }
         val court = courts.entries.joinToString(",") { (v, c) -> "{\"v\":${q(v)},\"king\":${q(c.king ?: "")},\"nobles\":[${c.nobles.joinToString(",") { q(it) }}]}" }
         return "{\"t\":$now,\"range\":$wifiRangeM,\"phones\":[$ph],\"sent\":${r.sent},\"delivered\":${r.delivered},\"p50\":${r.latencyP50s},\"ferry\":${r.ferryTrips}," +
             "\"candies\":${r.candies.values.sum()},\"king\":${q(nat.king ?: "")},\"nobles\":[${nat.nobles.joinToString(",") { q(it) }}],\"courts\":[$court]," +
+            "\"history\":[${samples.takeLast(240).joinToString(",") { "[${it.t / 1000},${it.sent},${it.delivered},${it.pockets},${it.islands},${it.ferry},${it.candies}]" }}]," +
             "\"log\":[${log.toList().takeLast(40).reversed().joinToString(",") { q(it) }}]}"
     }
 
@@ -133,6 +158,7 @@ class World(
 
     private fun tick() {
         walk()
+        reindex()
         // Links break when phones walk apart or the host stops hosting.
         for (p in phones.values) if (!p.host && p.connected && p.island != null) {
             val h = hostOf(p)
@@ -146,11 +172,16 @@ class World(
             collect(p, emptyList())
         }
         deliver()
+        if (now % 10_000 < tickMs) samples += Sample(now, sentAt.size, deliveredAt.size, phones.values.sumOf { it.node.pocketCount() },
+            phones.values.count { it.host }, ferryTrips, phones.values.sumOf { it.node.candies })
     }
+
+    /** One sample every 10 simulated seconds, for the charts. */
+    fun history(): List<Sample> = samples.toList()
 
     private fun decide(p: Phone) {
         if (!p.connected || p.ferryBackAt != null) return
-        val visible = phones.values.filter { sees(p, it) }.map { cartel(it) }
+        val visible = near(p).map { cartel(it) }
         val roster = if (p.host) members(p).map { it.id.take(8) } else hostOf(p)?.let { h -> members(h).map { it.id.take(8) } } ?: emptyList()
         when (val a = Islands.decide(p.id, IslandState(p.island, p.host, roster, p.ferriedTurn), visible, now)) {
             IslandAction.Stay -> Unit
@@ -172,6 +203,7 @@ class World(
             // The host keeps the door: the last seat is only for ferries.
             val seats = if (p.targetIsFerry) Islands.MAX_MEMBERS else Islands.MAX_MEMBERS - Islands.FERRY_SEATS
             p.island = if (h != null && h.host && sees(p, h) && members(h).size < seats) t else null
+            if (p.island != null) membersByHost.getOrPut(t) { ArrayList() } += p
             if (p.ferryHome != null && p.ferryBackAt == null) p.ferryBackAt = now + 20_000
         }
         val back = p.ferryBackAt
@@ -190,9 +222,8 @@ class World(
     }
 
     private fun deliver() {
-        val due = inFlight.filter { it.at <= now }
-        inFlight.removeAll(due.toSet())
-        for (d in due) {
+        while (inFlight.isNotEmpty() && inFlight.first().at <= now) {
+            val d = inFlight.removeFirst()
             if (!d.to.connected) continue
             // The host repeats island messages (heartbeats, plaza, cards) to everyone; letters go through its node,
             // which re-shouts them with its own hop record, so the host earns its candy like any carrier.
@@ -213,7 +244,7 @@ class World(
                 for (carrier in e.journey) {
                     val c = byId[carrier.take(16)] ?: continue
                     val island = c.island
-                    val alternatives = phones.values.count { it !== c && it.island == island && it.island != null } // others who could have carried it here
+                    val alternatives = island?.let { (membersByHost[it]?.size ?: 0) } ?: 0 // others in the island who could have carried it
                     carries += Carry(c.name, byId[origin]?.name ?: "?", p.name, alternatives, c.village)
                 }
             }

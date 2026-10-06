@@ -54,6 +54,7 @@ class Node(
     private val offeredTo = mutableSetOf<String>()
     private var lastBeacon = Long.MIN_VALUE / 2
     private var newNeighbor = false
+    private var lastSweep = Long.MIN_VALUE / 2
     private class PlazaEntry(val id: String, val name: String, val text: String, val ts: Long, val mine: Boolean, val heardBy: LinkedHashSet<String> = LinkedHashSet())
     // Letters that matter are repeated until confirmed: a plaza message until someone hears it, a card until theirs arrives.
     private class Retry(val frame: ByteArray, var left: Int, var nextAt: Long)
@@ -98,12 +99,19 @@ class Node(
     fun tick() {
         val now = clock()
         if (now - lastBeacon >= BEACON_MS) { lastBeacon = now; enqueue(Beacon.of(identity, coded, now).encode()) }
-        neighbors.values.removeAll { now - it.lastSeen > NEIGHBOR_TTL_MS }
-        nearby.values.removeAll { now - it.lastSeen > NEIGHBOR_TTL_MS }
-        if (pockets.values.removeAll { it.env.expired(now) }) savePockets()
-        for (r in plazaRetries.values + cardRetries.values) if (r.left > 0 && now >= r.nextAt) { r.left--; r.nextAt = now + RETRY_MS; enqueue(r.frame) }
-        plazaRetries.values.removeAll { it.left == 0 }
-        cardRetries.values.removeAll { it.left == 0 }
+        // Housekeeping once a second is plenty: lifetimes are tens of seconds, and it keeps an idle tick cheap.
+        if (now - lastSweep >= SWEEP_MS) {
+            lastSweep = now
+            neighbors.values.removeAll { now - it.lastSeen > NEIGHBOR_TTL_MS }
+            nearby.values.removeAll { now - it.lastSeen > NEIGHBOR_TTL_MS }
+            if (pockets.values.removeAll { it.env.expired(now) }) savePockets()
+        }
+        if (plazaRetries.isNotEmpty() || cardRetries.isNotEmpty()) {
+            for (retries in listOf(plazaRetries.values, cardRetries.values)) {
+                for (r in retries) if (r.left > 0 && now >= r.nextAt) { r.left--; r.nextAt = now + RETRY_MS; enqueue(r.frame) }
+                retries.removeAll { it.left == 0 }
+            }
+        }
         road?.let { r ->
             val targets = neighbors.values.filter { it.stable && hosts(it) }.map { it.nodeId to it.beacon.boxPublic } + inviteBack.values
             for ((nodeId, box) in targets) {
@@ -301,6 +309,7 @@ class Node(
         // A signed heartbeat is ~150 bytes: about 12 classic micros with parity on the universal shout, so it goes out every 15 s.
         const val BEACON_MS = 15_000L
         const val NEIGHBOR_TTL_MS = 30_000L
+        const val SWEEP_MS = 1_000L
         const val MAX_RESHOUTS = 5
         const val MAX_SEEN = 4_000
         const val MAX_OUTBOX = 400

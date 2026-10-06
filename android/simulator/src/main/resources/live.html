@@ -95,6 +95,16 @@ td.m{font-family:var(--mono);font-size:12px}
 @keyframes pulse{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.live i{animation:none}}
 .story{color:var(--muted);font-size:13px;margin:0 0 10px}
+
+#map{aspect-ratio:2/1}
+.charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:640px){.charts{grid-template-columns:minmax(0,1fr)}}
+.chartbox{position:relative}
+.chartbox h3{margin:0 0 4px;font-size:12px;font-weight:700;color:var(--ink);display:flex;justify-content:space-between}
+.chartbox h3 span{font-family:var(--mono);font-weight:500;color:var(--muted)}
+.chartbox canvas{width:100%;height:110px;display:block;cursor:crosshair}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-family:var(--mono);font-size:11.5px;color:var(--ink);box-shadow:0 6px 16px -8px rgba(0,0,0,.35);white-space:nowrap}
+details.data{margin-top:8px;font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -118,20 +128,29 @@ td.m{font-family:var(--mono);font-size:12px}
         <p class="story" id="story"></p>
         <canvas id="map" aria-label="Mapa de islas y celulares"></canvas>
         <div class="legend">
-          <span><b style="background:var(--ink)"></b>anfitrión (círculo = su alcance Wi-Fi)</span>
-          <span><b style="border:1.5px solid var(--ink)"></b>miembro (color = su isla)</span>
+          <span><b style="background:var(--ink)"></b>anfitrión de isla</span>
+          <span><b style="background:var(--muted)"></b>miembro</span>
           <span><b style="background:var(--node)"></b>sin isla o conectándose</span>
           <span><b style="border:2.5px solid var(--pocket)"></b>de ferry</span>
           <span><i></i>caño de la isla</span>
         </div>
       </section>
-      <section class="card"><h2>Bus de eventos <span class="r">lo último arriba</span></h2><div class="log" id="log"></div></section>
+      <section class="card"><h2>Cómo va <span class="r">una muestra cada 10 s simulados</span></h2>
+        <div class="charts">
+          <div class="chartbox"><h3>Cartas entregadas <span id="v0"></span></h3><canvas id="c0" aria-label="Porcentaje de cartas entregadas en el tiempo"></canvas></div>
+          <div class="chartbox"><h3>Cartas en bolsillos <span id="v1"></span></h3><canvas id="c1" aria-label="Cartas en bolsillos en el tiempo"></canvas></div>
+          <div class="chartbox"><h3>Islas <span id="v2"></span></h3><canvas id="c2" aria-label="Cantidad de islas en el tiempo"></canvas></div>
+          <div class="chartbox"><h3>Caramelos cobrados <span id="v3"></span></h3><canvas id="c3" aria-label="Caramelos cobrados en el tiempo"></canvas></div>
+        </div>
+        <details class="data"><summary>Ver los datos</summary><div id="datatable"></div></details>
+      </section>
     </div>
     <div class="stack">
       <section class="card"><h2>Indicadores</h2><div class="tiles" id="tiles"></div></section>
       <section class="card"><h2>La Corte <span class="r">diversidad × escasez</span></h2><div id="court"></div>
         <p class="note">Nadie la nombra: sale del puntaje de cada cartero por cartas confirmadas. Donde faltan caminos, cada carta vale más.</p></section>
-      <section class="card"><h2>Islas ahora</h2><div id="islands"></div></section>
+      <section class="card"><h2>Bus de eventos <span class="r">lo último arriba</span></h2><div class="log" id="log"></div></section>
+      <section class="card"><h2>Islas más grandes</h2><div id="islands"></div></section>
     </div>
   </div>
 </div>
@@ -177,10 +196,11 @@ function render() {
   const rows = [`<tr><td><b>Nacional</b></td><td class="m"><b>${esc(w.king || '—')}</b></td><td class="m">${esc(w.nobles.join(', ') || '—')}</td></tr>`]
     .concat(w.courts.map(c => `<tr><td>${esc(c.v)}</td><td class="m">${esc(c.king || '—')}</td><td class="m">${esc(c.nobles.join(', ') || '—')}</td></tr>`));
   $('court').innerHTML = `<table><tr><th>Pueblo</th><th>👑 Rey</th><th>🎩 Nobleza</th></tr>${rows.join('')}</table>`;
-  $('islands').innerHTML = hosts.length ? `<table><tr><th>Isla de</th><th>Miembros</th><th>Caramelos</th></tr>${hosts.map(h => {
-    const mem = w.phones.filter(p => p.i === h.n && !p.h && p.c);
-    return `<tr><td><span class="isl" style="background:${islandColor(h.n)}"></span>${esc(h.n)}</td><td class="m">${mem.length}</td><td class="m">${[h, ...mem].reduce((a, p) => a + p.k, 0)}</td></tr>`;
-  }).join('')}</table>` : '<div class="empty">Todavía no hay islas: los celulares se están buscando.</div>';
+  const byIsland = new Map(); for (const p of w.phones) if (p.i && p.c) { const e = byIsland.get(p.i) || { n: 0, k: 0 }; e.n++; e.k += p.k; byIsland.set(p.i, e); }
+  const top = [...byIsland.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 10);
+  $('islands').innerHTML = top.length ? `<table><tr><th>Isla de</th><th>Celulares</th><th>Caramelos</th></tr>${top.map(([h, e]) =>
+    `<tr><td>${esc(h)}</td><td class="m">${e.n}</td><td class="m">${e.k}</td></tr>`).join('')}</table>` : '<div class="empty">Todavía no hay islas: los celulares se están buscando.</div>';
+  charts(w.history);
   $('log').innerHTML = w.log.map(l => {
     const i = l.indexOf(' · '); const t = l.slice(0, i), m = l.slice(i + 3);
     return `<div><time>${esc(t)}</time><b>${esc([...m][0])}</b><span title="${esc(m)}">${esc([...m].slice(1).join('').trim())}</span></div>`;
@@ -193,31 +213,75 @@ function draw(w) {
   if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
   if (!w.phones.length) return;
-  const xs = w.phones.map(p => p.x), ys = w.phones.map(p => p.y), pad = w.range * 0.6;
+  const many = w.phones.length > 150;
+  const xs = w.phones.map(p => p.x), ys = w.phones.map(p => p.y), pad = many ? 10 : w.range * 0.6;
   const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad, minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
   const k = Math.min(W / (maxX - minX), H / (maxY - minY));
   const ox = (W - (maxX - minX) * k) / 2, oy = (H - (maxY - minY) * k) / 2;
   const X = x => ox + (x - minX) * k, Y = y => oy + (y - minY) * k;
   const byName = new Map(w.phones.map(p => [p.n, p]));
-  for (const h of w.phones.filter(p => p.h)) { // the Wi-Fi reach of each island
-    g.fillStyle = islandColor(h.n); g.globalAlpha = 0.07; g.beginPath(); g.arc(X(h.x), Y(h.y), w.range * k, 0, Math.PI * 2); g.fill();
-    g.globalAlpha = 0.4; g.strokeStyle = islandColor(h.n); g.setLineDash([4, 4]); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+  const ink = css('--ink'), muted = css('--muted'), node = css('--node'), pocket = css('--pocket');
+  if (!many) for (const h of w.phones.filter(p => p.h)) { // Wi-Fi reach, only when it stays readable
+    g.strokeStyle = muted; g.globalAlpha = 0.35; g.setLineDash([4, 4]); g.beginPath(); g.arc(X(h.x), Y(h.y), w.range * k, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
   }
-  for (const p of w.phones) { // pipes: each member to its host
-    if (p.h || !p.c || !p.i) continue;
-    const h = byName.get(p.i); if (!h) continue;
-    g.strokeStyle = islandColor(p.i); g.lineWidth = 1.5; g.globalAlpha = 0.85;
-    g.beginPath(); g.moveTo(X(p.x), Y(p.y)); g.lineTo(X(h.x), Y(h.y)); g.stroke(); g.globalAlpha = 1;
-  }
+  g.strokeStyle = muted; g.lineWidth = 1; g.globalAlpha = many ? 0.35 : 0.6;
+  g.beginPath();
+  for (const p of w.phones) { if (p.h || !p.c || !p.i) continue; const h = byName.get(p.i); if (!h) continue; g.moveTo(X(p.x), Y(p.y)); g.lineTo(X(h.x), Y(h.y)); }
+  g.stroke(); g.globalAlpha = 1;
+  const r0 = many ? 1.6 : 4;
   for (const p of w.phones) {
-    const x = X(p.x), y = Y(p.y), r = p.h ? 8 : 5;
+    const x = X(p.x), y = Y(p.y), r = p.h ? r0 * 1.8 : r0;
     g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2);
-    if (!p.c || !p.i) { g.fillStyle = css('--node'); g.fill(); }
-    else if (p.h) { g.fillStyle = islandColor(p.i); g.fill(); g.strokeStyle = css('--ink'); g.lineWidth = 2; g.stroke(); }
-    else { g.fillStyle = css('--surface'); g.fill(); g.strokeStyle = islandColor(p.i); g.lineWidth = 2.5; g.stroke(); }
-    if (p.f) { g.strokeStyle = css('--pocket'); g.lineWidth = 2.5; g.beginPath(); g.arc(x, y, r + 4, 0, Math.PI * 2); g.stroke(); }
-    if (p.k) { g.fillStyle = css('--muted'); g.font = '10px JetBrains Mono, monospace'; g.textAlign = 'center'; g.fillText('🍬' + p.k, x, y - r - 5); }
+    g.fillStyle = !p.c || !p.i ? node : p.h ? ink : muted; g.fill();
+    if (p.f) { g.strokeStyle = pocket; g.lineWidth = 2; g.beginPath(); g.arc(x, y, r + 2.5, 0, Math.PI * 2); g.stroke(); }
   }
+}
+
+/* ---------- charts: small multiples, one measure each, crosshair + tooltip ---------- */
+const SERIES = [
+  { id: 0, label: 'entregadas', value: r => r[1] ? r[2] / r[1] * 100 : 0, fmt: v => v.toFixed(0) + ' %', max: () => 100 },
+  { id: 1, label: 'en bolsillos', value: r => r[3], fmt: v => String(Math.round(v)) },
+  { id: 2, label: 'islas', value: r => r[4], fmt: v => String(Math.round(v)) },
+  { id: 3, label: 'caramelos', value: r => r[6], fmt: v => String(Math.round(v)) }
+];
+let lastHistory = [];
+function charts(h) {
+  lastHistory = h || [];
+  for (const s of SERIES) chart(s);
+  const rows = lastHistory.slice(-12).reverse();
+  $('datatable').innerHTML = rows.length ? `<table><tr><th>min</th><th>Cartas</th><th>Entregadas</th><th>Bolsillos</th><th>Islas</th><th>Ferrys</th><th>Caramelos</th></tr>${rows.map(r =>
+    `<tr><td class="m">${(r[0] / 60).toFixed(1)}</td><td class="m">${r[1]}</td><td class="m">${r[2]}</td><td class="m">${r[3]}</td><td class="m">${r[4]}</td><td class="m">${r[5]}</td><td class="m">${r[6]}</td></tr>`).join('')}</table>` : '';
+}
+function chart(s, hoverX) {
+  const cv = $('c' + s.id), dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const h = lastHistory; const L = 34, R = 6, T = 6, B = 16;
+  const vals = h.map(s.value);
+  $('v' + s.id).textContent = vals.length ? s.fmt(vals[vals.length - 1]) : '—';
+  if (h.length < 2) return;
+  const t0 = h[0][0], t1 = h[h.length - 1][0];
+  const vmax = s.max ? s.max() : Math.max(2, 2 * Math.ceil(Math.max(...vals) * 1.1 / 2)); // even, so the middle line is a whole number
+  const X = t => L + (t - t0) / Math.max(1, t1 - t0) * (W - L - R), Y = v => T + (1 - v / vmax) * (H - T - B);
+  g.strokeStyle = css('--line'); g.lineWidth = 1; g.fillStyle = css('--muted'); g.font = '10px JetBrains Mono, monospace';
+  for (const v of [0, vmax / 2, vmax]) { g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(W - R, Y(v)); g.stroke(); g.textAlign = 'right'; g.fillText(s.fmt(v), L - 4, Y(v) + 3); }
+  g.textAlign = 'left'; g.fillText((t0 / 60).toFixed(0) + ' min', L, H - 3); g.textAlign = 'right'; g.fillText((t1 / 60).toFixed(0) + ' min', W - R, H - 3);
+  g.strokeStyle = css('--grito'); g.lineWidth = 2; g.lineJoin = 'round'; g.beginPath();
+  h.forEach((r, i) => { const x = X(r[0]), y = Y(vals[i]); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+  const tip = cv.parentElement.querySelector('.tip');
+  if (hoverX == null) { if (tip) tip.remove(); return; }
+  let best = 0; for (let i = 1; i < h.length; i++) if (Math.abs(X(h[i][0]) - hoverX) < Math.abs(X(h[best][0]) - hoverX)) best = i;
+  const x = X(h[best][0]), y = Y(vals[best]);
+  g.strokeStyle = css('--muted'); g.lineWidth = 1; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x, T); g.lineTo(x, H - B); g.stroke(); g.setLineDash([]);
+  g.fillStyle = css('--grito'); g.strokeStyle = css('--surface'); g.lineWidth = 2; g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); g.stroke();
+  const el = tip || Object.assign(document.createElement('div'), { className: 'tip' }); if (!tip) cv.parentElement.appendChild(el);
+  el.textContent = `${(h[best][0] / 60).toFixed(1)} min · ${s.fmt(vals[best])} ${s.label}`;
+  el.style.left = Math.min(W - 150, Math.max(0, x - 60)) + 'px'; el.style.top = (cv.offsetTop - 26) + 'px';
+}
+for (const s of SERIES) {
+  const cv = $('c' + s.id);
+  cv.addEventListener('mousemove', e => chart(s, e.offsetX));
+  cv.addEventListener('mouseleave', () => chart(s, null));
 }
 
 document.addEventListener('click', e => {
