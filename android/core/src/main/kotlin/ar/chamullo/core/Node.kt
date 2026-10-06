@@ -41,7 +41,9 @@ class Node(
     private var lastBeacon = Long.MIN_VALUE / 2
     private var newNeighbor = false
     private class PlazaEntry(val id: String, val name: String, val text: String, val ts: Long, val mine: Boolean, val heardBy: LinkedHashSet<String> = LinkedHashSet())
-    private val plaza = ArrayList<PlazaEntry>()
+    private val plaza = ArrayList<PlazaEntry>().apply {
+        for (l in store.loadPlaza()) add(PlazaEntry(l.id, l.name, l.text, l.ts, l.mine, LinkedHashSet(l.heardBy)))
+    }
 
     var shoutsSent = 0L; private set
     var framesHeard = 0L; private set
@@ -94,7 +96,7 @@ class Node(
         return p.id
     }
 
-    private fun keepPlaza(e: PlazaEntry) { plaza += e; while (plaza.size > 200) plaza.removeAt(0) }
+    private fun keepPlaza(e: PlazaEntry) { plaza += e; while (plaza.size > 200) plaza.removeAt(0); store.savePlaza(plaza()) }
 
     fun onFrame(bytes: ByteArray): List<NodeEvent> {
         framesHeard++
@@ -128,6 +130,7 @@ class Node(
     private fun onHeard(h: Heard): List<NodeEvent> {
         val mine = plaza.firstOrNull { it.mine && it.id == h.plazaId } ?: return emptyList()
         if (!h.verify() || !mine.heardBy.add(h.name.ifBlank { h.nodeId.toHex().take(8) })) return emptyList()
+        store.savePlaza(plaza())
         return listOf(NodeEvent.PlazaHeard(h.plazaId, h.name))
     }
 

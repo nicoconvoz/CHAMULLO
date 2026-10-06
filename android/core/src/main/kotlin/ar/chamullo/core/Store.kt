@@ -12,12 +12,17 @@ interface Store {
     fun saveMessage(m: Message)
     fun messages(peer: ByteArray): List<Message>
     fun setState(msgId: String, state: MessageState)
+    fun savePlaza(lines: List<PlazaLine>) {}
+    fun loadPlaza(): List<PlazaLine> = emptyList()
 }
 
 class MemoryStore : Store {
     private val contacts = LinkedHashMap<String, Card>()
     private val messages = mutableListOf<Message>()
+    private var plaza = emptyList<PlazaLine>()
 
+    override fun savePlaza(lines: List<PlazaLine>) { plaza = lines }
+    override fun loadPlaza() = plaza
     override fun saveContact(card: Card) { contacts[card.nodeId.toHex()] = card }
     override fun contacts() = contacts.values.toList()
     override fun saveMessage(m: Message) { messages += m }

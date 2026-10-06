@@ -129,4 +129,20 @@ class NodeTest {
         assertTrue(air.events["caro"].orEmpty().none { it is NodeEvent.PlazaReceived }, "the plaza is only for those within earshot")
         assertEquals(listOf("Beto"), air.node("ana").plaza().single { it.id == id }.heardBy)
     }
+
+    @Test
+    fun `plaza - the history survives an app restart`() {
+        val store = MemoryStore()
+        var now = 0L
+        val ana = Identity.generate("Ana")
+        val beto = Node(Identity.generate("Beto"), MemoryStore()) { now }
+        val first = Node(ana, store) { now }
+        val id = first.sendPlaza("¿me escuchan?")
+        for (f in first.drainOutbox()) beto.onFrame(f)
+        for (f in beto.drainOutbox()) first.onFrame(f)
+        val again = Node(ana, store) { now } // the app was closed and opened again
+        val line = again.plaza().single { it.id == id }
+        assertEquals("¿me escuchan?", line.text)
+        assertEquals(listOf("Beto"), line.heardBy)
+    }
 }
