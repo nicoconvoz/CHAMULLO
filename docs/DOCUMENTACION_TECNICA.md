@@ -443,3 +443,15 @@ La billetera de la app paga la recompensa en **Lucas**, la moneda propia de CHAM
 
 En el puente fijo, Android le pide permiso al dueño la primera vez, y eso todavía no se probó en celulares reales.
 
+## Bitácora 0.5.1 a 0.5.5
+
+| Versión | Qué cambió | Por qué |
+|---|---|---|
+| 0.5.1 | Los períodos de la libreta cuentan desde la página génesis. La clave del fundador (`6e63751b…`) quedó escrita en el protocolo y se sacó el botón "Soy el fundador". Un libro guardado que rompe las reglas se descarta al arrancar | En el campo, la libreta contaba desde 1970 y cerraba un período cada 10 s: 31 páginas y 620 Lucas falsas en minutos. Con varios fundadores, el pueblo se partía en libretas que nunca se juntan |
+| 0.5.2 | La app busca el relé sola en `relays.txt` de la página. Queda un solo botón, sin direcciones | El Capitán: "tiene que ser todo fácil" |
+| 0.5.3 | El puente por Internet va por **Nostr** (spec 05 §11.2), con firma BIP-340, eventos NIP-01, un WebSocket propio y 6 relés públicos. Sin servidor propio | Idea del Capitán: una red P2P que se arma sola |
+| 0.5.4 | "Prestar Internet y ganar Lucas" aparece en la presentación y en la pantalla principal | Estaba escondido en Diagnóstico |
+| 0.5.5 | La búsqueda de islas va un paso por vez, reintenta si el Wi-Fi Direct está ocupado y relanza después de formar un grupo. Antes de fundar, el celular mira 30 a 60 s (spec 07 §6.3) | En el campo, cada celular fundó su isla y la búsqueda contestaba `BUSY` (código 2): nunca se vieron |
+
+**Cómo se documenta:** cada cambio va a su spec (la regla) y a esta bitácora (qué y por qué). El informe del gemelo se regenera con `./gradlew :simulator:run`.
+
