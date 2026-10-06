@@ -805,7 +805,8 @@ class WifiIslands(
         private val BEAT = "CHBEAT".toByteArray()
         const val PIPE_TICK_MS = 1_000L
         const val LINK_BEAT_MS = 2_000L
-        const val LINK_SILENT_MS = 8_000L
+        // 15 s, not 8 (field test 0.10.0): 8 s threw away pipes in dips the signal recovered from by itself, every ~30 s.
+        const val LINK_SILENT_MS = 15_000L
         const val REPAIR_MS = 3_000L
         const val CONNECT_TRIES = 6
         const val CONNECT_TIMEOUT_MS = 2_500

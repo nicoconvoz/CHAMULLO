@@ -33,11 +33,11 @@ class MicroTest {
     }
 
     @Test
-    fun `parity costs about a quarter more micros`() {
+    fun `grito+ spares cost half as many micros again, the old parity a quarter`() {
         val frame = ByteArray(200)
         val data = (frame.size + 2 + Micro.DATA - 1) / Micro.DATA
-        val total = Micro.split(frame).size
-        assertTrue(total - data in 1..(data + 3) / 4, "data $data, total $total")
+        assertTrue(Micro.split(frame).size - data == (data + 1) / 2, "grito+: data $data")
+        assertTrue(Micro.splitXor(frame).size - data in 1..(data + 3) / 4, "old parity: data $data")
     }
 
     @Test
@@ -57,9 +57,9 @@ class MicroTest {
     }
 
     @Test
-    fun `two lost micros in the same group cannot be guessed, so nothing comes out half-built`() {
+    fun `old parity - two lost micros in the same group cannot be guessed, so nothing comes out half-built`() {
         val frame = ByteArray(200) { 9 }
-        val micros = Micro.split(frame)
+        val micros = Micro.splitXor(frame)
         val groups = micros.size - (frame.size + 2 + Micro.DATA - 1) / Micro.DATA
         assertNull(rebuild(micros.filterIndexed { i, _ -> i != 0 && i != groups }))
     }

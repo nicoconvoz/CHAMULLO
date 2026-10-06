@@ -183,6 +183,20 @@ Los resultados reemplazan los supuestos del simulador.
 4. **Coexistencia:** los gritos comparten 2,4 GHz con Bluetooth y Wi-Fi de todo el entorno. Hay que medir el impacto en ciudades densas.
 5. **UUID:** registrar un UUID de servicio de 16 bits ante el Bluetooth SIG ahorraría 14 bytes por grito.
 
+## 4.1 GRITO+: repuestos Reed-Solomon (0.10.1)
+
+El grito común (Bluetooth sin largo alcance, el que tiene cualquier celular) parte cada trama en micros de 22 bytes. Hasta 0.10.0 agregaba un comodín XOR por grupo: si se perdían dos micros del mismo grupo, se perdía la trama.
+
+| Pieza | Regla |
+|---|---|
+| Micro GRITO+ | `0xC7 | id(2) | índice(1) | n(1) | r(1) | pedazo(16)`: misma forma que el micro viejo, con otra marca |
+| Repuestos | `r = n / 2` repuestos Reed-Solomon sobre GF(256) (matriz de Cauchy sistemática, `Erasure.kt`). **Cualquier** `n` de los `n + r` micros arman la trama, sean cuales sean los perdidos |
+| Qué repara | Pérdidas, no paquetes dañados: el CRC de la radio tira los dañados enteros y la app nunca los ve |
+| Qué gana | Con la misma cantidad de micros de más que un repuesto cada dos, aguanta perder un tercio de los gritos. Convierte la zona donde "llega a veces" en zona donde "llega siempre, más lento". **No multiplica el alcance:** la señal se cae como un precipicio, y esto gana quizás un 20 a 40 % de distancia |
+| Compatible | Los micros viejos (`0xC5`, comodín XOR) se siguen entendiendo |
+
+- Medido en el Moto E7 Plus (0.10.0): el chip contesta **"extendido: false, largo alcance: false"**. No tiene LE Coded ni anuncios extendidos, así que en ese celular GRITO+ es la mejor robustez posible por Bluetooth.
+
 ## 12. El "LoRa de mentira": Bluetooth LE de largo alcance (0.10.0)
 
 **Idea del Capitán:** usar las antenas que ya trae el celular como un LoRa casero. Un celular no puede hacer LoRa de verdad: LoRa es una forma de modular que vive en el chip (y en otra banda, 915 MHz en Argentina), y ninguna app puede reprogramar la radio de Wi-Fi o Bluetooth. Pero Bluetooth 5 trae su primo: **LE Coded PHY**, que codifica y repite cada bit (S=8, 125 kbit/s) y llega unas cuatro veces más lejos que el Bluetooth común. CHAMULLO ya grita en ese modo cuando el chip lo tiene (`GritoRadio`, modo `LONG`).
