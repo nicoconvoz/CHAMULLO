@@ -21,6 +21,7 @@ class GritoService : Service() {
     private var lastHello = 0L
     private var running = false
     private var locator: Locator? = null
+    private var relay: ar.chamullo.core.RelayBridge? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -48,6 +49,12 @@ class GritoService : Service() {
         islands.onHeading = { heading -> Hub.post { it.setHeading(heading) } }
         radios.forEach { it.start() }
         locator = Locator(this) { lat, lon -> Hub.post { it.locate(lat, lon) } }.also { it.start() }
+        // The Internet bridge (Discovery & Routing §11): only if the owner lends it and there is a relé to talk to.
+        val relayUrl = Settings.relay(this)
+        if (Settings.lendInternet(this) && relayUrl.isNotBlank()) {
+            relay = ar.chamullo.core.RelayBridge(relayUrl, identity, incoming).also { r -> r.start(); Hub.relay = r; Hub.worker.post { node.bridge = r } }
+            FieldLog.add("PUENTE", "presto Internet por el relé $relayUrl")
+        }
         running = true
         Hub.worker.post(object : Runnable {
             override fun run() {
@@ -59,6 +66,7 @@ class GritoService : Service() {
                     val on = radios.filter { it.active }
                     for (f in n.drainOutbox()) on.forEach { it.shout(f) }
                     islands.myCell = n.cell(); islands.stuck = n.stuckZone()
+                    n.cell()?.let { c -> relay?.place(c) }
                 }
                 Hub.worker.postDelayed(this, TICK_MS)
             }
@@ -123,6 +131,7 @@ class GritoService : Service() {
     override fun onDestroy() {
         running = false
         locator?.stop()
+        relay?.stop(); Hub.relay = null
         radios.forEach { it.stop() }
         Hub.node = null
         super.onDestroy()

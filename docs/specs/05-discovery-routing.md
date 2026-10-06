@@ -248,6 +248,23 @@ red local → isla → ferry → pueblo → 🕳️ salto grande → enrutamient
 - **Cobro:** quien la sube escribe su renglón como cualquier cartero, y los que la bajan también, al seguir el eco. Cobran con los mismos recibos. Los pagos también cruzan por el puente.
 - **Diversificado**: la entrega se reparte entre varios caminos por Internet a la vez, para no depender de uno solo.
 - La carta sigue sellada de punta a punta (§7): el tramo por Internet ve lo mismo que un cartero, nada más.
-- Implementado en el núcleo (`Bridge`, `Node`) y en el gemelo (la nube de `World`). Pendiente en la app: la nube real (un servidor o un directorio entre pares) y medir los bytes prestados.
+- Implementado en el núcleo (`Bridge`, `Node`), en el gemelo (la nube de `World`) y en la app, con el relé de §11.1.
+
+### 11.1 El relé: la nube que cualquiera puede alojar
+
+Un servidor chico (`android/relay`, `./gradlew :relay:run`, puerto 47475). No depende de ningún proveedor: lo levanta quien quiera.
+
+| Pedido | Firma | Qué hace |
+|---|---|---|
+| `POST /register` | sí | Cuerpo: mi **manzana** (nunca la celda). Vale 3 min; el puente lo repite cada minuto |
+| `GET /peers?zone=…` | no | Los puentes de esa zona, uno por línea. Cada vez empieza por otro, para repartir la carga. Una manzana sin puentes usa los de su barrio |
+| `POST /send?to=…` | sí, y solo puentes anotados | Una trama (hasta 64 KB) para el buzón de ese puente. Cuenta los bytes de quien la manda |
+| `GET /inbox` | sí | Espera hasta 20 s y entrega las tramas, cada una con su largo adelante |
+
+- **Firma:** `sig = sign_node("RELAY", método + " " + ruta + "
+" + ts + "
+" + H(cuerpo))`, en los encabezados `X-Chamullo-Id`, `X-Chamullo-Ts` y `X-Chamullo-Sig`. Vale ±5 min. Nadie lee el buzón de otro ni se anota en su nombre.
+- El relé guarda todo en memoria: si se reinicia, en un minuto los puentes se anotan de nuevo. Los buzones guardan hasta 500 tramas por hasta una hora.
+- **En la app:** Diagnóstico → "Puente por Internet". Dirección del relé y "Prestar Internet", apagado por defecto (son los datos del dueño). El cliente (`RelayBridge`) nunca bloquea al nodo: el directorio responde desde un caché que se refresca solo, y las tramas salen de una cola.
 - El puente cobra en **Lucas** por un servicio real: eso le da a la moneda su respaldo (Economy & Governance §13).
 

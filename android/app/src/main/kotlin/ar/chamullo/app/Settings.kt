@@ -10,4 +10,14 @@ object Settings {
     fun bluetooth(c: Context) = prefs(c).getBoolean("bluetooth", false)
 
     fun setBluetooth(c: Context, on: Boolean) = prefs(c).edit().putBoolean("bluetooth", on).apply()
+
+    /** The relé of the Internet bridge (Discovery & Routing §11.1): anyone can host one. Empty: no bridge. */
+    fun relay(c: Context) = prefs(c).getString("relay", "") ?: ""
+
+    fun setRelay(c: Context, url: String) = prefs(c).edit().putString("relay", url.trim()).apply()
+
+    /** Lend my Internet as a bridge for big jumps. Off by default: it is the owner's data plan. */
+    fun lendInternet(c: Context) = prefs(c).getBoolean("lendInternet", false)
+
+    fun setLendInternet(c: Context, on: Boolean) = prefs(c).edit().putBoolean("lendInternet", on).apply()
 }
