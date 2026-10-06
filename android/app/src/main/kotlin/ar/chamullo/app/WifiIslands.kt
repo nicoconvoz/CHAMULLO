@@ -494,7 +494,10 @@ class WifiIslands(
             val ch = channel ?: return
             p2p!!.requestConnectionInfo(ch) { info ->
                 if (info == null || !info.groupFormed) {
-                    if (!host && island != null && !busy) memberLost("me quedé sin isla")
+                    // Only a member that was really inside (its pipe opened) has fallen off. While joining, Android sends
+                    // "not connected yet" halfway through; taking that as a fall cancelled every join (field test 0.9.6:
+                    // since 0.9.4 Mito never got in). A join that never completes is caught by JOIN_GRACE_MS in tendPipes.
+                    if (!host && island != null && !busy && piped) memberLost("me quedé sin isla")
                     if (host) islandLost("Android desarmó mi isla")
                     return@requestConnectionInfo
                 }
@@ -548,7 +551,7 @@ class WifiIslands(
             startedAt = System.currentTimeMillis() // if it is not found, look around before founding
         } else {
             FieldLog.add("ISLA", "$why: la isla ${was?.take(6) ?: ""} no contestó")
-            channel?.let { ch -> p2p?.cancelConnect(ch, null) } // a try still pending would answer BUSY to the next one
+            channel?.let { ch -> p2p?.cancelConnect(ch, null) } // only after JOIN_GRACE_MS: a try still pending would answer BUSY
         }
         piped = false
     }
@@ -775,9 +778,9 @@ class WifiIslands(
         // A Wi-Fi Direct group owner answers at this address on its own network, also to plain Wi-Fi clients.
         const val GROUP_OWNER = "192.168.49.1"
         const val MAX_FRAME = 1_048_576
-        const val DISCOVER_MS = 30_000L
-        const val FOUND_AFTER_MS = 8_000L
-        const val FOUND_SPREAD_MS = 7_000L
+        const val DISCOVER_MS = 60_000L
+        const val FOUND_AFTER_MS = 20_000L
+        const val FOUND_SPREAD_MS = 10_000L
         const val FOUND_CONNECTED_MS = 3_000L
         const val DECIDE_MS = 5_000L
         const val CARTEL_TTL_MS = 60_000L

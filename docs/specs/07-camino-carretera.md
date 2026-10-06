@@ -199,8 +199,15 @@ Una isla **es** la red propia de CHAMULLO: un grupo Wi-Fi Direct (`DIRECT-CH-xxx
 |---|---|
 | El cartel lo dice | `w = 1`: mi celular está colgado de un Wi-Fi de casa. Se vuelve a colgar el cartel apenas cambia |
 | Radar | Un cartel nuevo o cambiado se decide en 300 ms, sin esperar la vuelta de 5 s |
-| Tiempos | Mirar antes de fundar: 8 a 15 s el libre, 3 s el de Wi-Fi de casa. Buscar carteles: cada 30 s. Esperas para mudarse: 20 s si el cartel dice que no me ve, 30 s si solo la veo en la lista |
+| Tiempos | Mirar antes de fundar: 20 a 30 s el libre (le da tiempo a ver la isla del de Wi-Fi de casa), 3 s el de Wi-Fi de casa. Buscar carteles: cada 60 s, como cuando funcionaba. Esperas para mudarse: 20 s si el cartel dice que no me ve, 30 s si solo la veo en la lista |
 | Sumándose | Mientras un celular se está sumando (hasta que abre el caño o pasan 30 s) no se decide nada más |
+
+### 6.14 Sumarse sin que lo cancele un aviso a mitad de camino (0.9.7)
+
+**Lo que pasó:** desde 0.9.4, el celular de Mito nunca terminó de subirse a ninguna isla: el Moto no registraba ni un intento y Android lo veía siempre sin grupo (`group_capab=0x0`). La causa: mientras un celular se sube, Android avisa a mitad del saludo que "todavía no está conectado". La regla de 0.9.4 tomaba ese aviso como una caída, cancelaba la conexión en curso y empezaba de nuevo, para siempre.
+
+- Solo se da por caído un miembro que **estuvo adentro de verdad** (llegó a abrir el caño con el anfitrión), como en 0.9.3.
+- Un intento que no termina se corta recién a los `JOIN_GRACE_MS = 30 s`, y recién ahí se cancela.
 
 ## 7. Llamadas y videollamadas en la isla (0.8.0)
 
