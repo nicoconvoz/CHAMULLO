@@ -155,8 +155,9 @@ class WifiIslands(
                 closeLinks(); unbridge(); island = null; host = false; busy = false; carteles.clear(); members.clear(); ferrying = null
                 seenSince.clear(); seenLast.clear()
             } else {
-                FieldLog.add("ISLA", "volvió el Wi-Fi: busco islas")
+                FieldLog.add("ISLA", "volvió el Wi-Fi: miro alrededor antes de fundar")
                 lastError = null
+                startedAt = System.currentTimeMillis()
                 publishCartel()
                 handler.post(discoverLoop)
             }
@@ -265,8 +266,15 @@ class WifiIslands(
 
     // Before founding an island, look around a while: one founds, the other (still looking) joins it. Each phone waits a
     // different time, by its id, so two phones that start together do not found at the same moment.
-    private val startedAt = System.currentTimeMillis()
-    private val lookFirstMs = FOUND_AFTER_MS + (me.take(4).toLong(16) % FOUND_SPREAD_MS)
+    // It starts again whenever the Wi-Fi comes back or my island falls (field test 0.9.1: after the Wi-Fi came back both
+    // phones founded at once and never met). A phone connected to a Wi-Fi network founds first: in the field it saw
+    // nobody, so waiting does not help it, while a free phone looks longer and joins it (Camino y Carretera §6.9).
+    @Volatile private var startedAt = System.currentTimeMillis()
+    private val spreadMs = me.take(4).toLong(16) % FOUND_SPREAD_MS
+    private fun lookFirstMs() = if (onWifiNetwork()) FOUND_CONNECTED_MS else FOUND_AFTER_MS + spreadMs
+
+    @Suppress("DEPRECATION")
+    private fun onWifiNetwork() = runCatching { (wifi?.connectionInfo?.networkId ?: -1) != -1 }.getOrDefault(false)
 
     /* ---------- decisions ---------- */
 
@@ -282,7 +290,7 @@ class WifiIslands(
                 val a = Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn, bridgingTo, canBridge,
                     HashMap(seenSince)),
                     carteles.values.map { it.first }, now, myCell, stuck)
-                if (a == IslandAction.Host && island == null && now - startedAt < lookFirstMs) Unit // still looking around
+                if (a == IslandAction.Host && island == null && now - startedAt < lookFirstMs()) Unit // still looking around
                 else act(a)
             }
             handler.postDelayed(this, DECIDE_MS)
@@ -423,6 +431,7 @@ class WifiIslands(
         if (!host || busy || System.currentTimeMillis() - hostSince < HOST_GRACE_MS) return
         FieldLog.add("ISLA", "$why: la vuelvo a armar o me sumo a otra")
         closeLinks(); members.clear(); host = false; island = null
+        startedAt = System.currentTimeMillis() // look around before founding again
         publishCartel()
     }
 
@@ -477,6 +486,9 @@ class WifiIslands(
         if (direct != null) direct.send(frame) else for (l in links) l.send(frame)
     }
 
+    /** My IPv4 address in the island (192.168.49.x), for the voice's UDP lane (Camino y Carretera §7.1). */
+    fun islandIp(): ByteArray? = links.firstNotNullOfOrNull { it.localIp() }
+
     private fun isDirect(f: ByteArray) = f.size > 5 && f[0] == 0x43.toByte() && f[1] == 0x48.toByte() && f[3].toInt() == 0x01 &&
         (f[4].toLong() == ar.chamullo.core.Packet.LINK_TUNNEL || f[4].toLong() == ar.chamullo.core.Packet.LINK_CALL)
 
@@ -521,6 +533,7 @@ class WifiIslands(
         private val handshake = Handshake(identity)
         @Volatile private var trusted = false
         val peer: ByteArray? get() = if (trusted) handshake.peer else null
+        fun localIp(): ByteArray? = (socket.localAddress as? java.net.Inet4Address)?.address?.takeIf { open }
 
         fun start() {
             links += this
@@ -614,6 +627,7 @@ class WifiIslands(
         const val DISCOVER_MS = 60_000L
         const val FOUND_AFTER_MS = 30_000L
         const val FOUND_SPREAD_MS = 30_000L
+        const val FOUND_CONNECTED_MS = 10_000L
         const val DECIDE_MS = 5_000L
         const val CARTEL_TTL_MS = 60_000L
         const val SEEN_GRACE_MS = 180_000L

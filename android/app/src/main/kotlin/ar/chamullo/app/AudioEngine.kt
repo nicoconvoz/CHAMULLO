@@ -63,18 +63,42 @@ class AudioEngine(private val context: Context, private val onPiece: (ByteArray)
         runCatching { r.stop() }; runCatching { r.release() }
     }
 
-    // A small jitter buffer: if the pieces pile up (the island stalled), drop the oldest so the voice stays live.
+    // The jitter buffer (Camino y Carretera §7.1): gather [PREBUFFER] pieces before sounding; when a piece is missing,
+    // fill its 20 ms with the last one, softer, and then silence, instead of letting the speaker run dry; if pieces pile
+    // up (the island stalled), keep only the newest so the voice stays live.
     private fun play() {
         val t = track ?: return
+        val silence = ByteArray(PIECE)
+        var last: ByteArray? = null
+        var missing = 0
         runCatching {
             t.play()
             while (running) {
-                val p = incoming.poll(200, TimeUnit.MILLISECONDS) ?: continue
-                while (incoming.size > MAX_QUEUED) incoming.poll()
-                t.write(p, 0, p.size)
+                if (incoming.size < PREBUFFER && missing == 0 && last == null) { Thread.sleep(5); continue } // gathering
+                if (incoming.size > MAX_QUEUED) while (incoming.size > PREBUFFER) incoming.poll()
+                val p = incoming.poll(PIECE_MS + 5, TimeUnit.MILLISECONDS)
+                val out = when {
+                    p != null -> { missing = 0; last = p; p }
+                    missing++ == 0 && last != null -> softer(last!!)
+                    else -> silence
+                }
+                if (missing > LOST_PIECES) { last = null; missing = 0 } // a real gap: gather again
+                t.write(out, 0, out.size)
             }
         }
         runCatching { t.stop() }; runCatching { t.release() }
+    }
+
+    // Half volume: 16-bit little-endian samples.
+    private fun softer(piece: ByteArray): ByteArray {
+        val out = piece.copyOf()
+        var i = 0
+        while (i + 1 < out.size) {
+            val v = ((out[i + 1].toInt() shl 8) or (out[i].toInt() and 0xff)).toShort() / 2
+            out[i] = v.toByte(); out[i + 1] = (v shr 8).toByte()
+            i += 2
+        }
+        return out
     }
 
     fun onRemote(piece: ByteArray) { if (running && piece.size <= PIECE * 4) incoming.offer(piece) }
@@ -95,7 +119,12 @@ class AudioEngine(private val context: Context, private val onPiece: (ByteArray)
         const val RATE = 16_000
         /** 20 ms at 16 kHz, 16-bit mono. */
         const val PIECE = RATE / 50 * 2
-        /** 160 ms waiting at most. */
-        const val MAX_QUEUED = 8
+        const val PIECE_MS = 20L
+        /** 60 ms gathered before sounding. */
+        const val PREBUFFER = 3
+        /** 200 ms waiting at most. */
+        const val MAX_QUEUED = 10
+        /** After this many missing pieces in a row (100 ms) it is a gap, not a hiccup: gather again. */
+        const val LOST_PIECES = 5
     }
 }

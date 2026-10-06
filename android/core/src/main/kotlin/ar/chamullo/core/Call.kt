@@ -143,3 +143,48 @@ class CallSession(val id: Long, val peer: ByteArray, val outgoing: Boolean, val 
         const val PING_MS = 2_000L
     }
 }
+
+/**
+ * The media lane of a call (Camino y Carretera §7.1): voice and picture go as UDP datagrams straight to the other
+ * phone, because a lost piece is better skipped than waited for. The pipe (TCP) carries them too until the other side
+ * says, in its ping, that UDP reaches it. A piece that arrives both ways plays once.
+ */
+class MediaRoute {
+    /** The other phone's IPv4 address in the island, from its ring or its answer. */
+    @Volatile var peer: ByteArray? = null
+    @Volatile private var lastUdpIn = Long.MIN_VALUE / 2
+    @Volatile private var peerHearsUdp = false
+    private val seen = LinkedHashSet<String>()
+
+    fun useUdp() = peer != null
+
+    fun alsoPipe() = peer == null || !peerHearsUdp
+
+    fun onUdpIn(now: Long) { lastUdpIn = now }
+
+    /** What my ping says: 1 if UDP media reached me in the last [UDP_FRESH_MS]. */
+    fun pingPayload(now: Long) = byteArrayOf(if (now - lastUdpIn <= UDP_FRESH_MS) 1 else 0)
+
+    fun onPing(payload: ByteArray) { peerHearsUdp = payload.firstOrNull()?.toInt() == 1 }
+
+    /** Whether a piece (known by its nonce) is new: the copy that comes the other way is dropped. */
+    @Synchronized fun firstTime(nonce: ByteArray): Boolean {
+        if (!seen.add(nonce.toHex())) return false
+        while (seen.size > MAX_SEEN) seen.remove(seen.first())
+        return true
+    }
+
+    companion object {
+        const val UDP_FRESH_MS = 3_000L
+        const val MAX_SEEN = 512
+
+        fun ring(video: Boolean, ip: ByteArray?) = byteArrayOf(if (video) 1 else 0) + (ip ?: ByteArray(0))
+
+        fun answer(ip: ByteArray?) = ip ?: ByteArray(0)
+
+        fun isVideo(ring: ByteArray) = ring.firstOrNull()?.toInt() == 1
+
+        /** An IPv4 address at [offset], if the piece carries one (phones before 0.9.2 do not). */
+        fun address(data: ByteArray, offset: Int): ByteArray? = if (data.size >= offset + 4) data.copyOfRange(offset, offset + 4) else null
+    }
+}

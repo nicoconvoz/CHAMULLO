@@ -134,6 +134,14 @@ Una isla **es** la red propia de CHAMULLO: un grupo Wi-Fi Direct (`DIRECT-CH-xxx
 - Por si el aviso no llega, cada `ALIVE_CHECK_MS = 30 s` el anfitrión pregunta si su grupo sigue existiendo (`requestGroupInfo`).
 - Los primeros `HOST_GRACE_MS = 15 s` después de fundar no cuentan: el grupo todavía se está armando.
 
+### 6.9 Cuando vuelve el Wi-Fi: mirar antes de fundar (0.9.2)
+
+**Lo que pasó:** los dos celulares estaban en la misma isla y hablaban por llamada. Se apagó y se prendió el Wi-Fi en los dos, y cada uno fundó su isla **a los 4 segundos**, sin mirar. El del Capitán, conectado a la red de la casa, nunca ve a nadie; quedaron dos islas solas, a centímetros, sin encontrarse.
+
+- La espera de "mirar antes de fundar" (`FOUND_AFTER_MS` + reparto por id) vuelve a empezar cuando vuelve el Wi-Fi y cuando se cae mi isla, no solo al arrancar la app.
+- **Funda primero el que está conectado a una red Wi-Fi** (`FOUND_CONNECTED_MS = 10 s`): en el campo no vio a nadie, así que esperar no le sirve. El que está libre mira más (30 a 60 s), encuentra esa isla y se suma.
+- Si igual quedan dos islas, sigue valiendo "el que ve, se mueve" (§6.7).
+
 ## 7. Llamadas y videollamadas en la isla (0.8.0)
 
 Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en celular. Por eso anda **solo dentro de la isla** (o por un puente fijo), donde todo está a uno o dos saltos por Wi-Fi Direct.
@@ -147,6 +155,18 @@ Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en
 | Voz | `AUDIO`: 20 ms de PCM 16 kHz mono de 16 bits (640 B, 256 kbit/s), sin códec, con el cancelador de eco y el supresor de ruido del celular. Del otro lado, a lo sumo 160 ms en cola: si se junta más, se tira lo viejo |
 | Video | `VIDEO`: H.264 640×480, 15 cuadros por segundo, 800 kbit/s, con el codificador y el decodificador del propio celular. Cada pedazo lleva banderas (configuración, cuadro clave, cámara apagada, "mandame un cuadro clave") y el giro de la cámara. La configuración viaja antes de cada cuadro clave |
 | Vida | `PING` cada 2 s. Sin voz ni señales en 15 s: "se cortó" |
+
+### 7.1 La voz por su propio carril (0.9.2)
+
+**Lo que pasó:** con obstáculos, a pocos metros, la voz se cortaba. Iba por el caño TCP de la isla: cuando se pierde un paquete, TCP frena todo lo que viene detrás hasta reenviarlo, y eso es un corte de un cuarto de segundo o más.
+
+| Pieza | Regla |
+|---|---|
+| Carril de voz | `AUDIO` va en datagramas UDP (puerto 47476) directo a la dirección del otro celular en la isla (192.168.49.x). Un pedazo perdido se saltea; los que siguen no esperan |
+| Direcciones | `RING` lleva, después del byte de video, mi dirección IPv4 en la isla; `ANSWER` lleva la del que atiende. Un celular viejo no la manda y todo sigue por el caño |
+| Repuesto | La voz va también por el caño hasta que el otro dice, en su `PING`, que le llega UDP (1 = sí). Si deja de llegarle, vuelve el caño. Un pedazo que llega por los dos lados suena una vez (por su nonce) |
+| Colchón | Junta 3 pedazos (60 ms) antes de sonar. Si falta uno, repite el anterior a media voz y después silencio; tras 5 faltantes seguidos vuelve a juntar. Más de 10 en cola (200 ms): se queda con los últimos |
+| Video | Sigue por el caño: un cuadro no entra en un datagrama de 1400 bytes |
 
 - La pantalla es oscura como la de ICEBREAK: atender o rechazar; durante la llamada, micrófono, altavoz, cámara, girar y colgar. Suena aunque el celular esté bloqueado.
 - Las reglas viven en el núcleo (`CallSession`, `CallMsg` en `Call.kt`, con pruebas en `CallTest.kt`); la voz y el video, en la app (`AudioEngine`, `VideoEngine`).

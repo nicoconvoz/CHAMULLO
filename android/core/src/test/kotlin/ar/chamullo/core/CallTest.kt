@@ -107,4 +107,50 @@ class CallTest {
             assertEquals(end, c.end)
         }
     }
+
+    /* ---------- the media lane: voice and picture over UDP, the pipe as a spare (field test 0.9.1) ---------- */
+
+    @Test
+    fun `until the other side confirms it hears UDP, media also goes through the pipe`() {
+        val r = MediaRoute()
+        assertTrue(!r.useUdp() && r.alsoPipe(), "without its address, only the pipe")
+        r.peer = byteArrayOf(192.toByte(), 168.toByte(), 49, 1)
+        assertTrue(r.useUdp() && r.alsoPipe(), "both, while it says nothing")
+        r.onPing(byteArrayOf(1))
+        assertTrue(r.useUdp() && !r.alsoPipe(), "it hears UDP: the pipe is free")
+        r.onPing(byteArrayOf(0))
+        assertTrue(r.alsoPipe(), "it stopped hearing UDP: the pipe again")
+        r.onPing(ByteArray(0))
+        assertTrue(r.alsoPipe(), "an old phone's ping says nothing about UDP")
+    }
+
+    @Test
+    fun `my ping says whether UDP media reached me lately`() {
+        val r = MediaRoute()
+        assertEquals(0, r.pingPayload(now = 10_000)[0].toInt())
+        r.onUdpIn(now = 10_000)
+        assertEquals(1, r.pingPayload(now = 10_000 + MediaRoute.UDP_FRESH_MS)[0].toInt())
+        assertEquals(0, r.pingPayload(now = 10_000 + MediaRoute.UDP_FRESH_MS + 1)[0].toInt())
+    }
+
+    @Test
+    fun `a piece that came both ways plays once`() {
+        val r = MediaRoute()
+        val nonce = ByteArray(24) { 3 }
+        assertTrue(r.firstTime(nonce))
+        assertTrue(!r.firstTime(nonce.copyOf()))
+        assertTrue(r.firstTime(ByteArray(24) { 4 }))
+    }
+
+    @Test
+    fun `the ring and the answer carry my address in the island, and an old ring still works`() {
+        val ip = byteArrayOf(192.toByte(), 168.toByte(), 49, 23)
+        val ring = MediaRoute.ring(video = true, ip)
+        assertTrue(MediaRoute.isVideo(ring))
+        assertArrayEquals(ip, MediaRoute.address(ring, offset = 1))
+        assertArrayEquals(ip, MediaRoute.address(MediaRoute.answer(ip), offset = 0))
+        val old = byteArrayOf(0)
+        assertTrue(!MediaRoute.isVideo(old))
+        assertNull(MediaRoute.address(old, offset = 1))
+    }
 }

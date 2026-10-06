@@ -19,6 +19,7 @@ import ar.chamullo.core.CallSession
 import ar.chamullo.core.Card
 import ar.chamullo.core.Crypto
 import ar.chamullo.core.Identity
+import ar.chamullo.core.MediaRoute
 import ar.chamullo.core.toHex
 import java.util.concurrent.CopyOnWriteArraySet
 
@@ -32,7 +33,11 @@ object Calls {
         var audio: AudioEngine? = null
         var video: VideoEngine? = null
         var lastPing = 0L
+        /** Voice over UDP, the pipe as a spare (Camino y Carretera §7.1). */
+        val route = MediaRoute()
     }
+
+    private val lane = MediaLane { m -> onMsg(m, viaUdp = true) }
 
     private val thread = HandlerThread("calls").apply { start() }
     private val handler = Handler(thread.looper)
@@ -50,12 +55,13 @@ object Calls {
 
     fun attach(c: Context, id: Identity, i: WifiIslands) = handler.post {
         context = c.applicationContext; identity = id; islands = i
+        lane.start()
         val nm = c.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CH_CALL, "Llamadas", NotificationManager.IMPORTANCE_HIGH).apply { setSound(null, null) })
         handler.post(loop)
     }
 
-    fun detach() = handler.post { current?.let { end(it, sendHangup = true) }; islands = null; handler.removeCallbacks(loop) }
+    fun detach() = handler.post { current?.let { end(it, sendHangup = true) }; islands = null; lane.stop(); handler.removeCallbacks(loop) }
 
     private fun changed() = main.post { listeners.forEach { it() } }
 
@@ -78,7 +84,7 @@ object Calls {
         val c = current ?: return@post
         if (c.session.outgoing || c.session.state != CallSession.State.RINGING) return@post
         c.session.answer(now())
-        send(c, CallMsg.ANSWER)
+        send(c, CallMsg.ANSWER, MediaRoute.answer(islands?.islandIp()))
         talk(c)
     }
 
@@ -95,19 +101,32 @@ object Calls {
 
     private fun send(c: Call, op: Int, data: ByteArray = ByteArray(0)) {
         val me = identity ?: return
-        islands?.sendDirect(CallMsg.sealWith(c.key, me.nodeId, c.card.nodeId, op, c.session.id, data).encode(), c.card.nodeId)
+        val frame = CallMsg.sealWith(c.key, me.nodeId, c.card.nodeId, op, c.session.id, data).encode()
+        // The voice goes by UDP when the other phone's address is known, and also by the pipe until it says UDP reaches it.
+        val peer = c.route.peer
+        if (op == CallMsg.AUDIO && peer != null) {
+            lane.send(frame, peer)
+            if (!c.route.alsoPipe()) return
+        }
+        islands?.sendDirect(frame, c.card.nodeId)
     }
 
-    fun onMsg(m: CallMsg) {
+    fun onMsg(m: CallMsg, viaUdp: Boolean = false) {
         val me = identity ?: return
         val c = current
         if (c != null && c.card.nodeId.contentEquals(m.from) && c.session.id == m.call) {
             val data = m.openWith(c.key) ?: return
             when (m.op) {
-                CallMsg.AUDIO -> { c.session.onMedia(now()); c.audio?.onRemote(data) }
+                CallMsg.AUDIO -> {
+                    if (viaUdp) c.route.onUdpIn(now())
+                    if (!c.route.firstTime(m.nonce)) return // the same piece, the other way
+                    c.session.onMedia(now()); c.audio?.onRemote(data)
+                }
                 CallMsg.VIDEO -> { c.session.onMedia(now()); c.video?.onRemote(data) }
                 CallMsg.RING -> send(c, CallMsg.RINGING) // my "ringing" got lost
+                CallMsg.PING -> { c.session.onMedia(now()); c.route.onPing(data) }
                 else -> handler.post {
+                    if (m.op == CallMsg.ANSWER) MediaRoute.address(data, 0)?.let { c.route.peer = it }
                     val was = c.session.state
                     c.session.onRemote(m.op, now())
                     if (was != CallSession.State.ACTIVE && c.session.state == CallSession.State.ACTIVE) talk(c)
@@ -128,7 +147,8 @@ object Calls {
                     islands?.sendDirect(CallMsg.sealWith(key, me.nodeId, m.from, CallMsg.BUSY, m.call, ByteArray(0)).encode(), m.from)
                 return@post
             }
-            val call = Call(CallSession(m.call, m.from, outgoing = false, video = data.firstOrNull()?.toInt() == 1, now = now()), card, key)
+            val call = Call(CallSession(m.call, m.from, outgoing = false, video = MediaRoute.isVideo(data), now = now()), card, key)
+            call.route.peer = MediaRoute.address(data, 1)
             current = call
             send(call, CallMsg.RINGING)
             FieldLog.add("LLAMADA", "me llama ${card.name}")
@@ -146,8 +166,8 @@ object Calls {
     private fun tick() {
         val c = current ?: return
         val now = now()
-        if (c.session.wantsRing(now)) send(c, CallMsg.RING, byteArrayOf(if (c.session.video) 1 else 0))
-        if (c.session.state == CallSession.State.ACTIVE && now - c.lastPing >= CallSession.PING_MS) { c.lastPing = now; send(c, CallMsg.PING) }
+        if (c.session.wantsRing(now)) send(c, CallMsg.RING, MediaRoute.ring(c.session.video, islands?.islandIp()))
+        if (c.session.state == CallSession.State.ACTIVE && now - c.lastPing >= CallSession.PING_MS) { c.lastPing = now; send(c, CallMsg.PING, c.route.pingPayload(now)) }
         c.session.tick(now)
         // Tell the other side too, so its phone stops ringing or calling.
         if (c.session.state == CallSession.State.ENDED) end(c, sendHangup = true)
