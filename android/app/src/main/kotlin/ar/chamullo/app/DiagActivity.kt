@@ -43,9 +43,7 @@ class DiagActivity : Activity() {
             addView(title("Puente por Internet"))
             addView(text("Donde las islas no llegan (un salto grande), tu Internet puede llevar la carta al otro lado. Usa tus datos: queda apagado si no lo prendés.", 13f, Ui.MUTED))
             addView(button(if (Settings.lendInternet(this@DiagActivity)) "Dejar de prestar Internet" else "Prestar Internet como puente", primary = false) {
-                Settings.setLendInternet(this@DiagActivity, !Settings.lendInternet(this@DiagActivity))
-                stopService(Intent(this@DiagActivity, GritoService::class.java))
-                startForegroundService(Intent(this@DiagActivity, GritoService::class.java))
+                Settings.toggleLendInternet(this@DiagActivity)
                 recreate()
             })
             bridgeInfo = text("", 14f); addView(card { addView(bridgeInfo) })

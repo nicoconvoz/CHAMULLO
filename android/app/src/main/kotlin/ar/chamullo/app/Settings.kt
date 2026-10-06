@@ -17,6 +17,13 @@ object Settings {
 
     fun setLendInternet(c: Context, on: Boolean) = prefs(c).edit().putBoolean("lendInternet", on).apply()
 
+    /** Flip lending Internet and restart the grito so it takes effect at once. */
+    fun toggleLendInternet(c: Context) {
+        setLendInternet(c, !lendInternet(c))
+        c.stopService(android.content.Intent(c, GritoService::class.java))
+        c.startForegroundService(android.content.Intent(c, GritoService::class.java))
+    }
+
     /**
      * The founder of the network (Economy & Governance §10): written in the protocol, not configured, so every CHAMULLO
      * follows one book per pueblo. Only the phone holding the founder's 16 words can write the genesis.

@@ -74,6 +74,25 @@ class OnboardingActivity : Activity() {
 
     private fun finishWith(phrase: String, name: String) {
         Vault(this).save(Phrase.normalize(phrase).joinToString(" "), name)
+        earn()
+    }
+
+    // Ganá Lucas: lending Internet is how the network jumps where phones do not reach, and it pays.
+    private fun earn() {
+        screen {
+            addView(logo())
+            addView(title("Ganá Lucas"))
+            addView(card {
+                addView(text("🪙 Prestá Internet y ganá Lucas", 20f, bold = true))
+                addView(text("Donde no hay celulares cerca, tu Internet lleva las cartas de los demás al otro lado. Cada carta que llevás te paga Lucas, que gastás en la Tienda o para que tus cartas pasen primero.", 14f))
+                addView(text("Usa muy pocos datos. Lo podés apagar cuando quieras desde la pantalla principal.", 13f, Ui.MUTED))
+            })
+            addView(button("Sí, quiero ganar Lucas") { Settings.setLendInternet(this@OnboardingActivity, true); home() })
+            addView(button("Ahora no", primary = false) { Settings.setLendInternet(this@OnboardingActivity, false); home() })
+        }
+    }
+
+    private fun home() {
         startActivity(Intent(this, MainActivity::class.java))
         finish()
     }

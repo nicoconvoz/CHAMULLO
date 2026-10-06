@@ -26,6 +26,9 @@ class MainActivity : Activity() {
     private lateinit var status: android.widget.TextView
     private lateinit var candies: android.widget.TextView
     private lateinit var nearby: LinearLayout
+    private lateinit var lend: android.widget.Button
+
+    private fun lendLabel() = if (Settings.lendInternet(this)) "✓ Prestando Internet (tocá para dejar de prestar)" else "Prestar Internet y ganar Lucas"
     private lateinit var contacts: LinearLayout
     private lateinit var update: LinearLayout
     private val listener: (NodeEvent?) -> Unit = { refresh() }
@@ -45,6 +48,16 @@ class MainActivity : Activity() {
                 addView(candies)
                 status = text("Encendiendo el grito…", 14f, Ui.MUTED)
                 addView(status)
+            })
+            // Ganá Lucas, in sight: lending Internet should not hide in Diagnóstico.
+            addView(card {
+                addView(text("🪙 Prestar Internet y ganar Lucas", 16f, bold = true))
+                addView(text("Tu Internet lleva cartas donde no llegan los celulares, y cada una te paga Lucas.", 13f, Ui.MUTED))
+                lend = button("", primary = !Settings.lendInternet(this@MainActivity)) {
+                    Settings.toggleLendInternet(this@MainActivity)
+                    lend.text = lendLabel()
+                }.apply { text = lendLabel() }
+                addView(lend)
             })
             // Services on the network: CHAMULLO carries them; none of them is CHAMULLO itself.
             addView(title("Servicios"))
