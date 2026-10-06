@@ -148,9 +148,9 @@ Una isla **es** la red propia de CHAMULLO: un grupo Wi-Fi Direct (`DIRECT-CH-xxx
 
 | Pieza | Regla |
 |---|---|
-| Latido del caño | Cada `LINK_BEAT_MS = 5 s` cada caño manda `CHBEAT` (6 bytes), que no se reenvía. También mantiene despierto el Wi-Fi del otro celular |
-| Caño mudo | Si por un caño no llega nada durante `LINK_SILENT_MS = 20 s`, se cierra |
-| Reparar | Un miembro que sigue en el grupo Wi-Fi Direct pero no tiene caño con el anfitrión abre uno nuevo (como mucho cada `REPAIR_MS = 10 s`), sin esperar el aviso de Android |
+| Latido del caño | Cada `LINK_BEAT_MS = 2 s` (desde 0.9.8; antes 5 s) cada caño manda `CHBEAT` (6 bytes), que no se reenvía. También mantiene despierto el Wi-Fi del otro celular |
+| Caño mudo | Si por un caño no llega nada durante `LINK_SILENT_MS = 8 s` (desde 0.9.8; antes 20 s), se cierra |
+| Reparar | Un miembro que sigue en el grupo Wi-Fi Direct pero no tiene caño con el anfitrión abre uno nuevo (cada `REPAIR_MS = 3 s` desde 0.9.8; antes 10 s), sin esperar el aviso de Android |
 | Llamar | La llamada espera hasta 20 s un "está sonando" (antes 12) y, si no llega, dice "no contesta… probá de nuevo", sin afirmar que no está en la isla |
 
 ### 6.11 La isla se muda con el Wi-Fi de su anfitrión (0.9.4)
@@ -208,6 +208,18 @@ Una isla **es** la red propia de CHAMULLO: un grupo Wi-Fi Direct (`DIRECT-CH-xxx
 
 - Solo se da por caído un miembro que **estuvo adentro de verdad** (llegó a abrir el caño con el anfitrión), como en 0.9.3.
 - Un intento que no termina se corta recién a los `JOIN_GRACE_MS = 30 s`, y recién ahí se cancela.
+
+### 6.15 Volver en segundos y el alcance real (0.9.8)
+
+**Lo que pasó:** con 0.9.7 los dos celulares se juntaron y hablaron. Al alejarse unos 15 m con paredes, el caño quedaba mudo y Mito tardaba **81 y 97 s** en volver, aunque su Wi-Fi seguía asociado a la isla (`Client: A06 de Jesús`). Cuando TCP pierde paquetes, espera cada vez el doble antes de reintentar (1, 2, 4, 8, 16 s…): aunque vuelva la señal, el caño viejo sigue dormido.
+
+| Pieza | Regla |
+|---|---|
+| Reloj propio | Los caños se cuidan cada `PIPE_TICK_MS = 1 s`, aparte de las decisiones de la isla (5 s) |
+| Tirar y abrir | Latido cada 2 s; 8 s sin nada y el caño se tira. Uno nuevo anda en el acto cuando vuelve la señal |
+| Reintentos cortos | El miembro reintenta cada 3 s, con `CONNECT_TRIES = 6` intentos de 2,5 s separados 0,5 s |
+
+**El alcance:** 60 m es lo que logra Wi-Fi Direct a campo abierto y viéndose. Entre paredes, con celulares económicos, lo esperable es **10 a 25 m**: cada pared se come señal, y la potencia de la antena la fija el chip, no la app. Además, un anfitrión colgado de un Wi-Fi de casa reparte su antena entre las dos redes, y la isla recibe menos tiempo de aire. Para el mayor alcance, la isla la tiene que sostener un celular sin Wi-Fi de casa.
 
 ## 7. Llamadas y videollamadas en la isla (0.8.0)
 

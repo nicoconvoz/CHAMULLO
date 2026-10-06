@@ -143,6 +143,7 @@ class WifiIslands(
             publishCartel()
             handler.postDelayed(discoverLoop, 500)
             handler.postDelayed(decideLoop, DECIDE_MS)
+            handler.postDelayed(pipeLoop, PIPE_TICK_MS)
             FieldLog.add("ISLA", "buscando islas por Wi-Fi Direct")
         }
     }
@@ -349,13 +350,21 @@ class WifiIslands(
 
     private val decideNow = Runnable { if (running) decide() }
 
+    // The pipes have their own clock (Camino y Carretera §6.15): a stalled pipe is found and replaced in seconds.
+    private val pipeLoop: Runnable = object : Runnable {
+        override fun run() {
+            if (!running) return
+            tendPipes(System.currentTimeMillis())
+            handler.postDelayed(this, PIPE_TICK_MS)
+        }
+    }
+
     private var lastOnWifi = false
 
     private fun decide() {
         run {
             val now = System.currentTimeMillis()
             carteles.values.removeAll { now - it.second > CARTEL_TTL_MS }
-            tendPipes(now)
             // Tell the others at once whether I am on a home Wi-Fi: it decides who holds the island (§6.13).
             val onWifi = onWifiNetwork()
             if (onWifi != lastOnWifi) { lastOnWifi = onWifi; publishCartel() }
@@ -529,6 +538,7 @@ class WifiIslands(
 
     @Volatile private var connecting = false
     private var lastRepair = 0L
+    private var lastBeat = 0L
     private var joinedAt = 0L
 
     // Field test 0.9.3 (Camino y Carretera §6.11): the host's island follows the channel of its home Wi-Fi; when that
@@ -571,16 +581,17 @@ class WifiIslands(
         if (connecting) return
         connecting = true
         try {
-            repeat(5) { attempt ->
+            // Short tries, close together: when the signal comes back, a new pipe works at once (§6.15).
+            repeat(CONNECT_TRIES) { _ ->
                 runCatching {
                     val s = Socket()
-                    s.connect(InetSocketAddress(owner, PORT), 4_000)
+                    s.connect(InetSocketAddress(owner, PORT), CONNECT_TIMEOUT_MS)
                     Link(s).apply { start(); if (ferrying != null) send(FERRY) }
                     rejoin = null; piped = true
                     FieldLog.add("ISLA", "en la isla: caño abierto con el anfitrión")
                     return
                 }
-                Thread.sleep(1_000L * (attempt + 1))
+                Thread.sleep(CONNECT_PAUSE_MS)
             }
             FieldLog.add("ISLA", "no pude abrir el caño con el anfitrión")
         } finally { connecting = false }
@@ -590,7 +601,8 @@ class WifiIslands(
     // group. Every pipe beats every [LINK_BEAT_MS]; one that says nothing for [LINK_SILENT_MS] is dead and is closed.
     // A member still in the group without a pipe to its host opens a new one: Android sends no notice for that.
     private fun tendPipes(now: Long) {
-        for (l in links) { l.beat(); if (l.silentFor(now) > LINK_SILENT_MS) { FieldLog.add("ISLA", "un caño quedó mudo ${LINK_SILENT_MS / 1000} s: lo cierro y abro otro"); l.close() } }
+        if (now - lastBeat >= LINK_BEAT_MS) { lastBeat = now; for (l in links) l.beat() }
+        for (l in links) if (l.silentFor(now) > LINK_SILENT_MS) { FieldLog.add("ISLA", "un caño quedó mudo ${LINK_SILENT_MS / 1000} s: lo cierro y abro otro"); l.close() }
         if (host || island == null || ferrying != null || busy || connecting || links.any { it !== bridgeLink }) return
         if (now - lastRepair < REPAIR_MS) return
         lastRepair = now
@@ -662,7 +674,7 @@ class WifiIslands(
 
     override fun stop() {
         running = false
-        handler.removeCallbacks(discoverLoop); handler.removeCallbacks(decideLoop)
+        handler.removeCallbacks(discoverLoop); handler.removeCallbacks(decideLoop); handler.removeCallbacks(pipeLoop)
         runCatching { context.unregisterReceiver(connectionReceiver) }
         runCatching { context.unregisterReceiver(scanReceiver) }
         runCatching { context.unregisterReceiver(stateReceiver) }
@@ -791,9 +803,13 @@ class WifiIslands(
         const val HANDSHAKE_MS = 10_000L
         private val FERRY = "CHFRY".toByteArray()
         private val BEAT = "CHBEAT".toByteArray()
-        const val LINK_BEAT_MS = 5_000L
-        const val LINK_SILENT_MS = 20_000L
-        const val REPAIR_MS = 10_000L
+        const val PIPE_TICK_MS = 1_000L
+        const val LINK_BEAT_MS = 2_000L
+        const val LINK_SILENT_MS = 8_000L
+        const val REPAIR_MS = 3_000L
+        const val CONNECT_TRIES = 6
+        const val CONNECT_TIMEOUT_MS = 2_500
+        const val CONNECT_PAUSE_MS = 500L
         const val REJOIN_TRIES = 3
         const val JOIN_GRACE_MS = 30_000L
         private val FULL = "CHFUL".toByteArray()
