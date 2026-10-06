@@ -2,7 +2,11 @@ package ar.chamullo.core
 
 sealed interface NodeEvent {
     data class CardReceived(val card: Card) : NodeEvent
-    data class LetterReceived(val from: Card, val text: String, val msgId: String, val journey: List<String> = emptyList(), val service: String = "chat") : NodeEvent
+    /** [journey]: the valid givers, in order; [alternatives]: for each, how many neighbors could have carried it instead. */
+    data class LetterReceived(
+        val from: Card, val text: String, val msgId: String, val journey: List<String> = emptyList(), val service: String = "chat",
+        val alternatives: List<Int> = emptyList()
+    ) : NodeEvent
     data class Delivered(val msgId: String) : NodeEvent
     data object NeighborsChanged : NodeEvent
     /** A letter I carried was confirmed: one more candy. */
@@ -24,13 +28,15 @@ class Neighbor(val beacon: Beacon, val lastSeen: Long, val beats: Int = 1) {
     val name get() = beacon.name
     val nodeId get() = beacon.nodeId
     val coded get() = beacon.coded
+    val cell get() = beacon.cell
 }
 
 /**
- * The node logic of "Primer Grito" (v0.1), independent of the radio: it receives frames, decides what to shout and
- * keeps letters in its pocket. Routing in v0.1 is a bounded eco (every carrier re-shouts once, up to the letter's hop
- * limit) plus carry-and-forward: pocketed letters are shouted again when a new neighbor shows up.
- * The compass routing of Discovery & Routing §6 comes in a later version.
+ * The node logic, independent of the radio: it receives frames, decides what to shout and keeps letters in its pocket.
+ * Routing is the compass of Discovery & Routing v0.2 §10 ([Compass]): each letter goes hand to hand (offer, accept,
+ * then the copy with both signatures, Proof of Relay §5) toward its destination barrio, and spreads by local eco once
+ * there. Letters without a destination zone keep the bounded eco of v0.1. A letter nobody can take yet stays in the
+ * pocket and is decided again when someone new shows up.
  */
 class Node(
     val identity: Identity,
@@ -39,7 +45,21 @@ class Node(
     var coded: Boolean = false,
     private val clock: () -> Long
 ) {
-    private class Pocket(val env: Envelope, var reshouts: Int = 0)
+    /**
+     * A letter I hold. [sealed] only for my own letters (I write the first hop with its one-time key); [from]: who handed
+     * it to me, so the lake never sends it back; [refused]: neighbors that did not take it; [shout]: my eco copy, written once.
+     */
+    private class Pocket(
+        val env: Envelope, val sealed: Sealed? = null, val from: ByteArray? = null, var reshouts: Int = 0, var nextTry: Long = 0,
+        val refused: HashMap<String, Long> = HashMap(), var shout: Envelope? = null, var stuck: Boolean = false,
+        var stuckSince: Long = Long.MAX_VALUE
+    )
+
+    /** An offer in flight: who I offered it to, who already took their copy, and until when I wait. */
+    private class Handoff(
+        val takers: List<String>, val done: HashSet<String>, val deadline: Long, val alternatives: Int, val detour: Int,
+        val copied: HashSet<String> = HashSet() // copies sent, waiting for "la tengo"
+    )
 
     private val outbox = ArrayDeque<ByteArray>()
     private val reassembler = Reassembler()
@@ -55,6 +75,15 @@ class Node(
     private var lastBeacon = Long.MIN_VALUE / 2
     private var newNeighbor = false
     private var lastSweep = Long.MIN_VALUE / 2
+    private var lastReply = Long.MIN_VALUE / 2
+    // Where I am (my cell), where a ferry is about to sail (its heading) and my barrio, for my card (Discovery & Routing §5).
+    private var cell: Zone? = null
+    private var heading: Zone? = null
+    private var myCard: Card? = null
+    private var routeDirty = false
+    private val pending = HashMap<String, Handoff>()
+    private class Promise(val giver: ByteArray, val at: Long)
+    private val promised = HashMap<String, Promise>() // letters I accepted and wait for: msg id → giver
     private class PlazaEntry(val id: String, val name: String, val text: String, val ts: Long, val mine: Boolean, val heardBy: LinkedHashSet<String> = LinkedHashSet())
     // Letters that matter are repeated until confirmed: a plaza message until someone hears it, a card until theirs arrives.
     private class Retry(val frame: ByteArray, var left: Int, var nextAt: Long)
@@ -66,6 +95,9 @@ class Node(
     private val carried = LinkedHashMap<String, Carried>()
     private val sent = LinkedHashMap<String, Sealed>()
     private val paymentsSeen = LinkedHashSet<String>()
+    // Payments I passed on: kept a while and repeated to new neighbors, so they board ferries like letters (§10.7).
+    private class PayPocket(val p: Payment, val ttl: Int, val at: Long, var reshouts: Int = 0)
+    private val payPockets = LinkedHashMap<String, PayPocket>()
     var candies = store.loadCandies(); private set
     private val nearby = LinkedHashMap<String, Nearby>()
     private val roadInvitedAt = HashMap<String, Long>()
@@ -77,7 +109,44 @@ class Node(
     }
 
     var shoutsSent = 0L; private set
+    /** Why copies left my pocket without being handed on: for the twin's report. */
+    val dropped = LinkedHashMap<String, Int>()
+    private fun drop(id: String, why: String) { if (pockets.remove(id) != null) { pending.remove(id); dropped.merge(why, 1, Int::plus); savePockets() } }
     var framesHeard = 0L; private set
+
+    /** The phone says where it is (from its GPS, or the twin's map). Changing barrio is a mudanza: my contacts hear it. */
+    fun locate(here: Zone) {
+        val before = cell?.up(Zone.BARRIO)
+        cell = here
+        routeDirty = true
+        val barrio = here.up(Zone.BARRIO)
+        if (barrio == before) return
+        myCard = null
+        if (before != null) for (c in store.contacts()) sendLetter(c, Letter.Moved(card()))
+    }
+
+    fun locate(lat: Double, lon: Double) = locate(Zone.of(lat, lon))
+
+    fun cell(): Zone? = cell
+
+    /** Where a letter I hold wants to go when nobody around gets it closer: the island layer may sail me there. */
+    fun stuckZone(): Zone? = pockets.values.firstOrNull { it.stuck }?.env?.destZone
+
+    /** My card, with my barrio when I know it. */
+    fun card(): Card = myCard ?: Card.of(identity, clock(), cell?.up(Zone.BARRIO)).also { myCard = it }
+
+    /**
+     * A ferry about to sail (Camino y Carretera §6.1) announces where it goes, so the letters headed there board it;
+     * while it has a heading it carries and does not hand out. Null: it arrived, it is where it is again.
+     */
+    fun setHeading(to: Zone?) {
+        heading = to
+        routeDirty = true
+        lastBeacon = clock()
+        enqueue(beacon())
+    }
+
+    private fun beacon() = Beacon.of(identity, coded, clock(), heading ?: cell).encode()
 
     fun pocketCount() = pockets.size
 
@@ -98,13 +167,16 @@ class Node(
 
     fun tick() {
         val now = clock()
-        if (now - lastBeacon >= BEACON_MS) { lastBeacon = now; enqueue(Beacon.of(identity, coded, now).encode()) }
+        if (now - lastBeacon >= BEACON_MS) { lastBeacon = now; enqueue(beacon()) }
         // Housekeeping once a second is plenty: lifetimes are tens of seconds, and it keeps an idle tick cheap.
         if (now - lastSweep >= SWEEP_MS) {
             lastSweep = now
             neighbors.values.removeAll { now - it.lastSeen > NEIGHBOR_TTL_MS }
             nearby.values.removeAll { now - it.lastSeen > NEIGHBOR_TTL_MS }
             if (pockets.values.removeAll { it.env.expired(now) }) savePockets()
+            payPockets.values.removeAll { now - it.at > PAY_KEEP_MS }
+            val late = promised.values.count { now - it.at > 2 * OFFER_TIMEOUT_MS }
+            if (late > 0) { promised.values.removeAll { now - it.at > 2 * OFFER_TIMEOUT_MS }; dropped.merge("promesa sin carta", late, Int::plus) } // the copy never came
         }
         if (plazaRetries.isNotEmpty() || cardRetries.isNotEmpty()) {
             for (retries in listOf(plazaRetries.values, cardRetries.values)) {
@@ -121,10 +193,19 @@ class Node(
                 enqueue(RoadInvite.to(identity, nodeId, box, r.ssid, r.passphrase, now).encode())
             }
         }
-        if (newNeighbor) {
-            newNeighbor = false
-            for (p in pockets.values) if (p.reshouts < MAX_RESHOUTS) { p.reshouts++; enqueue(p.env.encode()) }
+        // Offers that timed out: whoever took it, took it; whoever did not, is left out next time.
+        if (pending.isNotEmpty()) for ((id, h) in pending.entries.toList()) if (now >= h.deadline) {
+            pending.remove(id)
+            val p = pockets[id] ?: continue
+            if (h.done.isNotEmpty()) { pockets.remove(id); savePockets() }
+            else { for (t in h.takers) p.refused[t] = now; p.nextTry = now }
         }
+        val fresh = newNeighbor
+        val all = newNeighbor || routeDirty
+        newNeighbor = false; routeDirty = false
+        if (fresh) for (k in payPockets.values) if (k.reshouts < MAX_RESHOUTS) { k.reshouts++; shoutPayment(k.p, k.ttl) }
+        // Anyone new: an eco may shout again. A heading or a walk only re-plans the compass.
+        if (pockets.isNotEmpty()) for ((id, p) in pockets.entries.toList()) if (all || now >= p.nextTry) decide(id, p, fresh)
     }
 
     /** My Wi-Fi road is up: its key goes, sealed, to every stable neighbor (Camino y Carretera). */
@@ -152,23 +233,32 @@ class Node(
     private fun offerTo(nodeId: ByteArray, boxPublic: ByteArray) {
         val key = nodeId.toHex()
         offeredTo += key
-        val frame = CardOffer.to(identity, nodeId, boxPublic, clock()).encode()
+        val frame = CardOffer.to(identity, nodeId, boxPublic, clock(), cell?.up(Zone.BARRIO)).encode()
         if (store.contact(nodeId) == null) cardRetries[key] = Retry(frame, CARD_RETRIES, clock() + RETRY_MS)
         enqueue(frame)
     }
 
-    fun send(to: Card, text: String, maxHops: Int = 8, service: String = "chat"): String {
-        val sealed = Envelope.seal(identity, to, Letter.Text(text, service), clock(), maxHops = maxHops)
-        val env = sealed.envelope
-        val id = env.msgId.toHex()
+    /** [maxHops]: null lets the compass size it to the distance (Discovery & Routing §10.3). */
+    fun send(to: Card, text: String, maxHops: Int? = null, service: String = "chat"): String {
+        store.saveContact(to)
+        val sealed = sendLetter(to, Letter.Text(text, service), maxHops)
+        val id = sealed.envelope.msgId.toHex()
         sent[id] = sealed
         while (sent.size > 500) sent.remove(sent.keys.first())
-        seen += id
         store.saveMessage(Message(to.nodeId.toHex(), true, text, clock(), id, MessageState.SENT))
-        pockets[id] = Pocket(env) // the sender keeps its own letter until it is confirmed
-        savePockets()
-        enqueue(env.encode())
         return id
+    }
+
+    // Every letter of mine carries my current card; I keep it in my pocket and write its first hop (giver_1 = src).
+    private fun sendLetter(to: Card, body: Letter, maxHops: Int? = null): Sealed {
+        val sealed = Envelope.seal(identity, to, body, clock(), maxHops = maxHops ?: Compass.maxHops(cell, to.zone), senderCard = card())
+        val id = sealed.envelope.msgId.toHex()
+        remember(id)
+        val p = Pocket(sealed.envelope, sealed)
+        pockets[id] = p
+        savePockets()
+        decide(id, p, true)
+        return sealed
     }
 
     fun plaza(): List<PlazaLine> = plaza.map { PlazaLine(it.id, it.name, it.text, it.ts, it.mine, it.heardBy.toList()) }
@@ -196,6 +286,8 @@ class Node(
             is Heard -> onHeard(p)
             is RoadInvite -> onRoadInvite(p)
             is Payment -> onPayment(p)
+            is Offer -> onOffer(p)
+            is Accept -> onAccept(p)
             else -> emptyList()
         }
     }
@@ -203,9 +295,13 @@ class Node(
     private fun onBeacon(b: Beacon): List<NodeEvent> {
         if (b.nodeId.contentEquals(identity.nodeId) || !b.verify()) return emptyList()
         val key = b.nodeId.toHex()
-        val isNew = key !in neighbors
-        neighbors[key] = Neighbor(b, clock(), (neighbors[key]?.beats ?: 0) + 1)
+        val before = neighbors[key]
+        val isNew = before == null
+        neighbors[key] = Neighbor(b, clock(), (before?.beats ?: 0) + 1)
         if (isNew) newNeighbor = true
+        if (before != null && before.cell != b.cell) routeDirty = true // a ferry announcing its heading, or someone walking
+        // Someone new: I answer with my heartbeat, so a ferry that just arrived knows the island at once (§10.2).
+        if (isNew && clock() - lastReply >= BEACON_REPLY_MS) { lastReply = clock(); lastBeacon = clock(); enqueue(beacon()) }
         return if (isNew) listOf(NodeEvent.NeighborsChanged) else emptyList()
     }
 
@@ -222,7 +318,9 @@ class Node(
         val id = p.msgId.toHex()
         if (!paymentsSeen.add(id)) return emptyList()
         while (paymentsSeen.size > 4000) paymentsSeen.remove(paymentsSeen.first())
-        if (p.ttl > 1) enqueue(p.withTtl(p.ttl - 1).encode())
+        // It arrived: no need to keep carrying my copy.
+        if (pockets.remove(id) != null) { pending.remove(id); savePockets() }
+        if (p.isReceiver(identity.nodeId) && p.ttl > 1) forwardPayment(p, p.ttl - 1)
         val c = carried.remove(id) ?: return emptyList()
         if (!c.src.contentEquals(p.src) || !p.proves(c.commit) || p.journey.none { it.contentEquals(c.myRecord) }) return emptyList()
         candies++
@@ -257,42 +355,162 @@ class Node(
     private fun onEnvelope(env: Envelope): List<NodeEvent> {
         val now = clock()
         val id = env.msgId.toHex()
-        if (id in seen || env.expired(now) || !env.verify()) return emptyList()
-        remember(id)
+        val promise = if (env.isReceiver(identity.nodeId)) promised.remove(id) else null
+        if ((id in seen && promise == null) || env.expired(now) || !env.verify()) return emptyList()
         if (env.isFor(identity)) {
-            val opened = env.open(identity) ?: return emptyList()
-            return when (val body = opened.body) {
-                is Letter.Text -> {
-                    val from = store.contact(opened.sender) ?: Card(opened.sender, ByteArray(32), ByteArray(32), "Desconocido", 0, ByteArray(64))
-                    store.saveMessage(Message(opened.sender.toHex(), false, body.text, opened.ts, id, MessageState.RECEIVED))
-                    // The journey: who carried it, read with the key that came inside. The receipt carries only hashes.
-                    val hops = opened.journeySecret?.let { env.journey(it) } ?: emptyList()
-                    val receipt = Letter.Ack(env.msgId, env.blobs.map { Crypto.hash(it) }, opened.deliverySecret ?: ByteArray(0))
-                    store.contact(opened.sender)?.let { enqueue(Envelope.letter(identity, it, receipt, now).encode()) }
-                    listOf(NodeEvent.LetterReceived(from, body.text, id, hops.filter { it.valid }.map { it.giver.toHex() }, body.service))
-                }
-                is Letter.Ack -> {
-                    val acked = body.msgId.toHex()
-                    if (pockets.remove(acked) != null) savePockets()
-                    store.setState(acked, MessageState.DELIVERED)
-                    // The origin checks the receipt with the secret only the reader could know, signs it and pays the carriers.
-                    sent.remove(acked)?.takeIf { it.deliverySecret.contentEquals(body.revealed) && body.journey.isNotEmpty() }?.let {
-                        val pay = Payment.confirm(it, body.journey, body.revealed)
-                        paymentsSeen += acked
-                        enqueue(pay.encode())
-                    }
-                    listOf(NodeEvent.Delivered(acked))
-                }
-            }
+            if (id in seen) return emptyList()
+            remember(id)
+            return open(env, now)
         }
-        if (env.hopCount < env.maxHops) {
-            val next = env.withHop(identity, now)
-            next.deliveryCommit?.let { carried[id] = Carried(env.src, it, Crypto.hash(next.blobs.last())); while (carried.size > 2000) carried.remove(carried.keys.first()) }
-            pockets[id] = Pocket(next)
-            savePockets()
-            enqueue(next.encode())
-        }
+        // A copy handed to someone else: I heard it, but it is not mine to carry (§10.5).
+        if (!env.isReceiver(identity.nodeId)) return emptyList()
+        remember(id)
+        if (env.hopCount >= env.maxHops || pockets.size >= MAX_POCKETS) return emptyList()
+        // "La tengo": the giver may let go of its copy now that mine is here.
+        promise?.let { enqueue(Accept(identity.nodeId, it.giver, env.msgId, 0, 0, ByteArray(0), already = true).encode()) }
+        val p = Pocket(env, from = promise?.giver)
+        pockets[id] = p
+        savePockets()
+        decide(id, p, true)
         return emptyList()
+    }
+
+    private fun open(env: Envelope, now: Long): List<NodeEvent> {
+        val id = env.msgId.toHex()
+        val opened = env.open(identity) ?: return emptyList()
+        // Every letter brings the sender's current card: that is how I learn their barrio (Discovery & Routing §5).
+        opened.senderCard?.let { fresh -> if ((store.contact(fresh.nodeId)?.ts ?: -1) <= fresh.ts) store.saveContact(fresh) }
+        return when (val body = opened.body) {
+            is Letter.Text -> {
+                val from = store.contact(opened.sender) ?: Card(opened.sender, ByteArray(32), ByteArray(32), "Desconocido", 0, ByteArray(64))
+                store.saveMessage(Message(opened.sender.toHex(), false, body.text, opened.ts, id, MessageState.RECEIVED))
+                // The journey: who carried it, read with the key that came inside. The receipt carries only hashes.
+                val hops = opened.journeySecret?.let { env.journey(it) } ?: emptyList()
+                val receipt = Letter.Ack(env.msgId, env.blobs.map { Crypto.hash(it) }, opened.deliverySecret ?: ByteArray(0))
+                store.contact(opened.sender)?.let { sendLetter(it, receipt) }
+                val valid = hops.filter { it.valid && !it.giver.contentEquals(env.src) } // the carriers: the origin's own hop is not one
+                listOf(NodeEvent.LetterReceived(from, body.text, id, valid.map { it.giver.toHex() }, body.service, valid.map { it.alternatives }))
+            }
+            is Letter.Ack -> {
+                val acked = body.msgId.toHex()
+                if (pockets.remove(acked) != null) { pending.remove(acked); savePockets() }
+                store.setState(acked, MessageState.DELIVERED)
+                // The origin checks the receipt with the secret only the reader could know, signs it and pays the carriers.
+                sent.remove(acked)?.takeIf { it.deliverySecret.contentEquals(body.revealed) && body.journey.isNotEmpty() }?.let {
+                    val pay = Payment.confirm(it, body.journey, body.revealed)
+                    paymentsSeen += acked
+                    forwardPayment(pay, it.envelope.maxHops)
+                }
+                listOf(NodeEvent.Delivered(acked))
+            }
+            is Letter.Moved -> emptyList() // the new card is already saved
+        }
+    }
+
+    /* ---------- the compass at work (Discovery & Routing §10.4, §10.5) ---------- */
+
+    private fun peers() = neighbors.values.map { Compass.Peer(it.nodeId, it.cell, it.stable) }
+
+    private fun giverOf(p: Pocket) = p.sealed?.signer() ?: identity.signer()
+
+    // What to do with a letter in my pocket. [fresh]: a new neighbor or a new letter, so an eco may shout again.
+    private fun decide(id: String, p: Pocket, fresh: Boolean) {
+        if (id in pending) return
+        val now = clock()
+        val env = p.env
+        if (env.expired(now)) { drop(id, "venció"); return }
+        p.nextTry = Long.MAX_VALUE
+        if (heading != null) return // a sailing ferry carries
+        val plan = Compass.plan(cell, env.destZone, env.localTtl, env.detour, peers(), p.from, p.sealed != null, p.refused, now)
+        p.stuck = false
+        if (plan != Compass.Plan.Stop && plan != Compass.Plan.Hold && env.hopCount >= env.maxHops) { drop(id, "sin saltos"); return }
+        when (plan) {
+            is Compass.Plan.Eco -> {
+                if (!fresh || p.reshouts >= MAX_RESHOUTS) return
+                val copy = p.shout ?: env.withHop(giverOf(p), now).routed(emptyList(), plan.localTtl, 0).also { p.shout = it; carriedBy(p, it) }
+                p.reshouts++
+                enqueue(copy.encode())
+            }
+            is Compass.Plan.River -> { p.stuckSince = Long.MAX_VALUE; offer(id, p, plan.takers, plan.alternatives, 0) }
+            // Nobody gets it closer: first it waits for the ferry of need (§10.6), only then the lake.
+            is Compass.Plan.Lake -> {
+                p.stuckSince = minOf(p.stuckSince, now)
+                if (now - p.stuckSince >= LAKE_WAIT_MS) offer(id, p, listOf(plan.taker), 0, plan.detour)
+                else { p.nextTry = now + RETRY_MS; p.stuck = true }
+            }
+            Compass.Plan.Hold -> { p.stuckSince = minOf(p.stuckSince, now); p.nextTry = now + RETRY_MS; p.stuck = env.destZone != null }
+            Compass.Plan.Stop -> drop(id, "eco local agotado")
+        }
+    }
+
+    private fun offer(id: String, p: Pocket, takers: List<Compass.Peer>, alternatives: Int, detour: Int) {
+        val giver = giverOf(p).id
+        for (t in takers) enqueue(p.env.offer(giver, t.id).encode())
+        pending[id] = Handoff(takers.map { it.id.toHex() }, HashSet(), clock() + OFFER_TIMEOUT_MS, alternatives, detour)
+    }
+
+    // The taker named me as its giver: I write my record with its signature and hand it its own copy.
+    private fun onAccept(a: Accept): List<NodeEvent> {
+        val id = a.msgId.toHex()
+        val h = pending[id] ?: return emptyList()
+        val p = pockets[id] ?: return emptyList()
+        val taker = a.taker.toHex()
+        if (taker !in h.takers || taker in h.done || !a.msgId.contentEquals(p.env.msgId)) return emptyList()
+        if (a.already) {
+            // "La tengo": my copy arrived, or another one is already there. Either way that side is covered.
+            if (taker !in h.copied) dropped.merge("la tiene otro", 1, Int::plus)
+            h.done += taker
+        } else if (taker !in h.copied) {
+            if (!p.env.accepts(a, giverOf(p).id)) return emptyList()
+            val copy = p.env.withHop(giverOf(p), clock(), a, h.alternatives).routed(listOf(a.taker), null, h.detour)
+            carriedBy(p, copy)
+            enqueue(copy.encode())
+            h.copied += taker // I let go when the taker says it got it
+        }
+        if (h.done.size == h.takers.size) { pending.remove(id); pockets.remove(id); savePockets() }
+        return emptyList()
+    }
+
+    // Someone wants to hand me a letter: accepting is promising to sign (Proof of Relay §5).
+    private fun onOffer(o: Offer): List<NodeEvent> {
+        if (!o.taker.contentEquals(identity.nodeId)) return emptyList()
+        val id = o.msgId.toHex()
+        // "La tengo": another copy is in my pocket right now, so the one behind can go. Only if I hold it: having seen it
+        // proves nothing (I may have passed it on, and that copy may be gone). Never for my own letters: it would tell my
+        // neighbor I wrote it. In every other case I stay quiet, like any refusal.
+        val holding = (pockets[id]?.let { it.sealed == null } ?: false) || id in promised
+        if (holding) { enqueue(o.already(identity).encode()); return emptyList() }
+        if (id in pockets || id in sent) return emptyList() // my own letter
+        // Having seen it does not close the road: offered by hand, I take it again (§10.5). The letter cannot loop:
+        // it never goes back to its giver, it waits before backing up, and max_hops is the hard limit.
+        if (o.exp < clock() || pockets.size >= MAX_POCKETS) return emptyList()
+        promised[id] = Promise(o.giver, clock())
+        enqueue(o.accept(identity, clock()).encode())
+        return emptyList()
+    }
+
+    // What I need to cash my candy later: the hash of the record I wrote (not for my own letters: the origin does not charge).
+    private fun carriedBy(p: Pocket, copy: Envelope) {
+        if (p.sealed != null) return
+        val commit = copy.deliveryCommit ?: return
+        carried[copy.msgId.toHex()] = Carried(copy.src, commit, Crypto.hash(copy.blobs.last()))
+        while (carried.size > 2000) carried.remove(carried.keys.first())
+    }
+
+    // Payments go like letters toward the zone (§10.7): two streams, local eco on arrival, a short shout if nothing gets closer.
+    private fun forwardPayment(p: Payment, ttl: Int) {
+        payPockets[p.msgId.toHex()] = PayPocket(p, ttl, clock())
+        while (payPockets.size > MAX_POCKETS) payPockets.remove(payPockets.keys.first())
+        shoutPayment(p, ttl)
+    }
+
+    private fun shoutPayment(p: Payment, ttl: Int) {
+        val zone = p.zone ?: return enqueue(p.routed(null, emptyList(), ttl).encode())
+        when (val plan = Compass.plan(cell, zone, null, 0, peers(), null, origin = true)) {
+            is Compass.Plan.River -> enqueue(p.routed(zone, plan.takers.map { it.id }, ttl).encode())
+            is Compass.Plan.Eco -> enqueue(p.routed(zone, emptyList(), minOf(ttl, Compass.LOCAL_TTL)).encode())
+            else -> enqueue(p.routed(zone, emptyList(), minOf(ttl, 2)).encode())
+        }
     }
 
     private fun remember(id: String) {
@@ -318,5 +536,10 @@ class Node(
         const val ROAD_INVITE_MS = 5 * 60_000L
         const val PLAZA_RETRIES = 3
         const val CARD_RETRIES = 5
+        const val MAX_POCKETS = 200
+        const val OFFER_TIMEOUT_MS = 2_000L
+        const val BEACON_REPLY_MS = 5_000L
+        const val PAY_KEEP_MS = 30 * 60_000L
+        const val LAKE_WAIT_MS = 2 * Islands.FERRY_TURN_MS
     }
 }

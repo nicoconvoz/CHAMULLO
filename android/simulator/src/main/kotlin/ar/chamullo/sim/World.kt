@@ -9,7 +9,9 @@ import ar.chamullo.core.MemoryStore
 import ar.chamullo.core.Node
 import ar.chamullo.core.NodeEvent
 import ar.chamullo.core.Packet
+import ar.chamullo.core.Zone
 import ar.chamullo.core.toHex
+import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.random.Random
 
@@ -17,7 +19,8 @@ import kotlin.random.Random
  * The digital twin: real CHAMULLO nodes (the exact core the app ships) on simulated Wi-Fi Direct islands.
  *
  * Simulated: positions, Wi-Fi reach, the time a phone needs to join a group, frame latency and walking.
- * Real: Node, envelopes, journeys, receipts, payments, candies and every island decision ([Islands.decide]).
+ * Real: Node, envelopes, journeys, receipts, payments, candies, every island decision ([Islands.decide]) and the compass
+ * (Discovery & Routing v0.2 §10): the map in meters becomes latitude and longitude around [baseLat], [baseLon].
  */
 class World(
     seed: Long = 1,
@@ -25,8 +28,13 @@ class World(
     val connectMs: Long = 3_000,
     val latencyMs: Long = 30,
     val tickMs: Long = 100,
-    val areaM: Double = 400.0
+    val areaM: Double = 400.0,
+    val baseLat: Double = -34.5900,
+    val baseLon: Double = -58.4300
 ) {
+    private val mPerDegLon = 111_320.0 * cos(Math.toRadians(baseLat))
+    private fun zoneAt(x: Double, y: Double) = Zone.of(baseLat + y / 111_320.0, baseLon + x / mPerDegLon)
+
     private val random = Random(seed)
     var now = 0L; private set
 
@@ -42,6 +50,9 @@ class World(
         var ferryHome: String? = null
         var ferryBackAt: Long? = null
         var ferriedTurn = -1L
+        var boarding: IslandAction.Ferry? = null
+        var boardingUntil = 0L
+        var cell: Zone = zoneAt(x, y)
         var tx = x; var ty = y
         val connected get() = now >= busyUntil
     }
@@ -74,6 +85,7 @@ class World(
 
     fun addPhone(name: String, x: Double, y: Double, village: String, speed: Double = 0.0): String {
         val p = Phone(name, x, y, village, speed)
+        p.node.locate(p.cell)
         phones[name] = p; byId[p.id] = p
         return name
     }
@@ -85,7 +97,7 @@ class World(
 
     fun send(from: String, to: String, text: String): String {
         val a = phones.getValue(from); val b = phones.getValue(to)
-        val id = a.node.send(b.identity.card(), text)
+        val id = a.node.send(b.node.card(), text) // you write to someone whose card you have: it says their barrio
         sentAt[id] = now
         letterFrom[id] = from to to
         say("✉ $from le escribe a $to")
@@ -119,7 +131,7 @@ class World(
     private fun hostOf(p: Phone): Phone? = p.island?.let { byId[it] }?.takeIf { it.host && it !== p }
 
     private fun cartel(p: Phone) = Cartel(p.id, p.name, p.island ?: "", if (p.host) "DIRECT-CH-${p.id.take(6)}" else "", if (p.host) "clave" else "",
-        p.host, if (p.host) members(p).map { it.id.take(8) } else emptyList())
+        p.host, if (p.host) members(p).map { it.id.take(8) } else emptyList(), if (p.host) p.cell else null)
 
     /** Islands as they are now: island id → names of the host and its connected members. */
     fun islands(): Map<String, List<String>> = phones.values.filter { it.host }.associate { h -> h.id to (listOf(h.name) + members(h).map { it.name }) }
@@ -142,6 +154,12 @@ class World(
             "\"history\":[${samples.takeLast(240).joinToString(",") { "[${it.t / 1000},${it.sent},${it.delivered},${it.pockets},${it.islands},${it.ferry},${it.candies}]" }}]," +
             "\"log\":[${log.toList().takeLast(40).reversed().joinToString(",") { q(it) }}]}"
     }
+
+    /** Why copies left pockets without being handed on, summed over every phone. */
+    fun drops(): Map<String, Int> = phones.values.flatMap { it.node.dropped.entries }.groupBy({ it.key }, { it.value }).mapValues { it.value.sum() }
+
+    /** For probes: how far east the letters got. */
+    fun furthestLetterM(): Int = phones.values.filter { it.node.pocketCount() > 0 }.maxOfOrNull { it.x.toInt() } ?: -1
 
     /** For probes: who each phone is, where it stands and which islands it can see. */
     fun debug(): List<String> = phones.values.map { p ->
@@ -180,14 +198,19 @@ class World(
     fun history(): List<Sample> = samples.toList()
 
     private fun decide(p: Phone) {
-        if (!p.connected || p.ferryBackAt != null) return
+        if (!p.connected || p.ferryBackAt != null || p.boarding != null) return
         val visible = near(p).map { cartel(it) }
         val roster = if (p.host) members(p).map { it.id.take(8) } else hostOf(p)?.let { h -> members(h).map { it.id.take(8) } } ?: emptyList()
-        when (val a = Islands.decide(p.id, IslandState(p.island, p.host, roster, p.ferriedTurn), visible, now)) {
+        when (val a = Islands.decide(p.id, IslandState(p.island, p.host, roster, p.ferriedTurn), visible, now, p.cell, p.node.stuckZone())) {
             IslandAction.Stay -> Unit
             IslandAction.Host -> { p.host = true; p.island = p.id; say("🏝 ${p.name} funda una isla") }
             is IslandAction.Join -> connect(p, a.island, ferry = false)
-            is IslandAction.Ferry -> { p.ferryHome = p.island; p.ferriedTurn = Islands.turnOf(now); ferryTrips++; say("🚢 ${p.name} sale de ferry a la isla de ${byId[a.island]?.name}"); connect(p, a.island, ferry = true) }
+            is IslandAction.Ferry -> {
+                if (p.host) { p.host = false; p.island = null } // a lonely bridge host sails as the ferry of need
+                // Boarding (Discovery & Routing §10.6): the ferry announces its heading and waits for the letters going that way.
+                p.ferriedTurn = Islands.turnOf(now); p.boarding = a; p.boardingUntil = now + Islands.FERRY_BOARDING_MS
+                p.node.setHeading(a.cell)
+            }
         }
     }
 
@@ -196,6 +219,13 @@ class World(
     }
 
     private fun finishConnect(p: Phone) {
+        p.boarding?.let { a ->
+            if (now < p.boardingUntil) return@let
+            p.boarding = null
+            p.ferryHome = p.island; ferryTrips++
+            say("🚢 ${p.name} sale de ferry a la isla de ${byId[a.island]?.name} con ${p.node.pocketCount()} cartas")
+            connect(p, a.island, ferry = true)
+        }
         val t = p.target
         if (t != null && p.connected) {
             p.target = null
@@ -205,6 +235,7 @@ class World(
             p.island = if (h != null && h.host && sees(p, h) && members(h).size < seats) t else null
             if (p.island != null) membersByHost.getOrPut(t) { ArrayList() } += p
             if (p.ferryHome != null && p.ferryBackAt == null) p.ferryBackAt = now + 20_000
+            p.node.setHeading(null) // arrived: it is where it is again, and hands out with the compass
         }
         val back = p.ferryBackAt
         if (back != null && now >= back && p.connected) {
@@ -225,9 +256,9 @@ class World(
         while (inFlight.isNotEmpty() && inFlight.first().at <= now) {
             val d = inFlight.removeFirst()
             if (!d.to.connected) continue
-            // The host repeats island messages (heartbeats, plaza, cards) to everyone; letters go through its node,
-            // which re-shouts them with its own hop record, so the host earns its candy like any carrier.
-            if (d.to.host && d.frame.size > 3 && d.frame[3].toInt() == Packet.KIND_LINK) emit(d.to, d.frame, except = d.from)
+            // The host is the island's air (Camino y Carretera §6): it repeats every frame to the others, and carries
+            // a letter only when it is chosen (Discovery & Routing §10.6).
+            if (d.to.host) emit(d.to, d.frame, except = d.from)
             collect(d.to, d.to.node.onFrame(d.frame))
         }
     }
@@ -241,11 +272,10 @@ class World(
                     say("📬 llegó a ${p.name} la carta de ${e.from.name}" + if (via.isEmpty()) " (directo)" else " · la llevaron ${via.joinToString(" → ")}")
                 }
                 val origin = e.from.nodeId.toHex().take(16)
-                for (carrier in e.journey) {
+                for ((i, carrier) in e.journey.withIndex()) {
                     val c = byId[carrier.take(16)] ?: continue
-                    val island = c.island
-                    val alternatives = island?.let { (membersByHost[it]?.size ?: 0) } ?: 0 // others in the island who could have carried it
-                    carries += Carry(c.name, byId[origin]?.name ?: "?", p.name, alternatives, c.village)
+                    // How many could have carried it instead: each carrier counted it and wrote it, sealed, in its record (§8).
+                    carries += Carry(c.name, byId[origin]?.name ?: "?", p.name, e.alternatives.getOrElse(i) { 0 }, c.village)
                 }
             }
             else -> Unit
@@ -258,6 +288,8 @@ class World(
             if (hypot(p.tx - p.x, p.ty - p.y) < 2) { p.tx = random.nextDouble() * areaM; p.ty = random.nextDouble() * 60 }
             val d = hypot(p.tx - p.x, p.ty - p.y); val s = minOf(d, p.speed * tickMs / 1000.0)
             p.x += (p.tx - p.x) / d * s; p.y += (p.ty - p.y) / d * s
+            val now = zoneAt(p.x, p.y)
+            if (now != p.cell) { p.cell = now; p.node.locate(now) } // walking into another cell; another barrio is a mudanza
         }
     }
 

@@ -57,6 +57,9 @@ private fun run(s: Scenario): String {
     sb.appendLine("| Demora p50 / p95 | ${f(rep.latencyP50s)} s / ${f(rep.latencyP95s)} s |")
     sb.appendLine("| Viajes de ferry | ${rep.ferryTrips} |")
     sb.appendLine("| Caramelos cobrados (recibos verificados) | ${rep.candies.values.sum()} |")
+    sb.appendLine("| Cartas en bolsillos al final | ${w.history().lastOrNull()?.pockets ?: 0} |")
+    w.drops().takeIf { it.isNotEmpty() }?.let { d -> sb.appendLine("| Copias soltadas, y por qué | ${d.entries.joinToString(", ") { "${it.key}: ${it.value}" }} |") }
+    if (w.furthestLetterM() >= 0) sb.appendLine("| La carta más avanzada que sigue en camino | a ${w.furthestLetterM()} m del oeste |")
     sb.appendLine()
     val courts = Economy.courts(rep.carries, nobles = 2)
     if (courts.isNotEmpty()) {

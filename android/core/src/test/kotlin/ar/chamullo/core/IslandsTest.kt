@@ -121,4 +121,51 @@ class IslandsTest {
         assertTrue(Islands.decide("m1", IslandState("aaaa", false, roster), listOf(host("aaaa", roster), almostFull), now = 0) is IslandAction.Ferry,
             "a ferry can still visit")
     }
+
+    @Test
+    fun `compass ferry - the neighbor island rotates with the turn, so no direction is left without a boat`() {
+        val roster = listOf("m1")
+        val mine = host("aaaa", roster)
+        val seen = listOf(mine, host("cccc"), host("bbbb"))
+        val targets = (0L until 4L).map { t ->
+            (Islands.decide("m1", IslandState("aaaa", false, roster), seen, now = t * Islands.FERRY_TURN_MS) as IslandAction.Ferry).island
+        }
+        assertEquals(listOf("bbbb", "cccc", "bbbb", "cccc"), targets)
+    }
+
+    @Test
+    fun `compass ferry - the ferry learns the cell of the island it sails to, and the cartel carries it`() {
+        val cell = Zone.of(-34.59, -58.41)
+        val there = host("bbbb").copy(cell = cell)
+        val a = Islands.decide("m1", IslandState("aaaa", false, listOf("m1")), listOf(host("aaaa", listOf("m1")), there), now = 0)
+        assertEquals(cell, (a as IslandAction.Ferry).cell)
+        val big = Cartel("0123456789abcdef", "Hermano", "0123456789abcdef", "DIRECT-CH-012345", "clave-xyz", host = true,
+            roster = listOf("aaaaaaaa", "bbbbbbbb", "cccccccc", "dddddddd", "eeeeeeee", "ffffffff", "11111111"), cell = cell)
+        assertTrue(big.toTxt().entries.sumOf { it.key.length + it.value.length + 2 } <= 255)
+        assertEquals(big, Cartel.fromTxt(big.toTxt()))
+    }
+
+    private val here = Zone.of(-34.59, -58.43)
+    private val eastward = Zone.of(-34.59, -58.37, Zone.BARRIO)
+
+    @Test
+    fun `ferry of need - whoever holds stuck letters sails toward the island that gets them closer, whatever the turn`() {
+        val roster = listOf("m0", "m1") // turn 0 belongs to m0, not to me (m1)
+        val west = host("bbbb").copy(cell = Zone.of(-34.59, -58.4315))
+        val east = host("cccc").copy(cell = Zone.of(-34.59, -58.4285))
+        val seen = listOf(host("aaaa", roster), west, east)
+        val a = Islands.decide("m1", IslandState("aaaa", false, roster), seen, now = 0, myCell = here, stuck = eastward)
+        assertEquals("cccc", (a as IslandAction.Ferry).island)
+        assertEquals(IslandAction.Stay, Islands.decide("m1", IslandState("aaaa", false, roster, ferriedTurn = 0), seen, now = 0, myCell = here, stuck = eastward),
+            "once per turn")
+    }
+
+    @Test
+    fun `ferry of need - a lonely bridge host may sail too, a host with members never`() {
+        val east = host("cccc").copy(cell = Zone.of(-34.59, -58.4285))
+        val lonely = Islands.decide("aaaa", IslandState("aaaa", true, emptyList()), listOf(host("aaaa"), east, member("x", "dddd")), now = 0, myCell = here, stuck = eastward)
+        assertEquals("cccc", (lonely as IslandAction.Ferry).island)
+        val busy = Islands.decide("aaaa", IslandState("aaaa", true, listOf("m1")), listOf(host("aaaa", listOf("m1")), east), now = 0, myCell = here, stuck = eastward)
+        assertEquals(IslandAction.Stay, busy)
+    }
 }

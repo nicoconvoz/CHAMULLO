@@ -12,7 +12,9 @@ class Identity private constructor(val seed: ByteArray, val name: String) {
 
     fun sign(tag: String, body: ByteArray): ByteArray = Crypto.sign(seed, signingInput(tag, body))
 
-    fun card(now: Long = 0): Card = Card.of(this, now)
+    fun card(now: Long = 0, zone: Zone? = null): Card = Card.of(this, now, zone)
+
+    fun signer() = Signer(nodeId, seed)
 
     fun withName(newName: String) = Identity(seed, newName)
 

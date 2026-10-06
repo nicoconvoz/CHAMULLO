@@ -17,16 +17,17 @@ class WorldTest {
     }
 
     @Test
-    fun `a letter inside an island arrives and its carrier earns a candy`() {
+    fun `a letter inside an island arrives at once - the host is the air, nobody charges for it`() {
         val w = World(seed = 2)
         val ids = (0 until 4).map { w.addPhone("p$it", 10.0 * it, 0.0, village = "A") }
         w.befriendAll()
         w.run(60_000)
-        val (from, to) = w.membersOfSomeIsland().let { it[1] to it[2] } // two members: the host in the middle carries
+        val (from, to) = w.membersOfSomeIsland().let { it[1] to it[2] } // two members: the host repeats, it does not carry
         w.send(from, to, "hola")
         w.run(30_000)
         assertEquals(1.0, w.report().deliveryRatio)
-        assertTrue(w.report().candies.values.sum() >= 1, "the host relayed it: ${w.report().candies}")
+        assertTrue(w.report().latencyP50s < 1.0, "one hop through the air")
+        assertEquals(0, w.report().candies.values.sum(), "the air is free (Camino y Carretera §6)")
     }
 
     @Test
@@ -42,6 +43,7 @@ class WorldTest {
         w.run(10 * 60_000)
         assertEquals(1.0, w.report().deliveryRatio, "delivered across islands")
         assertTrue(w.report().ferryTrips > 0)
+        assertTrue(w.report().candies.values.sum() >= 1, "whoever carried it across earned its candy: ${w.report().candies}")
     }
 
     @Test
@@ -54,5 +56,16 @@ class WorldTest {
         assertTrue(islands.size >= 1000 / (ar.chamullo.core.Islands.MAX_MEMBERS + 1), "islands: ${islands.size}")
         assertTrue(w.history().size >= 15, "one sample every 10 s")
         assertTrue(took < 60_000, "3 simulated minutes took ${took} ms")
+    }
+
+    @Test
+    fun `provincia - the compass carries letters hand to hand across a barrio line, and loses none on the way`() {
+        val s = Scenarios.all.single { it.key == "provincia" }
+        val w = Scenarios.build(s, seed = 7)
+        w.run(90_000)
+        repeat(3) { w.send(w.phonesOf("Norte")[it], w.phonesOf("Sur")[it], "carta $it") }
+        w.run(25 * 60_000)
+        assertTrue(w.furthestLetterM() > 1_000, "the letters walked east: ${w.furthestLetterM()} m")
+        assertEquals(0, w.drops().filterKeys { it != "la tiene otro" }.values.sum(), "no copy lost: ${w.drops()}")
     }
 }

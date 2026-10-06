@@ -340,9 +340,9 @@ class WifiIslands(
                         lastSpeed = "el otro recibió $it"; FieldLog.add("ISLA", "prueba de velocidad: el otro recibió $it")
                     }
                     else -> {
-                        // The host repeats island messages (heartbeats, plaza, cards) to everyone. Letters go through its node,
-                        // which re-shouts them with its own hop record, so the host earns its candy like any carrier.
-                        if (host && f.size > 3 && f[3].toInt() == ar.chamullo.core.Packet.KIND_LINK) for (l in links) if (l !== this) l.send(f)
+                        // The host is the island's air (Camino y Carretera §6): it repeats every frame to the others.
+                        // It carries a letter only when it is chosen, like anyone (Discovery & Routing §10.6).
+                        if (host) for (l in links) if (l !== this) l.send(f)
                         onFrame(f)
                     }
                 }
