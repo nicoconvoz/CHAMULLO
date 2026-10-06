@@ -62,7 +62,9 @@ class Node(
         val copied: HashSet<String> = HashSet() // copies sent, waiting for "la tengo"
     )
 
-    private val outbox = ArrayDeque<ByteArray>()
+    private val outbox = ArrayDeque<ByteArray>()          // links, offers, beacons: always first
+    private val paidLane = ArrayDeque<ByteArray>()        // letters with paid priority
+    private val freeLane = ArrayDeque<ByteArray>()        // letters without it: never less than a third (§6.2)
     private val reassembler = Reassembler()
     private val neighbors = LinkedHashMap<String, Neighbor>()
     private val seen = LinkedHashSet<String>()
@@ -123,6 +125,11 @@ class Node(
      * entries spread by word of mouth, the king writes pages, the nobility endorses them, latecomers catch up.
      */
     var ledger: Ledger? = null
+        set(value) {
+            field = value
+            // The book I kept: replayed page by page, so a restart does not lose it.
+            value?.let { l -> for (b in store.loadPages()) runCatching { l.accept(Page.decode(b)) } }
+        }
     private val ledgerPool = LinkedHashMap<String, ByteArray>() // entries waiting for a page
     private val ledgerSeen = LinkedHashSet<String>()
     private class Keep(val msg: LedgerMsg, val at: Long, var reshouts: Int = 0)
@@ -204,7 +211,15 @@ class Node(
         nearby[h.shortId] = Nearby(h.shortId, h.name, h.coded, clock())
     }
 
-    fun drainOutbox(): List<ByteArray> = buildList { while (outbox.isNotEmpty()) add(outbox.removeFirst()) }.also { shoutsSent += it.size }
+    fun drainOutbox(): List<ByteArray> = buildList {
+        while (outbox.isNotEmpty()) add(outbox.removeFirst())
+        // Two paid, one free, while both wait: priority arrives first, and the free lane keeps its third.
+        var paidInARow = 0
+        while (paidLane.isNotEmpty() || freeLane.isNotEmpty()) {
+            if (paidLane.isNotEmpty() && (paidInARow < 2 || freeLane.isEmpty())) { add(paidLane.removeFirst()); paidInARow++ }
+            else { add(freeLane.removeFirst()); paidInARow = 0 }
+        }
+    }.also { shoutsSent += it.size }
 
     fun tick() {
         val now = clock()
@@ -284,10 +299,15 @@ class Node(
         enqueue(frame)
     }
 
-    /** [maxHops]: null lets the compass size it to the distance (Discovery & Routing §10.3). */
-    fun send(to: Card, text: String, maxHops: Int? = null, service: String = "chat"): String {
+    /**
+     * [maxHops]: null lets the compass size it to the distance (Discovery & Routing §10.3). [priority]: Lucas offered to
+     * go first (Economy & Governance §6.1); only if I have them, and they are paid in the ledger for the carriers.
+     */
+    fun send(to: Card, text: String, maxHops: Int? = null, service: String = "chat", priority: Long = 0): String {
         store.saveContact(to)
-        val sealed = sendLetter(to, Letter.Text(text, service), maxHops)
+        val paid = priority.takeIf { it > 0 && available() >= it } ?: 0
+        val sealed = sendLetter(to, Letter.Text(text, service), maxHops, paid)
+        if (paid > 0) spend(null, paid, sealed.envelope.msgId.toHex())
         val id = sealed.envelope.msgId.toHex()
         sent[id] = sealed
         while (sent.size > 500) sent.remove(sent.keys.first())
@@ -296,8 +316,8 @@ class Node(
     }
 
     // Every letter of mine carries my current card; I keep it in my pocket and write its first hop (giver_1 = src).
-    private fun sendLetter(to: Card, body: Letter, maxHops: Int? = null): Sealed {
-        val sealed = Envelope.seal(identity, to, body, clock(), maxHops = maxHops ?: Compass.maxHops(cell, to.zone), senderCard = card())
+    private fun sendLetter(to: Card, body: Letter, maxHops: Int? = null, priority: Long = 0): Sealed {
+        val sealed = Envelope.seal(identity, to, body, clock(), maxHops = maxHops ?: Compass.maxHops(cell, to.zone), senderCard = card(), priority = priority)
         val id = sealed.envelope.msgId.toHex()
         remember(id)
         val p = Pocket(sealed.envelope, sealed)
@@ -474,7 +494,7 @@ class Node(
         if (env.expired(now)) { drop(id, "venció"); return }
         p.nextTry = Long.MAX_VALUE
         if (heading != null) return // a sailing ferry carries
-        val plan = Compass.plan(cell, env.destZone, env.localTtl, env.detour, peers(), p.from, p.sealed != null, p.refused, now)
+        val plan = Compass.plan(cell, env.destZone, env.localTtl, env.detour, peers(), p.from, p.sealed != null, p.refused, now, env.priority > 0)
         p.stuck = false
         if (plan != Compass.Plan.Stop && plan != Compass.Plan.Hold && env.hopCount >= env.maxHops) { drop(id, "sin saltos"); return }
         // The big jump (§11): beyond the next barrio the islands are too slow, so a bridge at hand takes it up.
@@ -629,6 +649,19 @@ class Node(
         if (now - lastPageTry >= LEDGER_PAGE_MS) { lastPageTry = now; kingWork(l, now) }
     }
 
+    /** My Lucas in the ledger, minus what I already spent and is waiting for a page. */
+    fun available(): Long = (ledger?.balance(identity.nodeId) ?: 0) - pendingSpends.values.sum()
+    private val pendingSpends = HashMap<String, Long>() // entry hash → amount
+
+    /** Spend Lucas (Economy & Governance §6, §13): [to] a seller of the store, or null for priority on letter [what]. */
+    fun spend(to: ByteArray?, amount: Long, what: String): Boolean {
+        if (ledger == null || amount <= 0 || available() < amount) return false
+        val entry = Entry.spend(identity, to, amount, what, clock()).encode()
+        pendingSpends[Crypto.hash(entry).toHex()] = amount
+        submit(entry)
+        return true
+    }
+
     private fun submit(entry: ByteArray) {
         ledgerPool.putIfAbsent(Crypto.hash(entry).toHex(), entry)
         gossip(LedgerMsg.ENTRY, entry)
@@ -657,7 +690,7 @@ class Node(
         if (m.kind == LedgerMsg.PAGE) {
             val page = runCatching { Page.decode(m.payload) }.getOrNull() ?: return emptyList()
             if (page.index < l.pages.size) return emptyList() // already in my book
-            if (l.accept(page)) { forget(page); proposal = null; ledgerSeen += key; overBridge(l, page); return relay(m, key) }
+            if (take(l, page)) { forget(page); proposal = null; ledgerSeen += key; overBridge(l, page); return relay(m, key) }
             if (page.index > l.pages.size) enqueue(LedgerMsg(LedgerMsg.HAVE, Tlv.u64(l.pages.size.toLong()), 1).encode())
             return emptyList()
         }
@@ -674,7 +707,7 @@ class Node(
                 if (h.contentEquals(p.hash()) && p.endorsements.none { it.first.contentEquals(who) }) {
                     val endorsed = Page(p.pueblo, p.index, p.prev, p.ts, p.entries, p.king, p.kingSig, p.endorsements + (who to sig))
                     proposal = endorsed
-                    if (l.accept(endorsed)) sealed(endorsed)
+                    if (take(l, endorsed)) sealed(endorsed)
                 }
             }
         }
@@ -706,10 +739,12 @@ class Node(
         }
         if (entries.isEmpty()) return
         val page = l.propose(identity, entries, now)
-        if (court.nobles.isEmpty()) { if (l.accept(page)) sealed(page); return } // genesis: the founder alone
+        if (court.nobles.isEmpty()) { if (take(l, page)) sealed(page); return } // genesis: the founder alone
         proposal = page; proposalAt = now
         gossip(LedgerMsg.PROPOSAL, page.encode())
     }
+
+    private fun take(l: Ledger, page: Page): Boolean = l.accept(page).also { if (it) store.appendPage(page.encode()) }
 
     private fun sealed(page: Page) {
         forget(page)
@@ -725,7 +760,7 @@ class Node(
         for (peer in b.peersIn(l.params.pueblo).filter { !it.contentEquals(identity.nodeId) }.take(BRIDGE_PEERS * 2)) { b.send(peer, frame); internetBytes += frame.size }
     }
 
-    private fun forget(page: Page) { for (e in page.entries) ledgerPool.remove(Crypto.hash(e).toHex()) }
+    private fun forget(page: Page) { for (e in page.entries) { val k = Crypto.hash(e).toHex(); ledgerPool.remove(k); pendingSpends.remove(k) } }
 
     private fun remember(id: String) {
         seen += id
@@ -733,8 +768,11 @@ class Node(
     }
 
     private fun enqueue(frame: ByteArray) {
-        for (part in Fragments.split(frame, maxFrame)) outbox.addLast(part)
-        while (outbox.size > MAX_OUTBOX) outbox.removeFirst()
+        val lane = if (frame.size > 3 && frame[3].toInt() == Packet.KIND_ENVELOPE) {
+            if (((Packet.parseOrNull(frame) as? Envelope)?.priority ?: 0) > 0) paidLane else freeLane
+        } else outbox
+        for (part in Fragments.split(frame, maxFrame)) lane.addLast(part)
+        while (lane.size > MAX_OUTBOX) lane.removeFirst()
     }
 
     companion object {

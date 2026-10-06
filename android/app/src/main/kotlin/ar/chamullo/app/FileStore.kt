@@ -15,6 +15,16 @@ import java.io.File
 /** Contacts and messages in one small JSON file in the app's private storage. */
 class FileStore(context: Context) : Store {
     private val file = File(context.filesDir, "store.json")
+    private val book = File(context.filesDir, "ledger.bin") // the ledger's pages, appended one after the other
+
+    @Synchronized override fun appendPage(page: ByteArray) {
+        runCatching { book.appendBytes(ar.chamullo.core.Writer().varint(page.size.toLong()).raw(page).bytes()) }
+    }
+
+    @Synchronized override fun loadPages(): List<ByteArray> = runCatching {
+        val r = ar.chamullo.core.Reader(book.readBytes())
+        buildList { while (r.remaining > 0) add(r.take(r.varint().toInt())) }
+    }.getOrDefault(emptyList())
     private val contacts = LinkedHashMap<String, Card>()
     private val messages = mutableListOf<Message>()
     private var plaza = mutableListOf<PlazaLine>()

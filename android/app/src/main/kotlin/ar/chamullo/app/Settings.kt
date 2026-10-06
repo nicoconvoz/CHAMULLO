@@ -20,4 +20,9 @@ object Settings {
     fun lendInternet(c: Context) = prefs(c).getBoolean("lendInternet", false)
 
     fun setLendInternet(c: Context, on: Boolean) = prefs(c).edit().putBoolean("lendInternet", on).apply()
+
+    /** The founder's id (Economy & Governance §10): with it, this phone keeps the ledger of its pueblo. */
+    fun founder(c: Context) = prefs(c).getString("founder", "") ?: ""
+
+    fun setFounder(c: Context, id: String) = prefs(c).edit().putString("founder", id.trim().lowercase()).apply()
 }

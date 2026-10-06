@@ -186,6 +186,8 @@ class Envelope(
     val deliveryCommit: ByteArray? get() = origin[10]
     /** Where the compass points (Discovery & Routing §6): the recipient's barrio, sealed by the origin. */
     val destZone: Zone? by lazy { Zone.decodeOrNull(origin[12]) }
+    /** Lucas the origin offers for priority (Economy & Governance §6.1), sealed by it; 0 for the free lane. */
+    val priority: Long get() = origin[13]?.let { runCatching { Tlv.readU64(it) }.getOrNull() } ?: 0
 
     // Transit fields each giver rewrites (Packet Format §5.4): who this copy is for, the local eco budget, the lake detour.
     private val transit: Map<Long, ByteArray> by lazy { Tlv.decode(transitTlv) }
@@ -330,7 +332,7 @@ class Envelope(
 
         /** Seals a letter with a journey key and a delivery secret (Proof of Relay §4.1); the origin keeps the secrets. */
         /** The compass points at [to]'s barrio, from its card; [senderCard] travels inside so the reply knows where I am. */
-        fun seal(sender: Identity, to: Card, body: Letter, now: Long, ttlMs: Long = 6 * 3600_000L, maxHops: Int = 8, senderCard: Card? = null): Sealed {
+        fun seal(sender: Identity, to: Card, body: Letter, now: Long, ttlMs: Long = 6 * 3600_000L, maxHops: Int = 8, senderCard: Card? = null, priority: Long = 0): Sealed {
             val eph = Crypto.randomBytes(32)
             val src = Crypto.signPublicKey(eph)
             val nonce = Crypto.randomBytes(16)
@@ -357,7 +359,7 @@ class Envelope(
             val originTlv = Tlv.encode(listOf(
                 2L to Writer().varint(SEALED).bytes(), 4L to byteArrayOf(maxHops.toByte()), 6L to payload,
                 8L to Crypto.boxPublicKey(journeySecret), 10L to Crypto.hash(deliverySecret)
-            ) + listOfNotNull(to.zone?.let { 12L to it.encode() }))
+            ) + listOfNotNull(to.zone?.let { 12L to it.encode() }, priority.takeIf { it > 0 }?.let { 13L to Tlv.u64(it) }))
             val unsigned = Envelope(src, tagFor(to.tagSecret, nonce), nonce, now, now + ttlMs, originTlv, ByteArray(64), 0)
             val env = Envelope(unsigned.src, unsigned.dstTag, nonce, now, now + ttlMs, originTlv, Crypto.sign(eph, Identity.signingInput("ENV", unsigned.body())), 0)
             return Sealed(env, eph, deliverySecret)

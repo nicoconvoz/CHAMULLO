@@ -121,11 +121,15 @@ La recompensa de una entrega se **reparte** entre los relays del camino. No se p
 - Un origen PUEDE adjuntar una oferta de Lucas para que su sobre tenga prioridad. El campo TLV de origen se registrará en Packet Format.
 - Los relays que lo transportan cobran esa oferta, repartida según §5.3 y liquidada por la libreta al presentar el Proof of Relay.
 
+- **Implementado:** la oferta viaja en el TLV de origen `13` (impar, sellado por el origen). El origen solo puede ofrecerla si tiene esas Lucas en la libreta: sin saldo no hay prioridad. Se paga con un `SPEND` sin destinatario y con la carta como referencia: la mitad se quema y la otra mitad queda en garantía para los carteros de esa carta, que la cobran al cierre. Una carta con prioridad abre `k = 3` corrientes.
+
 ### 6.2 Carril gratis garantizado
 
 - Cada relay DEBE reservar al menos **30 %** de su capacidad (ancho de banda y cola) para tráfico **sin** prioridad paga. El valor final se calibra con el simulador.
 - La prioridad hace llegar antes, pero NUNCA deja afuera a quien no paga.
 - Si el carril prioritario no se usa, el carril gratis PUEDE ocupar toda la capacidad.
+- **Implementado:** el nodo tiene dos filas de cartas. Mientras las dos esperan, salen dos con prioridad y una gratis: el carril gratis se queda con un tercio (33 %, por encima del 30 %). Las tramas de control (latidos, ofertas, libreta) salen siempre primero.
+- **Tienda de Lucas (app):** cada compra es un `SPEND` firmado a la cuenta de la tienda (la del fundador mientras dure la génesis), y queda en la próxima página.
 
 ## 7. Pueblos
 

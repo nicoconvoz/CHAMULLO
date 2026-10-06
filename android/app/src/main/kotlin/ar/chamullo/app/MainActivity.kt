@@ -50,6 +50,7 @@ class MainActivity : Activity() {
             addView(title("Servicios"))
             addView(button("La Plaza: chat abierto con los de cerca") { startActivity(Intent(this@MainActivity, PlazaActivity::class.java)) })
             addView(button("ICEBREAK: la red social", primary = false) { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ICEBREAK_URL))) })
+            addView(button("Tienda de Lucas", primary = false) { startActivity(Intent(this@MainActivity, StoreActivity::class.java)) })
             addView(text("ICEBREAK es un servicio más sobre la red. Por ahora se abre en el navegador y necesita internet; CHAMULLO no.", 12f, Ui.MUTED))
             addView(title("Cerca tuyo"))
             nearby = column(); addView(nearby)
@@ -106,7 +107,7 @@ class MainActivity : Activity() {
                 else -> "Bluetooth: apagado (es el respaldo; no se conecta a nada)."
             }
         }
-        Hub.ask({ it.candies }) { n -> candies.text = "🍬 $n caramelos por cartas que llevaste y se confirmaron" }
+        Hub.ask({ it.candies to it.available() }) { (n, lucas) -> candies.text = "🍬 $n caramelos por cartas que llevaste y se confirmaron\n🪙 $lucas Lucas en la libreta del pueblo" }
         Hub.ask({ node -> Triple(node.neighbors().map { Triple(it.name, it.coded, it) }, node.store.contacts(), node.nearby()) }) { (near, cards, hellos) ->
             nearby.removeAllViews()
             val verified = near.map { it.third.nodeId.toHex().take(16) }.toSet()

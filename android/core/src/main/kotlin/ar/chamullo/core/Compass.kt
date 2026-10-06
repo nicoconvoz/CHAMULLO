@@ -8,6 +8,8 @@ import kotlin.math.ceil
  */
 object Compass {
     const val K = 2
+    // Paid priority opens one stream more (Economy & Governance §6.1).
+    const val K_PRIORITY = 3
     // Calibrated with the twin: as deep as the v0.1 eco reached, but only inside the destination barrio.
     const val LOCAL_TTL = 8
     const val LAKE_BUDGET = 3
@@ -35,7 +37,7 @@ object Compass {
 
     fun plan(
         me: Zone?, dest: Zone?, localTtl: Int?, detour: Int, peers: List<Peer>, from: ByteArray?,
-        origin: Boolean, refused: Map<String, Long> = emptyMap(), now: Long = 0
+        origin: Boolean, refused: Map<String, Long> = emptyMap(), now: Long = 0, priority: Boolean = false
     ): Plan {
         if (dest == null || me == null) return Plan.Eco(null)
         if (dest.contains(me)) {
@@ -51,7 +53,7 @@ object Compass {
         if (progress.isNotEmpty()) {
             val ranked = progress.sortedWith(compareByDescending<Pair<Peer, Double>> { (p, gain) -> gain * if (p.stable) 1.0 else 0.5 }
                 .thenBy { it.first.id.toHex() })
-            return Plan.River(ranked.take(if (origin) K else 1).map { it.first }, progress.count { it.first.stable })
+            return Plan.River(ranked.take(if (origin) (if (priority) K_PRIORITY else K) else 1).map { it.first }, progress.count { it.first.stable })
         }
         // El lago: widen to ±90° of the bearing, then go around keeping the right hand on the wall.
         val around = usable

@@ -50,6 +50,7 @@ class GritoService : Service() {
         radios.forEach { it.start() }
         locator = Locator(this) { lat, lon -> Hub.post { it.locate(lat, lon) } }.also { it.start() }
         // The Internet bridge (Discovery & Routing §11): only if the owner lends it and there is a relé to talk to.
+        val founder = Settings.founder(this)
         val relayUrl = Settings.relay(this)
         if (Settings.lendInternet(this) && relayUrl.isNotBlank()) {
             relay = ar.chamullo.core.RelayBridge(relayUrl, identity, incoming).also { r -> r.start(); Hub.relay = r; Hub.worker.post { node.bridge = r } }
@@ -67,6 +68,11 @@ class GritoService : Service() {
                     for (f in n.drainOutbox()) on.forEach { it.shout(f) }
                     islands.myCell = n.cell(); islands.stuck = n.stuckZone()
                     n.cell()?.let { c -> relay?.place(c) }
+                    // The pueblo's ledger, once I know where I am and who founded the network (Economy & Governance §9-§10).
+                    if (n.ledger == null && founder.length == 64) n.cell()?.let { c ->
+                        n.ledger = ar.chamullo.core.Ledger(ar.chamullo.core.Ledger.Params(c.up(ar.chamullo.core.Zone.PUEBLO), ar.chamullo.core.hex(founder)))
+                        FieldLog.add("LIBRETA", "llevo la libreta de mi pueblo: ${n.ledger!!.pages.size} páginas")
+                    }
                 }
                 Hub.worker.postDelayed(this, TICK_MS)
             }

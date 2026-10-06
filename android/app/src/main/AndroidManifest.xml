@@ -46,6 +46,7 @@
         <activity android:name=".ChatActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".DiagActivity" android:exported="false" />
         <activity android:name=".PlazaActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".StoreActivity" android:exported="false" />
 
         <service
             android:name=".GritoService"

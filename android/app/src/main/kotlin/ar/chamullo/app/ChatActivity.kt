@@ -30,6 +30,7 @@ class ChatActivity : Activity() {
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(8)) }
         scroll = ScrollView(this).apply { addView(list); layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f) }
         val box = input("Escribí tu carta")
+        val priority = android.widget.CheckBox(this).apply { text = "Con prioridad: $PRIORITY_LUCAS Lucas para los carteros" }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; fitsSystemWindows = true
             val title = text("", 20f, bold = true).apply { setPadding(dp(16), dp(16), dp(16), dp(4)) }
@@ -39,11 +40,13 @@ class ChatActivity : Activity() {
             addView(LinearLayout(this@ChatActivity).apply {
                 orientation = LinearLayout.VERTICAL; setPadding(dp(16), 0, dp(16), dp(16))
                 addView(box)
+                addView(priority)
                 addView(button("Gritar carta") {
                     val msg = box.text.toString().trim()
                     if (msg.isNotEmpty()) {
                         box.setText("")
-                        Hub.post { node -> node.store.contact(peer)?.let { node.send(it, msg) }; Hub.emit(null) }
+                        val paid = if (priority.isChecked) PRIORITY_LUCAS else 0L
+                        Hub.post { node -> node.store.contact(peer)?.let { node.send(it, msg, priority = paid) }; Hub.emit(null) }
                     }
                 })
             })
@@ -76,7 +79,11 @@ class ChatActivity : Activity() {
         scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) }
     }
 
-    companion object { const val EXTRA_PEER = "peer" }
+    companion object {
+        const val EXTRA_PEER = "peer"
+        // What a letter offers its carriers to go first (Economy & Governance §6.1).
+        const val PRIORITY_LUCAS = 2L
+    }
 
     @Suppress("unused") private fun shortId() = peer.toHex().take(8)
 }

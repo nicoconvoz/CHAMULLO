@@ -13,6 +13,7 @@ import ar.chamullo.app.Ui.logo
 import ar.chamullo.app.Ui.screen
 import ar.chamullo.app.Ui.text
 import ar.chamullo.app.Ui.title
+import ar.chamullo.core.toHex
 
 /** Numbers for the field tests of Air Interface §10: what the radio can do and what it is doing. */
 class DiagActivity : Activity() {
@@ -22,6 +23,7 @@ class DiagActivity : Activity() {
     private var helloInfo = ""
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var bridgeInfo: TextView
+    private lateinit var ledgerInfo: TextView
     private val tick = object : Runnable { override fun run() { refresh(); handler.postDelayed(this, 1000) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,6 +53,20 @@ class DiagActivity : Activity() {
                 recreate()
             })
             bridgeInfo = text("", 14f); addView(card { addView(bridgeInfo) })
+            addView(title("Libreta del pueblo"))
+            addView(text("La libreta anota quién llevó cartas y reparte las Lucas. Para llevarla hace falta la clave del fundador de la red.", 13f, Ui.MUTED))
+            val founderField = input("Clave del fundador (64 letras y números)").apply { setText(Settings.founder(this@DiagActivity)) }
+            addView(founderField)
+            addView(button("Guardar la clave del fundador", primary = false) {
+                Settings.setFounder(this@DiagActivity, founderField.text.toString())
+                stopService(Intent(this@DiagActivity, GritoService::class.java))
+                startForegroundService(Intent(this@DiagActivity, GritoService::class.java))
+                recreate()
+            })
+            addView(button("Soy el fundador: usar mi clave", primary = false) {
+                Hub.ask({ it.identity.nodeId.toHex() }) { me -> founderField.setText(me) }
+            })
+            ledgerInfo = text("", 14f); addView(card { addView(ledgerInfo) })
             addView(title("Caja negra"))
             addView(button("Compartir registro") {
                 startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "CHAMULLO ${WebVersion.installed(this@DiagActivity)}\n" + FieldLog.text()), "Mandar el registro"))
@@ -64,6 +80,10 @@ class DiagActivity : Activity() {
     override fun onPause() { handler.removeCallbacks(tick); super.onPause() }
 
     private fun refresh() {
+        Hub.ask({ n -> Triple(n.identity.nodeId.toHex(), n.ledger, n.available()) }) { (me, l, lucas) ->
+            ledgerInfo.text = if (l == null) "Sin libreta todavía (falta la clave del fundador o la ubicación).\nMi clave: $me"
+            else "Páginas: ${l.pages.size}\nRey: ${l.court().king?.toHex()?.take(8) ?: "—"}${if (l.court().nobles.isEmpty()) " (génesis)" else " · ${l.court().nobles.size} nobles"}\nMis Lucas: $lucas\nMi clave: $me"
+        }
         val r = Hub.relay
         bridgeInfo.text = if (r == null) "Apagado." else
             "Prestando Internet.\n  Llevé por Internet: ${r.sentBytes / 1024} KB\n  Último aviso: ${r.lastError ?: "ninguno"}"

@@ -76,5 +76,20 @@ class NodeLedgerTest {
         assertEquals(air.node("fundador").ledger!!.pages.size, far.ledger!!.pages.size)
     }
 
+    @Test
+    fun `the book survives a restart - pages are kept and replayed`() {
+        var now = 0L
+        val founder = Identity.generate("Fundador")
+        val params = Ledger.Params(Zone.of(lat, -58.43, Zone.PUEBLO), founder.nodeId, periodMs = 30_000, maturityMs = 1, genesisContributors = 50)
+        val store = MemoryStore()
+        val first = Node(founder, store) { now }.apply { locate(lat, -58.43); ledger = Ledger(params) }
+        while (now < 30_000 + Node.LEDGER_PAGE_MS * 2) { now += 100; first.tick() }
+        val pages = first.ledger!!.pages.size
+        assertTrue(pages > 0)
+        val again = Node(founder, store) { now }.apply { ledger = Ledger(params) }
+        assertEquals(pages, again.ledger!!.pages.size)
+        assertEquals(first.ledger!!.balance(founder.nodeId), again.ledger!!.balance(founder.nodeId))
+    }
+
     private fun Air.node(n: String) = nodes.getValue(n)
 }

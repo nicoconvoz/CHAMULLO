@@ -18,6 +18,9 @@ interface Store {
     fun loadPockets(): List<ByteArray> = emptyList()
     fun saveCandies(n: Int) {}
     fun loadCandies(): Int = 0
+    /** The ledger's pages, in order (Economy & Governance §9): kept so the book survives a restart. */
+    fun appendPage(page: ByteArray) {}
+    fun loadPages(): List<ByteArray> = emptyList()
 }
 
 class MemoryStore : Store {
@@ -33,6 +36,9 @@ class MemoryStore : Store {
     private var candies = 0
     override fun saveCandies(n: Int) { candies = n }
     override fun loadCandies() = candies
+    private val pages = ArrayList<ByteArray>()
+    override fun appendPage(page: ByteArray) { pages += page }
+    override fun loadPages() = pages.toList()
     override fun saveContact(card: Card) { contacts[card.nodeId.toHex()] = card }
     override fun contacts() = contacts.values.toList()
     override fun saveMessage(m: Message) { messages += m }
