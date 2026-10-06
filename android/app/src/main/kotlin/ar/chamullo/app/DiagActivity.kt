@@ -30,7 +30,13 @@ class DiagActivity : Activity() {
             radioInfo = text("", 14f); addView(card { addView(radioInfo) })
             addView(title("Nodo"))
             nodeInfo = text("", 14f); addView(card { addView(nodeInfo) })
-            addView(button("Prueba de velocidad por la carretera (4 MB)") { (Hub.radios.firstOrNull { it is WifiRoad } as? WifiRoad)?.speedTest() })
+            addView(button("Prueba de velocidad en la isla (4 MB)") { (Hub.radios.firstOrNull { it is WifiIslands } as? WifiIslands)?.speedTest() })
+            addView(button(if (Settings.bluetooth(this@DiagActivity)) "Apagar el Bluetooth de respaldo" else "Prender el Bluetooth de respaldo", primary = false) {
+                Settings.setBluetooth(this@DiagActivity, !Settings.bluetooth(this@DiagActivity))
+                stopService(Intent(this@DiagActivity, GritoService::class.java))
+                startForegroundService(Intent(this@DiagActivity, GritoService::class.java))
+                recreate()
+            })
             addView(title("Caja negra"))
             addView(button("Compartir registro") {
                 startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "CHAMULLO ${WebVersion.installed(this@DiagActivity)}\n" + FieldLog.text()), "Mandar el registro"))
@@ -51,9 +57,9 @@ class DiagActivity : Activity() {
                 "  Lo tiene este celular: ${yes(r.supported)}",
                 "  Encendido y gritando: ${yes(r.active)}",
                 (r as? WifiRadio)?.let { "  Celulares encontrados: ${it.peers}" },
-                (r as? WifiRoad)?.let { "  Mi carretera: ${if (it.roadUp) it.ssid else "cerrada"}" },
-                (r as? WifiRoad)?.let { "  Viajando por: ${it.riding ?: "ninguna"} · caños abiertos: ${it.peers}" },
-                (r as? WifiRoad)?.let { "  Prueba de velocidad: ${it.lastSpeed ?: "sin hacer"}" },
+                (r as? WifiIslands)?.let { "  Isla: ${it.islandName ?: "ninguna todavía"}${if (it.host) " (soy el anfitrión, ${it.memberCount} miembros)" else ""}" },
+                (r as? WifiIslands)?.let { "  Carteles vistos: ${it.cartelesSeen} · caños abiertos: ${it.peers}${it.ferrying?.let { f -> " · de ferry a ${f.take(6)}" } ?: ""}" },
+                (r as? WifiIslands)?.let { "  Prueba de velocidad: ${it.lastSpeed ?: "sin hacer"}" },
                 (r as? GritoRadio)?.let { "  Anuncios extendidos: ${yes(it.extended)} · largo alcance: ${yes(it.coded)}" },
                 (r as? GritoRadio)?.takeIf { !it.extended }?.let { "  Megáfonos a la vez: ${it.megaphoneLimit}" },
                 (r as? GritoRadio)?.let { "  Escuchando: ${yes(it.listening)} · cartas en cola: ${it.waiting}" },

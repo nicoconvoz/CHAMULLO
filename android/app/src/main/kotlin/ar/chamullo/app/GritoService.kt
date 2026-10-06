@@ -35,10 +35,13 @@ class GritoService : Service() {
         val identity = Vault(this).identity() ?: run { stopSelf(); return }
         val incoming: (ByteArray) -> Unit = { frame -> Hub.worker.post { handle(frame) } }
         val bluetooth = GritoRadio(this, incoming) { hello -> Hub.worker.post { Hub.node?.onHello(hello) } }
-        val road = WifiRoad(this, identity, incoming) { ssid, pass -> Hub.post { it.setRoad(ssid, pass) } }
-        radios = listOf(road, WifiRadio(this, incoming), bluetooth)
-        // Frames up to 60 KB stay whole: the carretera carries them in one piece; caminos split small ones.
-        val node = Node(identity, FileStore(this), ROAD_FRAME, bluetooth.coded) { System.currentTimeMillis() }
+        val islands = WifiIslands(this, identity, incoming)
+        // Islas: Wi-Fi Direct is camino and carretera. Bluetooth is an opt-in fallback; Wi-Fi Aware stays off because
+        // Google documents it may conflict with Wi-Fi Direct.
+        val useBluetooth = Settings.bluetooth(this)
+        radios = listOfNotNull(islands, bluetooth.takeIf { useBluetooth })
+        // Frames up to 60 KB stay whole: islands carry them in one piece; the Bluetooth fallback splits small ones.
+        val node = Node(identity, FileStore(this), ROAD_FRAME, useBluetooth && bluetooth.coded) { System.currentTimeMillis() }
         Hub.radios = radios
         Hub.worker.post { Hub.node = node }
         radios.forEach { it.start() }
@@ -49,10 +52,7 @@ class GritoService : Service() {
                 Hub.node?.let { n ->
                     n.tick()
                     val now = System.currentTimeMillis()
-                    if (now - lastHello >= HELLO_MS) { lastHello = now; bluetooth.sayHello(n.hello()) }
-                    // Only one of two neighbors opens a road; a busy rider opens one for whoever it could not ride.
-                    n.setRiding(road.riding != null)
-                    if (n.wantsRoad()) road.ensureOpen() else if (road.closeIfIdle(ROAD_IDLE_MS)) n.closeRoad()
+                    if (useBluetooth && now - lastHello >= HELLO_MS) { lastHello = now; bluetooth.sayHello(n.hello()) }
                     val on = radios.filter { it.active }
                     for (f in n.drainOutbox()) on.forEach { it.shout(f) }
                 }
@@ -77,7 +77,6 @@ class GritoService : Service() {
                         synchronized(Hub.pendingCards) { if (Hub.pendingCards.none { it.nodeId.contentEquals(event.card.nodeId) }) Hub.pendingCards += event.card } // repeated offers: one dialog
                         notify(ID_CARD, notification(CH_MSG, "${event.card.name} quiere intercambiar tarjetas", "Tocá para aceptar.", MainActivity::class.java))
                     }
-                is NodeEvent.RoadInvited -> (radios.firstOrNull { it is WifiRoad } as? WifiRoad)?.join(event.ssid, event.passphrase)
                 is NodeEvent.LetterReceived ->
                     notify(event.msgId.hashCode(), notification(CH_MSG, event.from.name, event.text, ChatActivity::class.java, event.from.nodeId))
                 else -> Unit

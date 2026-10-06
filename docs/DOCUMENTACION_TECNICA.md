@@ -1,6 +1,6 @@
 # CHAMULLO — Documentación técnica
 
-Versión del documento: 5 · Estado del código: app 0.2.3 publicada; **0.3.0 "Islas" en construcción** (octubre 2026)
+Versión del documento: 6 · Estado del código: app 0.3.0 "Islas" (octubre 2026)
 
 > Este documento describe **lo que está construido y funcionando hoy**. El diseño completo de la red
 > (identidad, sobre, recibos, economía, routing, interfaz de aire) está en [`docs/specs/`](specs/). Cuando el
@@ -247,9 +247,9 @@ La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo
 | 0.2.1 | Saludo de un solo grito; la carretera abre solo con un vecino estable | "Vecinos: 0": la carretera abierta de entrada le robaba antena al grito |
 | 0.2.2 | Varios megáfonos a la vez en chips viejos | Lo que gritaba un chip viejo llegaba "a veces": cada micro salía una vez o ninguna |
 | 0.2.3 | Una sola carretera por par de vecinos; pasajero ocupado; cierre de carreteras vacías; aviso de versión cada 30 min | El Capitán: "si uno abre, el otro se conecta; ¿para qué abrir las dos?" |
-| 0.3.0 *(en construcción)* | **Islas**: todo por Wi-Fi Direct, carteles, ferry que rota; Bluetooth de respaldo | El Capitán: "¿para qué caminos si podemos trazarlos con la carretera?" |
+| 0.3.0 | **Islas**: todo por Wi-Fi Direct, carteles, anfitrión que reparte, ferry que rota; Bluetooth de respaldo apagado por defecto; Wi-Fi Aware apagado | El Capitán: "¿para qué caminos si podemos trazarlos con la carretera?" |
 
-## 13. En construcción: Islas (0.3.0)
+## 13. Islas (0.3.0)
 
 Rediseño del Capitán después de las pruebas de campo: **el Bluetooth complicaba todo y transmitía muy poco**. En
 0.3.0 Wi-Fi Direct hace de camino **y** de carretera. Diseño en [spec 07 §6](specs/07-camino-carretera.md#6-islas-v02).
@@ -258,12 +258,12 @@ Rediseño del Capitán después de las pruebas de campo: **el Bluetooth complica
 
 | Pieza | Qué es | Estado |
 |---|---|---|
-| **Isla** | Un grupo Wi-Fi Direct: un anfitrión y hasta 7 miembros que se hablan en un salto | Cerebro listo y probado |
-| **Cartel** | Registro de servicio Wi-Fi Direct (DNS-SD) con id, nombre, isla, rol, llave y lista de miembros. Se ve **sin conectarse** | Formato listo y probado |
-| **Sumarse, no fundar** | Sin isla: me sumo a la más grande con lugar; si no hay, fundo una | Cerebro listo y probado |
-| **Fusión** | Un anfitrión solo se suma a una isla vecina (a una más grande, o a otra sola de id menor) | Cerebro listo y probado |
-| **Ferry** | Por turnos de 60 s, un miembro sale, entra a la isla vecina, entrega lo que lleva y vuelve | Turnos listos y probados |
-| **Bluetooth y Wi-Fi Aware** | Apagados por defecto; el Bluetooth queda de respaldo | Pendiente en la app |
+| **Isla** | Un grupo Wi-Fi Direct: un anfitrión y hasta 7 miembros que se hablan en un salto; el anfitrión repite cada trama a los demás | En la app (`WifiIslands.kt`) |
+| **Cartel** | Registro de servicio Wi-Fi Direct (DNS-SD) con id, nombre, isla, rol, llave y lista de miembros. Se ve **sin conectarse**; se busca cada 15 s | En la app |
+| **Sumarse, no fundar** | Sin isla: me sumo a la más grande con lugar; si no hay, fundo una. Se decide cada 5 s | En la app |
+| **Fusión** | Un anfitrión solo se suma a una isla vecina (a una más grande, o a otra sola de id menor) | En la app |
+| **Ferry** | Por turnos de 60 s, un miembro sale, entra a la isla vecina 20 s, entrega lo que lleva y vuelve | En la app |
+| **Bluetooth y Wi-Fi Aware** | Apagados por defecto; el Bluetooth se prende desde Diagnóstico como respaldo | En la app |
 
 ### 13.2 Reglas de decisión (`Islands.decide`)
 
@@ -288,7 +288,7 @@ Rediseño del Capitán después de las pruebas de campo: **el Bluetooth complica
 
 ## 14. Pendientes conocidos
 
-- [ ] **Terminar Islas en la app** (§13).
+- [ ] **Probar Islas en campo** (§13): fundar, sumarse, prueba de velocidad.
 - [ ] **Medir la carretera en campo**: conexión, prueba de velocidad, posible choque de direcciones (todas las carreteras usan `192.168.49.x`).
 - [ ] Confirmar si Android pide aprobación cada vez que se sube a una carretera.
 - [ ] Brújula y río (spec 05) en la app: hoy el ruteo es eco acotado.
@@ -299,5 +299,5 @@ Rediseño del Capitán después de las pruebas de campo: **el Bluetooth complica
 
 ## 15. Próximo paso
 
-Terminar 0.3.0 "Islas" en la app (carteles, sumarse, anfitrión que reparte, ferry) y probarla con dos teléfonos
-Android 10+ con el Wi-Fi prendido: Diagnóstico → "En la isla de …" → **Prueba de velocidad**.
+Probar 0.3.0 con dos teléfonos Android 10+ con el Wi-Fi y la Ubicación prendidos: Diagnóstico → "Isla: …" →
+**Prueba de velocidad en la isla**. Si algo falla, compartir la caja negra.
