@@ -220,8 +220,9 @@ Cuando una carta cruza pueblos (Ana en Mendoza, Caro de Junín que la lleva):
 | Peso de un vecino | Su antigüedad en la libreta, de 0 a 1 en 30 días | §5.1: lo nuevo pesa casi cero |
 | Grito a todos | Vecino "eco", con peso fijo ½ | Un salto sin taker no nombra vecino: cuenta, pero menos |
 | Gasto de prioridad | Mitad se quema, mitad queda en garantía para los carteros de esa carta y se reparte al cierre | §4.3 y §6.1 |
+| Paquete de datos | Entero a la **garantía de datos** del comprador; no se quema ni va a la Tienda | §13: lo cobran los que prestan Internet, a medida que se usa |
 
-- **Asientos:** `JOURNEY` (el viaje sellado: se acepta si `H(r) = R` y `CONFIRM` vale), `CLAIM` (las cinco pruebas de Proof of Relay §7, una vez por renglón), `SPEND` (firmado, sin saldo negativo), `CLOSE` (el reparto, que cada copia recalcula y debe dar igual) y `DEPOSE` (más de 2/3 de la Nobleza).
+- **Asientos:** `JOURNEY` (el viaje sellado: se acepta si `H(r) = R` y `CONFIRM` vale), `CLAIM` (las cinco pruebas de Proof of Relay §7, una vez por renglón), `SPEND` (firmado, sin saldo negativo; un paquete de datos, `what = "tienda:datos…"` sin destinatario, va a la garantía de datos), `DATA` (un recibo de datos, §13.1), `CLOSE` (el reparto, que cada copia recalcula y debe dar igual) y `DEPOSE` (más de 2/3 de la Nobleza).
 - **Página:** índice, hash de la anterior, hora, asientos, firma del Rey y endorsos de la Nobleza; hacen falta **más** de 2/3. Si el primer asiento es un `DEPOSE` válido, la escribe el primer noble.
 - **Puntaje (§5):** por cartero, para cada vecino distinto con el que trabajó: `peso(vecino) × (1 + log2 n) × promedio(escasez × parte de la entrega)`, donde la parte es `1 / (saltos cobrables)`.
 - **Cámara compensadora (§9.3):** `Clearing.net` netea lo que se deben los pueblos, de a pares.
@@ -277,5 +278,24 @@ alguien necesita comunicarse
 
 - Es una **economía circular de trabajo real**: Lucas ↔ aporte verificable ↔ recurso real usado (cartas llevadas, bytes de Internet prestados).
 - El gemelo digital mide el precio: cuántas Lucas cuesta llevar una cantidad de información y cuánto aportó cada uno.
-- Pendiente: el recibo del tramo por Internet (quién prestó cuántos bytes) y su peso frente a llevar cartas en mano.
+- Pendiente: el recibo del tramo **por Nostr** (quién prestó cuántos bytes en un salto grande) y su peso frente a llevar cartas en mano. El del túnel de datos ya existe (§13.1).
+
+### 13.1 Los megas de la Tienda: recibos de datos (0.7.0)
+
+Los paquetes de datos de la Tienda se usan por el **túnel de datos** (Discovery & Routing §11.3): navego por el Internet de un vecino de mi isla.
+
+| Pieza | Regla |
+|---|---|
+| Compra | `SPEND` sin destinatario y `what = "tienda:datos-…"`. Las Lucas van enteras a la **garantía de datos** del comprador |
+| Precio de un byte | Los paquetes se gastan en el orden en que se compraron, cada uno a su precio: `DataPlan.owed` |
+| Recibo | `DATA_RECEIPT = { comprador, prestador, sesión (16 B), bytes, lucas, ts, firma_comprador("DATA", …) }`. Es **acumulado**: cada uno reemplaza al anterior de la misma sesión |
+| Cada cuánto | El comprador firma uno cada `RECEIPT_EVERY = 256 KB` |
+| Fiado | El prestador sirve hasta `CREDIT = 1 MB` sin recibo nuevo; después espera 20 s y corta |
+| Cobro | Asiento `DATA`: paga al prestador `lucas − lo ya pagado en esa sesión`, como mucho lo que queda en la garantía. Un recibo repetido o más viejo no paga nada. El prestador lo manda a la libreta cuando la sesión queda quieta, o cada 5 min |
+| Vencimiento | Se olvida lo pagado por una sesión dos períodos después; un recibo con hora anterior al período previo no se acepta |
+
+- Nadie paga dos veces: el recibo es acumulado y la libreta recuerda cuánto pagó cada sesión.
+- Nadie cobra de más: la firma es del comprador y el monto sale de sus propios paquetes.
+- Si el comprador no firma, el prestador pierde como mucho 1 MB.
+
 

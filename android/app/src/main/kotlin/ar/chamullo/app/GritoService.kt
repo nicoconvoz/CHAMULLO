@@ -22,6 +22,7 @@ class GritoService : Service() {
     private var running = false
     private var locator: Locator? = null
     private var relay: ar.chamullo.core.NostrBridge? = null
+    private var tunnel: DataTunnel? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -51,6 +52,8 @@ class GritoService : Service() {
         Hub.radios = radios
         Hub.worker.post { Hub.node = node }
         islands.onHeading = { heading -> Hub.post { it.setHeading(heading) } }
+        // El túnel de datos (Discovery & Routing §11.3): browse through a neighbor's Internet, or lend mine.
+        tunnel = DataTunnel(this, identity, islands).also { it.start(); Hub.tunnel = it }
         radios.forEach { it.start() }
         locator = Locator(this) { lat, lon -> Hub.post { it.locate(lat, lon) } }.also { it.start() }
         // The Internet bridge (Discovery & Routing §11): only if the owner lends it and there is a relé to talk to.
@@ -142,6 +145,7 @@ class GritoService : Service() {
         running = false
         locator?.stop()
         relay?.stop(); Hub.relay = null
+        tunnel?.stop(); Hub.tunnel = null
         radios.forEach { it.stop() }
         Hub.node = null
         super.onDestroy()

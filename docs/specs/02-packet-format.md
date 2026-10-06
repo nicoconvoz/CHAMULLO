@@ -201,6 +201,9 @@ Los mensajes `LINK` nunca salen del enlace en el que se crearon.
 | `13` | `HEARD` | "Lo escuché" de la plaza |
 | `14` | `ROAD_INVITE` | Llave de la carretera, sellada |
 | `15` | `PAYMENT` | Confirmación del origen que paga a los carteros. `11` ttl, `13` zona destino y `15` receivers viajan sin firma (Discovery & Routing §10.7) |
+| `16` | `CLAIM` | El cobro de un cartero con sus cinco pruebas (Proof of Relay §7) |
+| `17` | `LEDGER` | La libreta del pueblo de boca en boca: asiento, página propuesta, endoso, página sellada o "tengo hasta la n" (Economy & Governance §9.4) |
+| `18` | `TUNNEL` | Un pedazo del túnel de datos (Discovery & Routing §11.3): `2` de, `4` para (vacío = "¿quién presta?"), `6` operación, `8` corriente, `10` nonce, `12` contenido. `ASK` y `LEND` llevan la clave de caja firmada; las demás van selladas para la otra punta, con la operación y la corriente adentro |
 
 La **tarjeta de contacto** lleva su zona (manzana o barrio, Discovery & Routing §2.1) en el TLV `11`, impar y firmado: una tarjeta vieja sin zona sigue sirviendo. El contenido sellado de cada carta lleva la tarjeta actual del remitente en el TLV interno `21` (Discovery & Routing §5).
 

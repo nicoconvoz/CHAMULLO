@@ -66,6 +66,9 @@ object Crypto {
         it[31] = (it[31].toInt() and 127 or 64).toByte()
     }
 
+    /** The key two box key pairs share, to seal many messages without repeating the curve math. */
+    fun boxShared(theirPublic: ByteArray, mySecret: ByteArray): ByteArray = boxKey(theirPublic, mySecret)
+
     private fun boxKey(theirPublic: ByteArray, mySecret: ByteArray): ByteArray {
         val shared = ByteArray(32)
         X25519.scalarMult(mySecret, 0, theirPublic, 0, shared, 0)

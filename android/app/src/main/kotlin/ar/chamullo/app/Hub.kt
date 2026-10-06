@@ -20,6 +20,9 @@ object Hub {
     @Volatile var node: Node? = null
     @Volatile var radios: List<Radio> = emptyList()
     @Volatile var relay: ar.chamullo.core.NostrBridge? = null
+    /** The data tunnel (Discovery & Routing §11.3) and whether I browse with my bought Internet right now. */
+    @Volatile var tunnel: DataTunnel? = null
+    @Volatile var browsing = false
     val pendingCards = mutableListOf<Card>()
     val listeners = CopyOnWriteArraySet<(NodeEvent?) -> Unit>()
 

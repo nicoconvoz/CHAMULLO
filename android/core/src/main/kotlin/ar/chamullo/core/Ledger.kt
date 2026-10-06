@@ -29,6 +29,11 @@ sealed interface Entry {
             4L to Writer().apply { for ((id, v) in shares.toSortedMap()) raw(hex(id)).u64(v) }.bytes()))
     }
 
+    /** A data receipt (§13): the buyer's escrow pays [receipt]'s lender what it adds over the last one of its session. */
+    class Data(val receipt: DataReceipt) : Entry {
+        override fun encode() = byteArrayOf(R) + receipt.encode()
+    }
+
     /** More than two thirds of the nobility depose [king] (§8.3). */
     class Depose(val king: ByteArray, val ts: Long, val sigs: List<Pair<ByteArray, ByteArray>>) : Entry {
         override fun encode() = byteArrayOf(D) + Tlv.encode(listOf(2L to king, 4L to Tlv.u64(ts),
@@ -41,9 +46,11 @@ sealed interface Entry {
         private const val S: Byte = 3
         private const val K: Byte = 4
         private const val D: Byte = 5
+        private const val R: Byte = 6
 
         fun journey(j: Journey): Entry = OfJourney(j)
         fun claim(c: Claim): Entry = OfClaim(c)
+        fun data(r: DataReceipt): Entry = Data(r)
 
         fun spend(from: Identity, to: ByteArray?, amount: Long, what: String, ts: Long): Spend {
             val unsigned = Spend(from.nodeId, to, amount, what, ts, ByteArray(0))
@@ -71,6 +78,7 @@ sealed interface Entry {
                     val r = Reader(t.getValue(6))
                     Depose(t.getValue(2), Tlv.readU64(t.getValue(4)), buildList { while (r.remaining > 0) add(r.take(32) to r.take(64)) })
                 }
+                R -> Data(DataReceipt.decode(rest))
                 else -> null
             }
         }.getOrNull()
@@ -136,6 +144,9 @@ class Ledger(val params: Params) {
         val claimants = HashMap<String, HashSet<String>>() // msg id → who claimed it, for priority escrow
         val firstSeen = HashMap<String, Long>()
         val escrow = HashMap<String, Long>()        // msg id → Lucas offered for priority, waiting for its carriers
+        val dataEscrow = HashMap<String, Long>()    // buyer → Lucas of data packs, waiting for whoever lends the Internet (§13)
+        val dataPaid = HashMap<String, Long>()      // buyer + session → Lucas its receipts already paid
+        val dataPeriod = HashMap<String, Long>()    // buyer + session → period of its last receipt
         var period = 0L
         var lastScores: Map<String, Double> = emptyMap()
         var deposed: String? = null
@@ -143,6 +154,7 @@ class Ledger(val params: Params) {
         fun copy() = State().also { s ->
             s.balances += balances; s.journeys += journeys; s.journeyPeriod += journeyPeriod; s.claimed += claimed; s.carries += carries
             claimants.forEach { (k, v) -> s.claimants[k] = HashSet(v) }; s.firstSeen += firstSeen; s.escrow += escrow
+            s.dataEscrow += dataEscrow; s.dataPaid += dataPaid; s.dataPeriod += dataPeriod
             s.period = period; s.lastScores = lastScores; s.deposed = deposed
         }
     }
@@ -157,8 +169,11 @@ class Ledger(val params: Params) {
     fun journeysKept(): Int = state.journeys.size
     fun balances(): Map<String, Long> = state.balances.toMap()
 
-    /** Every Lucas in the pueblo: balances plus what waits in priority escrow. */
-    fun supply(): Long = state.balances.values.sum() + state.escrow.values.sum()
+    /** Every Lucas in the pueblo: balances plus what waits in priority and data escrow. */
+    fun supply(): Long = state.balances.values.sum() + state.escrow.values.sum() + state.dataEscrow.values.sum()
+
+    /** Lucas of [id]'s data packs not yet paid to lenders (§13). */
+    fun dataEscrow(id: ByteArray): Long = state.dataEscrow[id.toHex()] ?: 0
 
     fun court(): Court = courtOf(state)
 
@@ -235,9 +250,25 @@ class Ledger(val params: Params) {
             if (ok) {
                 s.balances[from] = (s.balances[from] ?: 0) - e.amount
                 if (e.to != null) s.balances.merge(e.to.toHex(), e.amount, Long::plus)
+                else if (e.what.startsWith(Shop.DATA_PREFIX)) s.dataEscrow.merge(from, e.amount, Long::plus) // whole, for the lenders
                 else s.escrow.merge(e.what, e.amount - e.amount / 2, Long::plus) // the other half is burned
             }
             ok
+        }
+        is Entry.Data -> {
+            val r = e.receipt
+            val buyer = r.buyer.toHex()
+            val key = buyer + r.session.toHex()
+            val delta = r.lucas - (s.dataPaid[key] ?: 0)
+            val left = s.dataEscrow[buyer] ?: 0
+            // Receipts older than the previous period are not taken: their session may already have left the state.
+            if (!r.verify() || delta <= 0 || left <= 0 || r.ts < (s.period - 1) * params.periodMs) false else {
+                val pay = minOf(delta, left)
+                s.dataEscrow[buyer] = left - pay
+                s.balances.merge(r.lender.toHex(), pay, Long::plus)
+                s.dataPaid[key] = r.lucas; s.dataPeriod[key] = s.period
+                true
+            }
         }
         is Entry.Close -> {
             if (e.period != s.period || ts < (s.period + 1) * params.periodMs || e.shares != sharesOf(s, ts)) false else {
@@ -256,6 +287,7 @@ class Ledger(val params: Params) {
                     s.journeys.remove(id); s.journeyPeriod.remove(id); s.claimants.remove(id)
                     s.claimed.removeAll { it.startsWith("$id:") }
                 }
+                for ((k, p) in s.dataPeriod.entries.toList()) if (p < s.period) { s.dataPeriod.remove(k); s.dataPaid.remove(k) }
                 s.deposed = null
                 s.period++
                 true

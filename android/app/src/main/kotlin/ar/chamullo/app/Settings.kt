@@ -46,6 +46,25 @@ object Settings {
 
     fun markSeen(c: Context, id: String) = prefs(c).edit().putLong("seen-$id", System.currentTimeMillis()).apply()
 
+    /** Bytes of bought Internet used so far (Discovery & Routing §11.3), kept in memory and saved every 256 KB. */
+    private var used = -1L
+    private var savedUsed = 0L
+
+    @Synchronized fun dataUsed(c: Context): Long {
+        if (used < 0) { used = prefs(c).getLong("dataUsed", 0); savedUsed = used }
+        return used
+    }
+
+    @Synchronized fun addDataUsed(c: Context, n: Long) {
+        used = dataUsed(c) + n
+        if (used - savedUsed >= 256 * 1024) { savedUsed = used; prefs(c).edit().putLong("dataUsed", used).apply() }
+    }
+
+    /** The store's catalog as last read from the page, so a phone without Internet still knows its packs. */
+    fun catalog(c: Context): String? = prefs(c).getString("catalog", null)
+
+    fun setCatalog(c: Context, json: String) = prefs(c).edit().putString("catalog", json).apply()
+
     /** The tab the home screen shows. */
     fun tab(c: Context) = prefs(c).getInt("tab", 0)
 

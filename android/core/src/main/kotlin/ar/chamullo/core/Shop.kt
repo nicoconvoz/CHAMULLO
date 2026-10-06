@@ -11,6 +11,8 @@ object Shop {
     class Purchase(val item: Item, val price: Long, val ts: Long)
 
     const val PREFIX = "tienda:"
+    /** Data packs: their Lucas wait in the buyer's data escrow until lenders collect them with receipts (§13). */
+    const val DATA_PREFIX = "tienda:datos"
 
     /** The catalog that comes inside the app. Data packs are Internet lent by bridges (Discovery & Routing §11). */
     const val DEFAULT = """{"categorias":[
@@ -46,7 +48,15 @@ object Shop {
     fun parseOrDefault(json: String?): List<Category> = json?.let { runCatching { parse(it).takeIf { c -> c.isNotEmpty() } }.getOrNull() } ?: parse(DEFAULT)
 
     /** A purchase: [buyer] pays [item]'s price to [seller] (the store's account), signed, for the next page. */
-    fun buy(buyer: Identity, item: Item, seller: ByteArray, now: Long): Entry.Spend = Entry.spend(buyer, seller, item.price, PREFIX + item.id, now)
+    fun buy(buyer: Identity, item: Item, seller: ByteArray, now: Long): Entry.Spend = Entry.spend(buyer, payee(item, seller), item.price, PREFIX + item.id, now)
+
+    /** Who a purchase pays: the store, or nobody yet for a data pack (it goes to escrow for the lenders). */
+    fun payee(item: Item, seller: ByteArray): ByteArray? = if (isData(item)) null else seller
+
+    fun isData(item: Item) = item.mb > 0 && (PREFIX + item.id).startsWith(DATA_PREFIX)
+
+    /** The packs bought, oldest first, for [DataPlan]. */
+    fun packs(purchases: List<Purchase>): List<DataPlan.Pack> = purchases.filter { isData(it.item) }.map { DataPlan.Pack(it.item.mb, it.price) }
 
     /** What [me] bought, as the ledger has it. */
     fun purchases(ledger: Ledger, me: ByteArray, catalog: List<Category>): List<Purchase> {

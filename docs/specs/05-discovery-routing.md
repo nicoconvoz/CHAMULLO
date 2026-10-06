@@ -266,6 +266,30 @@ La nube del puente es **Nostr**: miles de relés públicos que no son de nadie, 
 
 El relé propio de §11.1 queda para quien quiera alojar el suyo.
 
+### 11.3 El túnel de datos: navegar con Internet prestado (0.7.0)
+
+Los megas de la Tienda (Economy & Governance §13.1) se usan así: **un celular sin datos navega por el Internet de un vecino de su isla** que tiene "Prestar Internet" prendido.
+
+```text
+Chrome → proxy de CHAMULLO (127.0.0.1:8118) → tramas LINK 18 por la isla → el que presta → la web
+```
+
+| Pieza | Cómo |
+|---|---|
+| Para todas las apps | "Navegar con mis datos" arma una VPN que **solo recomienda un proxy** (`setHttpProxy`, Android 10+). Chrome y las apps que respetan el proxy del sistema navegan por CHAMULLO; lo demás que llega a la VPN se descarta. Los caños de CHAMULLO quedan afuera de la VPN. Android pide permiso una vez |
+| El proxy | HTTPS va como `CONNECT`: el túnel lleva el cifrado de la web sin abrirlo. HTTP va de a un pedido por conexión, con `Connection: close` |
+| Buscar quién presta | `ASK` a toda la isla cada 5 s hasta que alguien contesta `LEND`. Las dos llevan la clave de caja firmada, así un anfitrión del medio no puede cambiarla |
+| Por dónde viaja | Solo por los caños de la isla, nunca por el Bluetooth. El anfitrión pasa cada pedazo solo al miembro al que va |
+| Sellado | Todo pedazo después de `LEND` va sellado (XSalsa20-Poly1305) para la otra punta, con la operación y la corriente adentro: el anfitrión ve quién habla con quién, no qué |
+| Corrientes | `OPEN` (sesión + `host:puerto`), `OPENED`, `DATA` (hasta 16 KB), `ACK` (bytes ya tomados), `CLOSE`, `RECEIPT`. Ventana de 256 KB por sentido: nadie desborda la cola del caño |
+| Qué se abre | Solo direcciones públicas y puertos web (80, 443, 8080, 8443). Nunca la red de la casa del que presta ni su propio celular |
+| Qué Internet presta | La red del celular con Internet verificado que no sea una VPN (datos móviles o Wi-Fi) |
+| Pago | Recibos acumulados firmados por el comprador (Economy & Governance §13.1) |
+
+- Si el que presta se va (ferry, se apaga), el comprador vuelve a preguntar y sigue con otro.
+- Si se acaban los megas, el proxy contesta una página que lo explica.
+- Límite conocido: las apps que ignoran el proxy del sistema no navegan. Hace falta probarlo en campo con dos celulares.
+
 ### 11.1 El relé: la nube que cualquiera puede alojar
 
 Un servidor chico (`android/relay`, `./gradlew :relay:run`, puerto 47475). No depende de ningún proveedor: lo levanta quien quiera.

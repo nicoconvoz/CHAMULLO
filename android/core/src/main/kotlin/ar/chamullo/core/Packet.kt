@@ -20,6 +20,7 @@ sealed interface Packet {
         const val LINK_ACCEPT = 9L
         const val LINK_CLAIM = 16L
         const val LINK_LEDGER = 17L
+        const val LINK_TUNNEL = 18L
 
         fun isChamullo(b: ByteArray) = b.size >= 4 && b[0] == MAGIC[0] && b[1] == MAGIC[1] && b[2].toInt() == VERSION
 
@@ -42,6 +43,7 @@ sealed interface Packet {
                         LINK_ACCEPT -> Accept.decode(tlv)
                         LINK_CLAIM -> Claim.decode(tlv)
                         LINK_LEDGER -> LedgerMsg.decode(tlv)
+                        LINK_TUNNEL -> TunnelMsg.decode(tlv)
                         else -> throw WireException("unknown link message $type")
                     }
                 }

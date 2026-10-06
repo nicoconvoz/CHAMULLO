@@ -693,6 +693,9 @@ class Node(
         return true
     }
 
+    /** A lender collects what a buyer used through its Internet (Economy & Governance §13): the receipt goes to the book. */
+    fun submitData(r: DataReceipt) { if (r.verify()) submit(Entry.data(r).encode()) }
+
     private fun submit(entry: ByteArray) {
         ledgerPool.putIfAbsent(Crypto.hash(entry).toHex(), entry)
         gossip(LedgerMsg.ENTRY, entry)

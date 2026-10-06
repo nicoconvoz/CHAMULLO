@@ -92,6 +92,8 @@ class WifiIslands(
     /** From the node, every tick: where I am, and where a letter nobody here gets closer wants to go (§10.6). */
     @Volatile var myCell: Zone? = null
     @Volatile var stuck: Zone? = null
+    /** Pieces of the data tunnel addressed to me or to everyone (Discovery & Routing §11.3). */
+    var onTunnel: (ar.chamullo.core.TunnelMsg) -> Unit = {}
     /** Tells the node a ferry heading (boarding) or that it arrived (null). */
     var onHeading: (Zone?) -> Unit = {}
 
@@ -398,6 +400,29 @@ class WifiIslands(
         if (links.isNotEmpty()) shouts++
     }
 
+    /**
+     * A piece of the data tunnel: only to the island, never to the Bluetooth fallback. A host sends it straight to the
+     * member it is for; a member hands it to its host, which does the same.
+     */
+    fun sendTunnel(frame: ByteArray, to: ByteArray) {
+        val direct = if (host) links.firstOrNull { it.peer?.contentEquals(to) == true } else null
+        if (direct != null) direct.send(frame) else for (l in links) l.send(frame)
+    }
+
+    private fun isTunnel(f: ByteArray) = f.size > 5 && f[0] == 0x43.toByte() && f[1] == 0x48.toByte() && f[3].toInt() == 0x01 &&
+        f[4].toLong() == ar.chamullo.core.Packet.LINK_TUNNEL
+
+    // The host passes tunnel pieces only to the member they are for (to everyone if it is a "who lends?").
+    private fun onTunnelFrame(from: Link, f: ByteArray) {
+        val m = ar.chamullo.core.Packet.parseOrNull(f) as? ar.chamullo.core.TunnelMsg ?: return
+        val forMe = m.to.isEmpty() || m.to.contentEquals(identity.nodeId)
+        if (host && !m.to.contentEquals(identity.nodeId)) {
+            val target = if (m.to.isEmpty()) null else links.firstOrNull { it !== from && it.peer?.contentEquals(m.to) == true }
+            if (target != null) target.send(f) else if (m.to.isEmpty()) for (l in links) if (l !== from) l.send(f)
+        }
+        if (forMe) onTunnel(m)
+    }
+
     /** Sends [megabytes] of test data to everyone connected; the receivers measure and answer. */
     fun speedTest(megabytes: Int = 4) {
         if (links.isEmpty()) { lastSpeed = "no hay nadie en la isla"; return }
@@ -426,6 +451,7 @@ class WifiIslands(
         // The secret greeting (Identity §7): nothing passes until the other side proves who it is.
         private val handshake = Handshake(identity)
         @Volatile private var trusted = false
+        val peer: ByteArray? get() = if (trusted) handshake.peer else null
 
         fun start() {
             links += this
@@ -472,6 +498,7 @@ class WifiIslands(
                     continue
                 }
                 when {
+                    isTunnel(f) -> onTunnelFrame(this, f)
                     f.startsWith(FERRY) -> handler.post { ferryLinks += this }
                     f.startsWith(FULL) -> { FieldLog.add("ISLA", "la isla está llena: fundo la mía"); handler.post { island = null } }
                     f.startsWith(SPEED_START) -> { speedExpected = intOf(f, SPEED_START.size); speedGot = 0; speedStart = System.nanoTime() }

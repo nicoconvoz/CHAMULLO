@@ -196,6 +196,11 @@ class MainActivity : Activity() {
             addView(button("Tienda de Lucas") { startActivity(Intent(this@MainActivity, StoreActivity::class.java)) })
         })
         page.addView(card {
+            addView(text("🌐 Navegar con Internet prestado", 16f, bold = true))
+            addView(text("Sin datos ni Wi-Fi: comprá megas con tus Lucas y navegá por un vecino de tu isla que preste Internet.", 13f, Ui.MUTED))
+            addView(button(if (Hub.browsing) "✓ Navegando (abrí la Tienda para parar)" else "Navegar con mis datos", primary = false) { startActivity(Intent(this@MainActivity, StoreActivity::class.java)) })
+        })
+        page.addView(card {
             addView(text("💰 Prestar Internet y ganar Lucas", 16f, bold = true))
             addView(text("Tu Internet lleva cartas donde no llegan los celulares, y cada una te paga Lucas.", 13f, Ui.MUTED))
             addView(button(if (Settings.lendInternet(this@MainActivity)) "✓ Prestando Internet (tocá para dejar de prestar)" else "Prestar Internet y ganar Lucas",

@@ -24,7 +24,7 @@
     <!-- Wi-Fi Direct search and the Wi-Fi list need location; without this type Android cuts it when the app is in the back. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Only to read version.txt from the download page when there is internet; letters never use it. -->
+    <!-- version.txt and the catalog from the page; the Nostr bridge and the data tunnel when the owner lends Internet. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
@@ -50,6 +50,15 @@
         <activity android:name=".PlazaActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".StoreActivity" android:exported="false" />
 
+        <!-- "Navegar con mis datos": a VPN that only points apps to CHAMULLO's local proxy (the data tunnel). -->
+        <service
+            android:name=".TunnelVpn"
+            android:exported="true"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
         <service
             android:name=".GritoService"
             android:exported="false"

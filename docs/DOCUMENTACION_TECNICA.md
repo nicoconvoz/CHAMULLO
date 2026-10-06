@@ -211,7 +211,8 @@ del otro, y se muestra un solo aviso por persona.
 | `ACCESS_FINE_LOCATION` | Android entrega los gritos solo con este permiso; también lo pide Wi-Fi Aware/Direct hasta Android 12. **No se lee la ubicación** |
 | `NEARBY_WIFI_DEVICES` (13+) | Wi-Fi Aware y Wi-Fi Direct |
 | `ACCESS_/CHANGE_WIFI_STATE`, `CHANGE_/ACCESS_NETWORK_STATE` | Carretera y Wi-Fi Aware |
-| `INTERNET` | Leer `version.txt` y los caños TCP de la carretera (red local) |
+| `INTERNET` | Leer `version.txt` y los caños TCP de la carretera (red local); el puente por Nostr y el túnel de datos cuando se presta Internet |
+| `BIND_VPN_SERVICE` (del servicio `TunnelVpn`) | "Navegar con mis datos": una VPN que solo recomienda el proxy de CHAMULLO (Discovery & Routing §11.3) |
 | `FOREGROUND_SERVICE(_CONNECTED_DEVICE)`, `POST_NOTIFICATIONS` | Mantener la red viva y avisar cartas nuevas |
 
 ## 10. Actualizaciones y publicación
@@ -459,6 +460,7 @@ En el puente fijo, Android le pide permiso al dueño la primera vez, y eso todav
 
 | 0.6.0 | **Interfaz estilo ICEBREAK:** barra gris arriba con 5 íconos de ICEBREAK (Contactos con favoritos, Chats con no leídos, Apps, Guía, Configuración), dibujados desde sus SVG sin librerías. **Chat privado** copiado de ICEBREAK: llamada, videollamada (llegan en la próxima versión, solo dentro de la isla) y eliminar contacto; burbujas y píldora de ICEBREAK. **Adjuntos** como cartas selladas (Packet Format §5.6): foto, cámara, video, archivo, ubicación y contacto, hasta 3 MB. **Tienda de Lucas** con catálogo publicado en la página (`tienda.json`): datos de Internet prestados de 50 MB a 10 GB, prioridad, insignias y apoyos. "Mis compras" sale de la libreta. La moneda 🪙 se cambió por 💰 | El Capitán pidió la distribución de ICEBREAK y una tienda buena. 🪙 (Emoji 13) no se ve en Android 10: era el "ícono que no se ve" en su Moto |
 | 0.6.1 | **Guía:** ICEBREAK va primero (abrir en la web o descargar la APK para Android) y debajo la guía de uso de CHAMULLO | El Capitán pidió ICEBREAK arriba de la guía de uso |
+| 0.7.0 | **Túnel de datos:** los megas de la Tienda ya se usan. "Navegar con mis datos" arma una VPN que solo recomienda un proxy local; el proxy manda la web por la isla (LINK 18, sellado de punta a punta) hasta un vecino con "Prestar Internet", que abre la conexión real. Los paquetes de datos van enteros a la garantía de datos del comprador; el que presta cobra con recibos acumulados firmados por el comprador (asiento `DATA`), con 1 MB de fiado. Solo direcciones públicas y puertos web | El Capitán: "desde megas hasta gigas de datos de internet prestados que podés acceder con tus Lucas". Specs: Packet Format §6, Economy & Governance §13.1, Discovery & Routing §11.3 |
 
 **Cómo se documenta:** cada cambio va a su spec (la regla) y a esta bitácora (qué y por qué). El informe del gemelo se regenera con `./gradlew :simulator:run`.
 
