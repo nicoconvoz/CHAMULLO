@@ -224,4 +224,45 @@ class IslandsTest {
         val b = Islands.decide(small, IslandState(Islands.islandId(small), true, emptyList()), listOf(Islands.fromScan("DIRECT-CH-" + big.take(6))!!), now = 0)
         assertEquals(IslandAction.Stay, b)
     }
+
+    /* ---------- one sees, the other does not (field test 0.8.1: the bear hug) ---------- */
+
+    private val capitan = "6e63751b4968bab0"
+    private val mito = "48ab2393aaaabbbb"
+    private fun lonely(id: String, seen: Map<String, Long> = emptyMap()) = IslandState(Islands.islandId(id), true, emptyList(), seenSince = seen)
+    private fun hostSeeing(id: String, sees: List<String>?) = Cartel(Islands.islandId(id), "H", Islands.islandId(id), Islands.ssidOf(id),
+        Islands.passphraseFor(Islands.ssidOf(id)), host = true, roster = emptyList(), sees = sees)
+
+    @Test
+    fun `a host's cartel says which islands it sees, and an old cartel says nothing about it`() {
+        val c = hostSeeing(capitan, listOf("48ab23", "abcdef"))
+        assertEquals(listOf("48ab23", "abcdef"), Cartel.fromTxt(c.toTxt())!!.sees)
+        assertEquals(emptyList<String>(), Cartel.fromTxt(hostSeeing(capitan, emptyList()).toTxt())!!.sees, "sees nobody")
+        assertEquals(null, Cartel.fromTxt(host("bbbb").toTxt())!!.sees, "unknown")
+    }
+
+    @Test
+    fun `the one who sees moves - a lonely host joins a lonely island that cannot see it, even with a smaller id`() {
+        val capitanCantSee = hostSeeing(capitan, emptyList())
+        val early = Islands.decide(mito, lonely(mito, mapOf("6e6375" to 0L)), listOf(capitanCantSee), now = Islands.ASYM_WAIT_MS - 1)
+        assertEquals(IslandAction.Stay, early, "first give its cartel time to catch up")
+        val later = Islands.decide(mito, lonely(mito, mapOf("6e6375" to 0L)), listOf(capitanCantSee), now = Islands.ASYM_WAIT_MS)
+        assertEquals(IslandAction.Join("6e6375", "DIRECT-CH-6e6375", Islands.passphraseFor("DIRECT-CH-6e6375")), later)
+    }
+
+    @Test
+    fun `when both see each other only the bigger id moves, however long it takes`() {
+        val long = Islands.SCAN_WAIT_MS * 10
+        val fromMito = Islands.decide(mito, lonely(mito, mapOf("6e6375" to 0L)), listOf(hostSeeing(capitan, listOf("48ab23"))), now = long)
+        assertEquals(IslandAction.Stay, fromMito)
+        val fromCapitan = Islands.decide(capitan, lonely(capitan, mapOf("48ab23" to 0L)), listOf(hostSeeing(mito, listOf("6e6375"))), now = long)
+        assertEquals("48ab23", (fromCapitan as IslandAction.Join).island)
+    }
+
+    @Test
+    fun `an island seen only in the Wi-Fi list that never comes - after a while I go`() {
+        val listed = Islands.fromScan("DIRECT-CH-6e6375")!!
+        assertEquals(IslandAction.Stay, Islands.decide(mito, lonely(mito, mapOf("6e6375" to 0L)), listOf(listed), now = Islands.SCAN_WAIT_MS - 1))
+        assertEquals("6e6375", (Islands.decide(mito, lonely(mito, mapOf("6e6375" to 0L)), listOf(listed), now = Islands.SCAN_WAIT_MS) as IslandAction.Join).island)
+    }
 }

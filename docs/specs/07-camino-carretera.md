@@ -114,6 +114,18 @@ Una isla **es** la red propia de CHAMULLO: un grupo Wi-Fi Direct (`DIRECT-CH-xxx
 - **Se apaga:** cierra los caños y el puente fijo, se olvida de la isla y de los carteles, y no busca ni decide. Avisa con una notificación que abre el interruptor del sistema, y la app muestra arriba de todo una tarjeta roja con el botón **"Prender Wi-Fi"**: en Android 10+, el panel de Wi-Fi sobre la app, en un toque.
 - **Vuelve:** cuelga el cartel y busca islas en el acto, sin esperar el minuto de la búsqueda.
 
+### 6.7 El que ve, se mueve (prueba de campo 0.8.1)
+
+**Lo que pasó:** dos celulares, uno conectado a la red de la casa y otro con el Wi-Fi prendido sin red. Cada uno fundó su isla. El de la casa (`6e6375`) no veía a nadie; el otro (`48ab23`) veía al primero. La regla "entre dos islas solas se muda el de id más grande" le pedía moverse al que no veía, y el que veía se quedaba esperando: un abrazo de oso.
+
+| Pieza | Regla |
+|---|---|
+| El cartel dice qué ve | Un anfitrión cuelga en `v` las islas que ve (hasta 3). Sin `v`: no se sabe (isla de la lista de Wi-Fi, cartel viejo) |
+| Desde cuándo | Cada celular anota desde cuándo ve cada isla. Un cartel puede parpadear: se olvida recién después de 3 min sin verlo |
+| El que ve, se mueve | Si la otra isla sola **no me ve** según su cartel, después de `ASYM_WAIT_MS = 90 s` me mudo yo, aunque mi id sea más chico. Los 90 s dejan que los dos carteles se pongan al día, así no se mudan los dos a la vez |
+| Sin cartel | Si solo la veo en la lista de Wi-Fi y en `SCAN_WAIT_MS = 120 s` no vino, voy yo |
+| Si los dos se ven | Sigue la regla de siempre: se muda solo el de id más grande |
+
 ## 7. Llamadas y videollamadas en la isla (0.8.0)
 
 Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en celular. Por eso anda **solo dentro de la isla** (o por un puente fijo), donde todo está a uno o dos saltos por Wi-Fi Direct.

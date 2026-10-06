@@ -149,6 +149,7 @@ class WifiIslands(
                 FieldLog.add("ISLA", "el Wi-Fi se apagó: sin Wi-Fi no hay islas")
                 lastError = "el Wi-Fi está apagado: prendelo (no hace falta conectarse a ninguna red)"
                 closeLinks(); unbridge(); island = null; host = false; busy = false; carteles.clear(); members.clear(); ferrying = null
+                seenSince.clear(); seenLast.clear()
             } else {
                 FieldLog.add("ISLA", "volvió el Wi-Fi: busco islas")
                 lastError = null
@@ -162,7 +163,22 @@ class WifiIslands(
     /* ---------- carteles ---------- */
 
     private fun cartel() = Cartel(me, myName, island ?: "", if (host) ssid else "", if (host) passphrase else "", host,
-        if (host) members.values.toList() else emptyList(), if (host) myCell else null, bridgingTo ?: "")
+        if (host) members.values.toList() else emptyList(), if (host) myCell else null, bridgingTo ?: "",
+        if (host) seenSince.keys.sorted() else null)
+
+    // Who sees whom (Camino y Carretera §6.7): the islands I see and since when, kept while I keep seeing them.
+    private val seenSince = LinkedHashMap<String, Long>()
+    private val seenLast = HashMap<String, Long>()
+
+    // A cartel can blink (it lasts a minute, the search repeats every minute): an island is forgotten only after
+    // [SEEN_GRACE_MS] without seeing it, so "since when" does not start over at every blink.
+    private fun updateSeen(now: Long) {
+        val visible = carteles.values.map { it.first }.filter { it.host && it.island.isNotEmpty() && it.island != island }.map { it.island }.toSet()
+        val before = seenSince.keys.toSet()
+        for (i in visible) { seenLast[i] = now; seenSince.putIfAbsent(i, now) }
+        for (i in seenSince.keys.toList()) if (now - (seenLast[i] ?: 0) > SEEN_GRACE_MS || i == island) { seenSince.remove(i); seenLast.remove(i) }
+        if (seenSince.keys != before && host) publishCartel() // tell the others what I see now
+    }
 
     private fun publishCartel() {
         val ch = channel ?: return
@@ -257,7 +273,9 @@ class WifiIslands(
             carteles.values.removeAll { now - it.second > CARTEL_TTL_MS }
             if (!busy && ferrying == null && !wifiOff) {
                 readScan()
-                val a = Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn, bridgingTo, canBridge),
+                updateSeen(now)
+                val a = Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn, bridgingTo, canBridge,
+                    HashMap(seenSince)),
                     carteles.values.map { it.first }, now, myCell, stuck)
                 if (a == IslandAction.Host && island == null && now - startedAt < lookFirstMs) Unit // still looking around
                 else act(a)
@@ -575,6 +593,7 @@ class WifiIslands(
         const val FOUND_SPREAD_MS = 30_000L
         const val DECIDE_MS = 5_000L
         const val CARTEL_TTL_MS = 60_000L
+        const val SEEN_GRACE_MS = 180_000L
         const val FERRY_STAY_MS = 20_000L
         const val HANDSHAKE_MS = 10_000L
         private val FERRY = "CHFRY".toByteArray()

@@ -18,13 +18,16 @@ data class Cartel(
     /** The island's cell (Camino y Carretera §6.1): where a ferry that sails there is heading. Only hosts hang it. */
     val cell: Zone? = null,
     /** A member that is also a fixed bridge (§6.2) says to which island: one bridge per pair of islands. */
-    val bridgeTo: String = ""
+    val bridgeTo: String = "",
+    /** The islands a host sees (§6.7): who sees whom decides who moves. Null: unknown (the Wi-Fi list, an old cartel). */
+    val sees: List<String>? = null
 ) {
     /** DNS-SD TXT record: short keys, fits the ~255 bytes a Wi-Fi Direct service record allows. */
     fun toTxt(): Map<String, String> = buildMap {
         put("i", nodeId); put("n", name.take(12)); put("l", island); put("h", if (host) "1" else "0")
         if (host) { put("s", ssid); put("p", passphrase); put("r", roster.joinToString(",") { it.take(8) }); cell?.let { put("c", it.encode().toHex()) } }
         if (bridgeTo.isNotEmpty()) put("b", bridgeTo)
+        if (host && sees != null) put("v", sees.take(MAX_SEES).joinToString(","))
     }
 
     companion object {
@@ -34,8 +37,12 @@ data class Cartel(
             val host = t["h"] == "1"
             return Cartel(id, t["n"] ?: "", island, t["s"] ?: "", t["p"] ?: "", host,
                 t["r"]?.split(',')?.filter { it.isNotEmpty() } ?: emptyList(),
-                t["c"]?.let { c -> runCatching { Zone.decode(hex(c)) }.getOrNull() }, t["b"] ?: "")
+                t["c"]?.let { c -> runCatching { Zone.decode(hex(c)) }.getOrNull() }, t["b"] ?: "",
+                t["v"]?.split(',')?.filter { it.isNotEmpty() })
         }
+
+        /** Islands a cartel lists as seen: a few, it must fit the ~255 bytes of the service record. */
+        const val MAX_SEES = 3
     }
 }
 
@@ -43,7 +50,9 @@ data class Cartel(
 data class IslandState(
     val island: String?, val host: Boolean, val members: List<String>, val ferriedTurn: Long = -1,
     /** The island I also stand in as a fixed bridge, and whether this phone can hold two Wi-Fi connections at once. */
-    val bridging: String? = null, val canBridge: Boolean = false
+    val bridging: String? = null, val canBridge: Boolean = false,
+    /** Since when I keep seeing each island (§6.7): how long a lonely island has had to come to me. */
+    val seenSince: Map<String, Long> = emptyMap()
 )
 
 sealed interface IslandAction {
@@ -65,6 +74,10 @@ object Islands {
     const val FERRY_TURN_MS = 60_000L
     // Before sailing, the ferry announces its heading and waits for the letters that go that way (Discovery & Routing §10.6).
     const val FERRY_BOARDING_MS = 3_000L
+    // Who sees whom (§6.7): time for both cartels to say what they see before I move against the id rule, and the
+    // longer wait for an island known only from the Wi-Fi list, whose cartel says nothing.
+    const val ASYM_WAIT_MS = 90_000L
+    const val SCAN_WAIT_MS = 120_000L
 
     fun turnOf(now: Long) = now / FERRY_TURN_MS
 
@@ -115,10 +128,13 @@ object Islands {
         }
 
         if (state.host) {
-            // A lonely host merges into a neighbor: a bigger island, or another lonely one with a smaller id.
+            // A lonely host merges into a neighbor: a bigger island, or another lonely one with a smaller id. But the one
+            // who sees moves (§6.7): if the other cannot see me it will never come, so after a while I go, whatever the ids.
             if (state.members.isNotEmpty() || best == null) return IslandAction.Stay
             if (strangers.isNotEmpty()) return IslandAction.Stay // a bridge keeps its post at the border
-            val merge = best.roster.isNotEmpty() || best.island < me
+            val waited = now - (state.seenSince[best.island] ?: now)
+            val blind = best.sees?.let { state.island !in it && waited >= ASYM_WAIT_MS } ?: (waited >= SCAN_WAIT_MS)
+            val merge = best.roster.isNotEmpty() || best.island < me || blind
             return if (merge) IslandAction.Join(best.island, best.ssid, best.passphrase) else IslandAction.Stay
         }
 
