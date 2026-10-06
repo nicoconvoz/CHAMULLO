@@ -29,7 +29,7 @@ import java.util.UUID
  * - Long-range bonus: phones with Coded PHY also shout the whole frame as one extended advertisement.
  */
 @SuppressLint("MissingPermission")
-class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) {
+class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) : Radio {
     private enum class Mode { CLASSIC, LONG }
     private class Emission(val mode: Mode, val bytes: ByteArray)
 
@@ -43,9 +43,13 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) {
     private var busy = false
     private var scanning = false
 
-    var shouts = 0L; private set
-    var heard = 0L; private set
-    var lastError: String? = null; private set
+    override val label = "Bluetooth"
+    override val supported = adapter != null
+    override val active get() = enabled
+    override val peers = 0
+    override var shouts = 0L; private set
+    override var heard = 0L; private set
+    override var lastError: String? = null; private set
 
     val enabled get() = adapter?.isEnabled == true
     val extended get() = adapter?.isLeExtendedAdvertisingSupported == true
@@ -53,22 +57,22 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) {
     val maxAdvLen get() = if (extended) adapter!!.leMaximumAdvertisingDataLength else 31
     val maxFrame get() = MAX_FRAME
 
-    fun start() = handler.post { startScan() }
+    override fun start() { handler.post { startScan() } }
 
-    fun stop() = handler.post {
+    override fun stop() { handler.post {
         runCatching { if (scanning) adapter?.bluetoothLeScanner?.stopScan(scanCallback) }
         scanning = false
         for (cb in callbacks.values) runCatching { adapter?.bluetoothLeAdvertiser?.stopAdvertisingSet(cb) }
         sets.clear(); starting = null; busy = false; queue.clear()
-    }
+    } }
 
-    fun shout(frame: ByteArray) = handler.post {
+    override fun shout(frame: ByteArray) { handler.post {
         if (!enabled) return@post
         if (coded && frame.size <= maxAdvLen - 20) queue.addLast(Emission(Mode.LONG, frame))
         for (m in Micro.split(frame)) queue.addLast(Emission(Mode.CLASSIC, m))
         while (queue.size > MAX_QUEUE) queue.removeFirst()
         pump()
-    }
+    } }
 
     private fun data(e: Emission): AdvertiseData = when (e.mode) {
         Mode.CLASSIC -> AdvertiseData.Builder().addManufacturerData(COMPANY, e.bytes).build()

@@ -10,11 +10,14 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import ar.chamullo.core.Node
+import ar.chamullo.core.Crypto
 import ar.chamullo.core.NodeEvent
+import ar.chamullo.core.toHex
 
 /** Keeps el grito alive while the app is in the background: listening, shouting and carrying letters. */
 class GritoService : Service() {
-    private lateinit var radio: GritoRadio
+    private var radios: List<Radio> = emptyList()
+    private val recent = LinkedHashMap<String, Long>()
     private var running = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -29,24 +32,32 @@ class GritoService : Service() {
         else startForeground(ID_RUN, ongoing)
 
         val identity = Vault(this).identity() ?: run { stopSelf(); return }
-        radio = GritoRadio(this) { frame -> Hub.worker.post { handle(frame) } }
-        val node = Node(identity, FileStore(this), radio.maxFrame, radio.coded) { System.currentTimeMillis() }
-        Hub.radio = radio
+        val incoming: (ByteArray) -> Unit = { frame -> Hub.worker.post { handle(frame) } }
+        val bluetooth = GritoRadio(this, incoming)
+        radios = listOf(WifiRadio(this, incoming), bluetooth)
+        val node = Node(identity, FileStore(this), GritoRadio.MAX_FRAME, bluetooth.coded) { System.currentTimeMillis() }
+        Hub.radios = radios
         Hub.worker.post { Hub.node = node }
-        radio.start()
+        radios.forEach { it.start() }
         running = true
         Hub.worker.post(object : Runnable {
             override fun run() {
                 if (!running) return
-                Hub.node?.let { n -> n.tick(); for (f in n.drainOutbox()) radio.shout(f) }
+                Hub.node?.let { n -> n.tick(); val on = radios.filter { it.active }; for (f in n.drainOutbox()) on.forEach { it.shout(f) } }
                 Hub.worker.postDelayed(this, TICK_MS)
             }
         })
         Thread { while (running) { checkVersion(); Thread.sleep(WebVersion.CHECK_EVERY_MS) } }.apply { isDaemon = true }.start()
     }
 
+    // The same frame may arrive by Wi-Fi and by Bluetooth: only the first copy reaches the node.
     private fun handle(frame: ByteArray) {
         val node: Node = Hub.node ?: return
+        val key = Crypto.hash(frame).toHex()
+        val now = System.currentTimeMillis()
+        if ((recent[key] ?: 0L) > now - 10_000) return
+        recent[key] = now
+        while (recent.size > 2048) recent.remove(recent.keys.first())
         for (event in node.onFrame(frame)) {
             when (event) {
                 is NodeEvent.CardReceived ->
@@ -85,7 +96,7 @@ class GritoService : Service() {
 
     override fun onDestroy() {
         running = false
-        if (::radio.isInitialized) radio.stop()
+        radios.forEach { it.stop() }
         Hub.node = null
         super.onDestroy()
     }

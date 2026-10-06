@@ -18,7 +18,7 @@ object Hub {
     private val main = Handler(Looper.getMainLooper())
 
     @Volatile var node: Node? = null
-    @Volatile var radio: GritoRadio? = null
+    @Volatile var radios: List<Radio> = emptyList()
     val pendingCards = mutableListOf<Card>()
     val listeners = CopyOnWriteArraySet<(NodeEvent?) -> Unit>()
 

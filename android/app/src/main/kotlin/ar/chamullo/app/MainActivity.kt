@@ -89,12 +89,14 @@ class MainActivity : Activity() {
     }
 
     private fun refresh() {
-        val radio = Hub.radio
-        status.text = when {
-            radio == null -> "El grito está apagado: falta dar permisos."
-            !radio.enabled -> "Prendé el Bluetooth: CHAMULLO usa esa radio, sin conectarse a nada."
-            radio.coded -> "Gritando: grito universal + largo alcance."
-            else -> "Gritando: grito universal (tu radio no tiene largo alcance)."
+        val radios = Hub.radios
+        status.text = if (radios.isEmpty()) "El grito está apagado: falta dar permisos." else radios.joinToString("\n") { r ->
+            when {
+                !r.supported -> "${r.label}: este celular no lo tiene."
+                r.active -> "${r.label}: gritando ✓" + if (r.peers > 0) " (${r.peers} cerca)" else ""
+                r is WifiRadio -> "Wi-Fi: prendé el Wi-Fi para gritar más lejos (no se conecta a ninguna red)."
+                else -> "Bluetooth: apagado (es el respaldo; no se conecta a nada)."
+            }
         }
         Hub.ask({ node -> node.neighbors().map { Triple(it.name, it.coded, it) } to node.store.contacts() }) { (near, cards) ->
             nearby.removeAllViews()
@@ -143,8 +145,8 @@ class MainActivity : Activity() {
     /* ---------- permissions and start ---------- */
     private fun needed(): Array<String> = buildList {
         if (Build.VERSION.SDK_INT >= 31) { add(Manifest.permission.BLUETOOTH_SCAN); add(Manifest.permission.BLUETOOTH_ADVERTISE); add(Manifest.permission.BLUETOOTH_CONNECT) }
-        else add(Manifest.permission.ACCESS_FINE_LOCATION)
-        if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+        if (Build.VERSION.SDK_INT <= 32) add(Manifest.permission.ACCESS_FINE_LOCATION) // Wi-Fi Aware (and Bluetooth before 12)
+        if (Build.VERSION.SDK_INT >= 33) { add(Manifest.permission.NEARBY_WIFI_DEVICES); add(Manifest.permission.POST_NOTIFICATIONS) }
     }.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }.toTypedArray()
 
     private fun askPermissions() {
@@ -154,14 +156,11 @@ class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        val radioPerms = if (Build.VERSION.SDK_INT >= 31) listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_ADVERTISE) else listOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        if (radioPerms.all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) startGrito()
-        else status.text = "Sin permiso de Bluetooth el grito no puede encenderse."
+        // The grito starts with whatever antenna got permission; the status line says which ones work.
+        startGrito()
     }
 
     private fun startGrito() {
-        val adapter = getSystemService(BluetoothManager::class.java)?.adapter
-        if (adapter != null && !adapter.isEnabled) runCatching { startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) }
         startForegroundService(Intent(this, GritoService::class.java))
         status.postDelayed({ refresh() }, 1500)
     }
