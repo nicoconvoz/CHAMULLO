@@ -132,6 +132,7 @@ Inspirado en la selección de recursos por sensado del modo 2 del *sidelink*:
 - El aire es compartido: un grito lo escuchan **todos** los vecinos en alcance.
 - Por eso, el *fanout* del río (Discovery & Routing §6.2) **no** cuesta k gritos. Cuesta **uno** con k destinatarios en `receivers`.
 - El eco local del barrio se hace con un grito con `receivers` vacío.
+- **Nota v0.2:** como cada renglón nombra a su taker (Proof of Relay §4.5), el río entrega una copia por taker: `k` gritos cortos y no uno. Sobre Wi-Fi Direct no pesa; para El Grito queda abierto juntar los `k` renglones en un solo grito.
 
 ## 7. Batería: dormir con un ojo abierto (DRX)
 

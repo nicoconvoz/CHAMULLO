@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Estado | Borrador |
-| Fecha | 2026-10-05 |
+| Fecha | 2026-10-06 (campos de la brújula: Discovery & Routing v0.2 §10) |
 | Depende de | Identity & Cryptography v0.1 |
 | Consumida por | Discovery & Routing, Proof of Relay / Proof of Delivery, Transport Abstraction |
 
@@ -156,6 +156,11 @@ ENVELOPE =
 |---|---|---|---|
 | `2` | par | `hop_attestation` | Proof of Relay / Delivery §4.3 |
 | `3` | impar | Reservado (antes `path_metrics`, que ahora viaja cifrado dentro de cada renglón) | — |
+| `5` | impar | `receivers` | Lista de ids cortos (8 bytes c/u) a los que el giver entrega esta copia; vacío o ausente = todos. Discovery & Routing §10.5 |
+| `7` | impar | `local_ttl` | `u8`: saltos que le quedan al eco local dentro del barrio destino. Discovery & Routing §10.4 |
+| `9` | impar | `detour` | `u8`: saltos seguidos sin progreso en el lago. Discovery & Routing §10.4 |
+
+Los tipos `5`, `7` y `9` los reescribe cada giver: no están firmados por el origen. Un relay mentiroso no gana nada, porque `max_hops` sigue siendo el tope duro.
 
 Como un flujo TLV no admite tipos duplicados (§4.2), los renglones de la ruta van **todos dentro** de un único registro `hop_attestation`, como una lista de `blob_i` cifrados (Proof of Relay §4.3).
 
@@ -188,8 +193,16 @@ Los mensajes `LINK` nunca salen del enlace en el que se crearon.
 | `4` | `PING` / `5` `PONG` | Mantener vivo el enlace y medir latencia |
 | `6` | `CLOSE` | Cierre ordenado, con motivo |
 | `7` | `ERROR` | Error de protocolo, con código y texto opcional |
-| `8` | `OFFER` | Ofrecer un sobre al vecino (Proof of Relay §5.2) |
-| `9` | `ACCEPT` | Aceptarlo y comprometerse a firmar (Proof of Relay §5.2) |
+| `8` | `OFFER` | Ofrecer un sobre a un vecino: `2` giver, `4` taker, `6` `msg_id`, `8` `i`, `10` `s_{i-1}`, `12` `exp` (Proof of Relay §5.2) |
+| `9` | `ACCEPT` | Aceptarlo y comprometerse a firmar: `2` taker, `4` giver, `6` `msg_id`, `8` `i`, `10` `ts`, `12` `accept_sig` (Proof of Relay §5.2) |
+| `10` | `BEACON` | Latido firmado: `2` node_id, `4` caja pública, `6` ts, `7` nombre, `9` codificado, `10` firma y `11` **celda** (Discovery & Routing §10.2), firmada |
+| `11` | `CARD_OFFER` | Tarjeta sellada para un vecino |
+| `12` | `PLAZA` | Mensaje abierto de la plaza |
+| `13` | `HEARD` | "Lo escuché" de la plaza |
+| `14` | `ROAD_INVITE` | Llave de la carretera, sellada |
+| `15` | `PAYMENT` | Confirmación del origen que paga a los carteros. `11` ttl, `13` zona destino y `15` receivers viajan sin firma (Discovery & Routing §10.7) |
+
+La **tarjeta de contacto** lleva su zona (nivel barrio) en el TLV `11`, impar y firmado: una tarjeta vieja sin zona sigue sirviendo. El contenido sellado de cada carta lleva la tarjeta actual del remitente en el TLV interno `21` (Discovery & Routing §5).
 
 ## 7. Handshake y negociación de gestos
 

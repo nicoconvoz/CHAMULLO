@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Estado | Borrador |
-| Fecha | 2026-10-05 |
+| Fecha | 2026-10-06 (renglón implementado, §4.5) |
 | Depende de | Identity & Cryptography v0.1, Packet Format v0.1 |
 | Consumida por | Economy & Governance, Discovery & Routing, Simulator |
 
@@ -113,6 +113,15 @@ Un cartero no puede leer los renglones anteriores. Al recibir del vecino `p`, DE
 4. `hop_count ≤ max_hops`.
 
 La verificación de la cadena **completa** la hace el destino (§6.1).
+
+### 4.5 El renglón tal como lo implementa el núcleo (v0.2)
+
+Registro TLV, cifrado en el renglón: `2` giver, `4` i, `6` ts, `8` `hop_sig`, `10` taker, `12` `accept_sig`, `14` alternativas (`path_metrics`, Discovery & Routing §8).
+
+- `hop_sig_i = sig_giver("HOP", msg_id | i | s_{i-1} | giver | taker | ts | accept_sig_i)` y `accept_sig_i = sig_taker("ACPT", msg_id | i | s_{i-1} | giver | taker | ts)`.
+- El primer renglón lo escribe el origen con la clave efímera `src`: `giver_1 = src`.
+- **Grito a todos** (eco local o eco acotado, Discovery & Routing §10.4): `taker` y `accept_sig` van vacíos. Ese salto vale si `hop_sig` verifica; la continuidad con el siguiente no se exige, porque cualquiera de los que oyeron pudo seguirla.
+- **Entrega escuchada:** si el destino abre una copia dirigida a otro taker, la carta vale igual. El último renglón no nombra al destino y por eso no cobra nadie por ese salto.
 
 ## 5. El compromiso previo: aceptar es comprometerse a firmar
 

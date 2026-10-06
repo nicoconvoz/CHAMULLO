@@ -370,3 +370,43 @@ Probar 0.3.0 con dos teléfonos Android 10+ con el Wi-Fi y la Ubicación prendid
 ## Decisión: la moneda se llama Lucas
 
 La billetera de la app paga la recompensa en **Lucas**, la moneda propia de CHAMULLO (spec 04). Reemplaza a ICE, que queda como moneda de ICEBREAK: un servicio más sobre la red, del que CHAMULLO no depende. Los caramelos siguen siendo los recibos verificados; el reparto diario los convierte en Lucas.
+
+## La brújula sobre islas (Discovery & Routing v0.2)
+
+**Qué cambió:** las cartas dejaron de repartirse como volante. Cada carta va de mano en mano hacia el barrio del destino y, al llegar, se reparte con un eco local acotado. Las reglas exactas están en el spec 05 §10; el núcleo de la app y el gemelo usan el mismo código.
+
+| Pieza | Dónde | Qué hace |
+|---|---|---|
+| Grilla | `Zone.kt` | Celda de ~50 m, barrio de ~2 km, pueblo, región. Distancia y rumbo |
+| Brújula | `Compass.kt` | Decide río, lago, eco local, llevar o parar. Funciones puras |
+| Mano en mano | `Node.kt` + `Offer` / `Accept` | Ofrecer, aceptar, copia firmada por los dos, "la tengo" y soltar |
+| Islas | `Islands.kt` | El ferry rota entre islas vecinas y existe el ferry de necesidad |
+| Gemelo | `World.kt` | Mapa en latitud y longitud, el anfitrión es el aire, embarque de 3 s |
+
+**Lo que el gemelo obligó a corregir** (todo anotado en el spec 05 §10):
+
+- La celda de 100 m era más grande que el alcance del Wi-Fi, así que se pasó a 50 m.
+- El lago alejaba las cartas del borde de la isla: ahora espera dos turnos de ferry.
+- Un rechazo ya no dura para siempre, sino 30 s.
+- Haber visto una carta ya no cierra el camino para volver a llevarla.
+- Se suelta la copia solo con el "la tengo" del que la recibe.
+- Los pagos se guardan y suben al ferry como las cartas.
+
+**Resultados del informe** (`docs/SIMULACION.md`):
+
+| Escenario | Entregadas |
+|---|---|
+| Plaza | 100 % |
+| Dos pueblos | 70–85 % |
+| Ruta de tres pueblos | 100 % |
+| Pueblos con viajeros | 100 % |
+| Ciudad de 1000 | 43 % (antes ~30 %) |
+| Provincia, 4 km | 0 %: llega a ~3 km y se frena |
+
+**Acertijos abiertos** (son del Capitán):
+
+1. **El barrio grande:** dentro del barrio destino solo queda el eco local de 8 saltos (~400 m con Wi-Fi). La ciudad entera cae en un barrio, y en la provincia la carta entra al barrio de Sur a 1,2 km del pueblo.
+2. **El puente por Internet** para el salto grande, que además le da respaldo real a Lucas (spec 05 §11, spec 04 §13).
+
+**Pendiente en la app:** leer el GPS y llamar a `Node.locate`. Mientras no lo haga, las cartas de la app siguen con el eco de v0.1 (sin zona), igual que hoy.
+

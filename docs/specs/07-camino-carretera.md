@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Estado | Borrador, implementado en la app 0.2.0 |
-| Fecha | 2026-10-05 |
+| Fecha | 2026-10-06 (islas con brújula, §6.1) |
 | Depende de | Air Interface v0.1, Discovery & Routing v0.1 |
 
 Diseño del Capitán del proyecto.
@@ -57,8 +57,18 @@ como respaldo para teléfonos sin Wi-Fi Direct.
 | Cartel | Registro de servicio Wi-Fi Direct (DNS-SD, `_chamullo._tcp`) con `i` id, `n` nombre, `l` isla, `h` anfitrión, y si es anfitrión `s` red, `p` clave, `r` miembros (8 hex c/u). Cabe en ~255 bytes |
 | Sumarse | Sin isla: unirse a la isla con lugar con más miembros; si no hay, fundar una |
 | Fusión | Un anfitrión solo se une a una isla vecina más grande, o a otra sola de id menor |
-| Ferry | Turnos de 60 s sobre la lista ordenada de miembros: el de turno va a la isla vecina, entrega y vuelve |
+| Ferry | Turnos de 60 s sobre la lista ordenada de miembros: el de turno va a una isla vecina, entrega y vuelve. La isla vecina rota con el turno (§6.1) |
+| Lugar del ferry | El anfitrión deja libre `FERRY_SEATS = 1` lugar: un recién llegado se suma solo si quedan dos o más; el último es para ferrys |
+| Puente | Un miembro que ve gente de otra isla pero no a su anfitrión funda una isla chica en el borde y no la abandona mientras vea a esos vecinos |
+| Anfitrión = aire | El anfitrión repite **toda** trama de un miembro a los demás (latidos, ofertas y sobres). Cartero, solo si lo eligen |
 | Puente fijo (futuro) | Miembro de su isla y cliente Wi-Fi común de la otra a la vez (concurrencia), con sockets atados a cada red |
 
 Implementación de referencia de las decisiones: `android/core/.../Islands.kt` (`Islands.decide`), con pruebas en
 `IslandsTest.kt`.
+
+### 6.1 Islas con brújula (Discovery & Routing v0.2 §10.6)
+
+- El cartel del anfitrión lleva `c`, la celda de la isla (Discovery & Routing §10.1), para que el ferry sepa hacia dónde va. La celda solo la ven los que están al alcance del Wi-Fi Direct, igual que con un latido.
+- El ferry del turno elige la isla vecina con lugar de índice `turno mod cantidad`, en orden de id.
+- Embarque: anuncia ese rumbo en su latido y espera `FERRY_BOARDING_MS = 3 s`; los miembros le dan las cartas que acercan en esa dirección. Mientras viaja, lleva y no reparte.
+- Al llegar: latido con su celda real, la isla le responde con los suyos (`BEACON_REPLY_MS`) y reparte con la brújula. A los 20 s vuelve a casa con lo que no pudo dejar.

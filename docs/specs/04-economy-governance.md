@@ -239,3 +239,21 @@ Al principio no hay recibos, así que no hay ranking.
 6. **Marco legal:** un token con valor económico puede quedar alcanzado por regulación financiera. Se trata en la *Legal & Regulatory Deployment Guide*.
 7. **Concentración de antenas:** ¿el puntaje nacional de una cuenta suma lineal o con rendimiento decreciente por cada antena extra?
 8. **ICEBREAK:** es un servicio más sobre la red y tiene su propia moneda (ICE). ¿Acepta Lucas, hay cambio entre ICE y Lucas, o no se tocan?
+
+## 13. Lucas con respaldo real: el circuito del Capitán
+
+Lucas no vale porque CHAMULLO lo diga: vale porque **paga un servicio real y verificable**, la conectividad.
+
+```text
+alguien necesita comunicarse
+→ la red de islas no alcanza (el salto grande, Discovery & Routing §11)
+→ varios teléfonos prestan un poco de Internet como puente auxiliar
+→ el aporte se verifica con los mismos recibos de Proof of Relay
+→ se pagan Lucas
+→ esas Lucas se gastan dentro del ecosistema (prioridad, Tienda de Lucas)
+```
+
+- Es una **economía circular de trabajo real**: Lucas ↔ aporte verificable ↔ recurso real usado (cartas llevadas, bytes de Internet prestados).
+- El gemelo digital mide el precio: cuántas Lucas cuesta llevar una cantidad de información y cuánto aportó cada uno.
+- Pendiente: el recibo del tramo por Internet (quién prestó cuántos bytes) y su peso frente a llevar cartas en mano.
+
