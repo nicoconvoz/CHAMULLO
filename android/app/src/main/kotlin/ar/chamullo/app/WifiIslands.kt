@@ -131,8 +131,12 @@ class WifiIslands(
             p2p.setDnsSdResponseListeners(channel, { _, _, _ -> }, { _, record, _ ->
                 Cartel.fromTxt(record)?.takeIf { it.nodeId != me }?.let { c ->
                     val fresh = c.nodeId !in carteles
-                    carteles[c.nodeId] = c.copy(island = Islands.islandId(c.island), bridgeTo = Islands.islandId(c.bridgeTo)) to System.currentTimeMillis()
-                    if (fresh) FieldLog.add("ISLA", "veo el cartel de ${c.name.ifBlank { c.nodeId.take(6) }}${if (c.host) " (anfitrión)" else ""}")
+                    val clean = c.copy(island = Islands.islandId(c.island), bridgeTo = Islands.islandId(c.bridgeTo))
+                    val changed = carteles[c.nodeId]?.first != clean
+                    carteles[c.nodeId] = clean to System.currentTimeMillis()
+                    if (fresh) FieldLog.add("ISLA", "veo el cartel de ${c.name.ifBlank { c.nodeId.take(6) }}${if (c.host) " (anfitrión)" else ""}${if (c.onWifi) " · con Wi-Fi de casa" else ""}")
+                    // The radar (Camino y Carretera §6.13): someone new or something new on a cartel is decided at once.
+                    if (changed) { handler.removeCallbacks(decideNow); handler.postDelayed(decideNow, 300) }
                 }
             })
             p2p.removeGroup(channel, null) // start clean: no leftover group from a previous run
@@ -226,7 +230,7 @@ class WifiIslands(
 
     private fun cartel() = Cartel(me, myName, island ?: "", if (host) ssid else "", if (host) passphrase else "", host,
         if (host) members.values.toList() else emptyList(), if (host) myCell else null, bridgingTo ?: "",
-        if (host) seenSince.keys.sorted() else null)
+        if (host) seenSince.keys.sorted() else null, onWifiNetwork())
 
     // Who sees whom (Camino y Carretera §6.7): the islands I see and since when, kept while I keep seeing them.
     private val seenSince = LinkedHashMap<String, Long>()
@@ -340,9 +344,25 @@ class WifiIslands(
     private val decideLoop: Runnable = object : Runnable {
         override fun run() {
             if (!running) return
+            decide()
+            handler.postDelayed(this, DECIDE_MS)
+        }
+    }
+
+    private val decideNow = Runnable { if (running) decide() }
+
+    private var lastOnWifi = false
+
+    private fun decide() {
+        run {
             val now = System.currentTimeMillis()
             carteles.values.removeAll { now - it.second > CARTEL_TTL_MS }
             tendPipes(now)
+            // Tell the others at once whether I am on a home Wi-Fi: it decides who holds the island (§6.13).
+            val onWifi = onWifiNetwork()
+            if (onWifi != lastOnWifi) { lastOnWifi = onWifi; publishCartel() }
+            // While I am getting into an island, nothing else is decided (field test 0.9.4: the border rule founded meanwhile).
+            if (!host && island != null && !piped && now - joinedAt < JOIN_GRACE_MS) return@run
             if (!busy && ferrying == null && !wifiOff && !tryRejoin()) {
                 readScan()
                 updateSeen(now)
@@ -354,7 +374,6 @@ class WifiIslands(
                 else if (a is IslandAction.Join && blindPaused(a, now)) Unit // one blind try at a time, never in a loop
                 else act(a)
             }
-            handler.postDelayed(this, DECIDE_MS)
         }
     }
 
@@ -525,7 +544,13 @@ class WifiIslands(
         val was = island
         closeLinks(); island = null
         // Only an island I really was in is worth looking for again; a blind try that never opened a pipe is not (§6.12).
-        if (piped) {
+        // And not one held on a home Wi-Fi: a free phone founds the steady island at once, and that one comes to it (§6.13).
+        val hostOnWifi = was?.let { hostOf(it)?.onWifi } == true
+        if (piped && hostOnWifi && !onWifiNetwork()) {
+            FieldLog.add("ISLA", "$why: la isla la tenía un celular con Wi-Fi de casa; armo la mía, que no se mueve")
+            startedAt = System.currentTimeMillis() - lookFirstMs() // found now if no free island is around
+            rejoin = null
+        } else if (piped) {
             FieldLog.add("ISLA", "$why${if (was != null) ": busco de nuevo la isla ${was.take(6)}" else ""}")
             rejoin = was; rejoinTries = 0
             startedAt = System.currentTimeMillis() // if it is not found, look around before founding
@@ -769,9 +794,9 @@ class WifiIslands(
         // A Wi-Fi Direct group owner answers at this address on its own network, also to plain Wi-Fi clients.
         const val GROUP_OWNER = "192.168.49.1"
         const val MAX_FRAME = 1_048_576
-        const val DISCOVER_MS = 60_000L
-        const val FOUND_AFTER_MS = 30_000L
-        const val FOUND_SPREAD_MS = 30_000L
+        const val DISCOVER_MS = 30_000L
+        const val FOUND_AFTER_MS = 8_000L
+        const val FOUND_SPREAD_MS = 7_000L
         const val DECIDE_MS = 5_000L
         const val CARTEL_TTL_MS = 60_000L
         const val SEEN_GRACE_MS = 180_000L

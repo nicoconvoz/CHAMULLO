@@ -307,4 +307,40 @@ class IslandsTest {
         val withMembers = onWifi(island = "6e6375", host = true, members = listOf("m1"), hostSince = 0)
         assertEquals(IslandAction.Stay, Islands.decide(capitan, withMembers, emptyList(), now = Islands.BLIND_RETRY_MS * 5))
     }
+
+    /* ---------- the cartel says "I am on a home Wi-Fi": the free phone holds the island (field test 0.9.4) ---------- */
+
+    private fun lonelyHost(id: String, onWifi: Boolean, members: List<String> = emptyList()) =
+        Cartel(Islands.islandId(id), "H", Islands.islandId(id), Islands.ssidOf(id), Islands.passphraseFor(Islands.ssidOf(id)), host = true, roster = members, onWifi = onWifi)
+
+    @Test
+    fun `the cartel says whether its phone is on a home Wi-Fi`() {
+        assertTrue(Cartel.fromTxt(lonelyHost(capitan, onWifi = true).toTxt())!!.onWifi)
+        assertTrue(!Cartel.fromTxt(lonelyHost(mito, onWifi = false).toTxt())!!.onWifi)
+    }
+
+    @Test
+    fun `a free phone does not join a lonely island held by a phone on a home Wi-Fi - it founds the steady one`() {
+        assertEquals(IslandAction.Host, Islands.decide(mito, IslandState(null, false, emptyList()), listOf(lonelyHost(capitan, onWifi = true)), now = 0))
+        val withMembers = lonelyHost(capitan, onWifi = true, members = listOf("m1"))
+        assertEquals("6e6375", (Islands.decide(mito, IslandState(null, false, emptyList()), listOf(withMembers), now = 0) as IslandAction.Join).island,
+            "but it does not split an island that already has people")
+    }
+
+    @Test
+    fun `a phone on a home Wi-Fi goes to the free phone's island before any other`() {
+        val a = Islands.decide(capitan, onWifi(), listOf(lonelyHost("aaaaaa0000", onWifi = true, members = listOf("x")), lonelyHost(mito, onWifi = false)), now = 0)
+        assertEquals("48ab23", (a as IslandAction.Join).island)
+    }
+
+    @Test
+    fun `two lonely hosts - the one on a home Wi-Fi moves to the free one, whatever the ids`() {
+        val capitanAlone = onWifi(island = "6e6375", host = true, hostSince = 0)
+        assertEquals("48ab23", (Islands.decide(capitan, capitanAlone, listOf(lonelyHost(mito, onWifi = false)), now = 0) as IslandAction.Join).island)
+        val mitoAlone = IslandState("48ab23", true, emptyList())
+        val bigFree = "ffffff0000000000"
+        assertEquals(IslandAction.Stay, Islands.decide(bigFree, IslandState("ffffff", true, emptyList()), listOf(lonelyHost(capitan, onWifi = true)), now = 10 * Islands.SCAN_WAIT_MS),
+            "a free host never moves to a lonely island on a home Wi-Fi, not even by the id rule")
+        assertEquals(IslandAction.Stay, Islands.decide(mito, mitoAlone, listOf(lonelyHost(capitan, onWifi = true)), now = 0))
+    }
 }

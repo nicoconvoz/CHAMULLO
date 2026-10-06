@@ -22,7 +22,9 @@ data class Cartel(
     /** A member that is also a fixed bridge (§6.2) says to which island: one bridge per pair of islands. */
     val bridgeTo: String = "",
     /** The islands a host sees (§6.7): who sees whom decides who moves. Null: unknown (the Wi-Fi list, an old cartel). */
-    val sees: List<String>? = null
+    val sees: List<String>? = null,
+    /** Its phone is on a home Wi-Fi (§6.13): its channel moves with that Wi-Fi, so it should not hold an island. */
+    val onWifi: Boolean = false
 ) {
     /** DNS-SD TXT record: short keys, fits the ~255 bytes a Wi-Fi Direct service record allows. */
     fun toTxt(): Map<String, String> = buildMap {
@@ -30,6 +32,7 @@ data class Cartel(
         if (host) { put("s", ssid); put("p", passphrase); put("r", roster.joinToString(",") { it.take(8) }); cell?.let { put("c", it.encode().toHex()) } }
         if (bridgeTo.isNotEmpty()) put("b", bridgeTo)
         if (host && sees != null) put("v", sees.take(MAX_SEES).joinToString(","))
+        if (onWifi) put("w", "1")
     }
 
     companion object {
@@ -40,7 +43,7 @@ data class Cartel(
             return Cartel(id, t["n"] ?: "", island, t["s"] ?: "", t["p"] ?: "", host,
                 t["r"]?.split(',')?.filter { it.isNotEmpty() } ?: emptyList(),
                 t["c"]?.let { c -> runCatching { Zone.decode(hex(c)) }.getOrNull() }, t["b"] ?: "",
-                t["v"]?.split(',')?.filter { it.isNotEmpty() })
+                t["v"]?.split(',')?.filter { it.isNotEmpty() }, t["w"] == "1")
         }
 
         /** Islands a cartel lists as seen: a few, it must fit the ~255 bytes of the service record. */
@@ -84,8 +87,8 @@ object Islands {
     const val FERRY_BOARDING_MS = 3_000L
     // Who sees whom (§6.7): time for both cartels to say what they see before I move against the id rule, and the
     // longer wait for an island known only from the Wi-Fi list, whose cartel says nothing.
-    const val ASYM_WAIT_MS = 90_000L
-    const val SCAN_WAIT_MS = 120_000L
+    const val ASYM_WAIT_MS = 20_000L
+    const val SCAN_WAIT_MS = 30_000L
     // §6.12: a phone on a home Wi-Fi tries each contact's island by name for a while, then founds its own; holding one
     // alone, it tries again from time to time to leave the island to a free phone.
     const val BLIND_TRY_MS = 35_000L
@@ -135,8 +138,14 @@ object Islands {
         val withRoom = hosts.filter { it.roster.size < MAX_MEMBERS - FERRY_SEATS }
         val best = withRoom.maxWithOrNull(compareBy<Cartel> { it.roster.size }.thenByDescending { it.island })
 
+        // §6.13: the island is held by a free phone. Among the islands with room, those held by a free phone come first.
+        val bestFree = withRoom.filter { !it.onWifi }.maxWithOrNull(compareBy<Cartel> { it.roster.size }.thenByDescending { it.island })
+
         // Not on any island: join the biggest one with room; on a home Wi-Fi, a contact's island by its name; or found my own.
         if (state.island == null) {
+            bestFree?.let { return IslandAction.Join(it.island, it.ssid, it.passphrase) }
+            // A free phone founds the steady island instead of joining a lonely one held on a home Wi-Fi (it would drag it).
+            if (!state.onWifiNetwork) return best?.takeIf { it.roster.isNotEmpty() }?.let { IslandAction.Join(it.island, it.ssid, it.passphrase) } ?: IslandAction.Host
             best?.let { return IslandAction.Join(it.island, it.ssid, it.passphrase) }
             if (state.onWifiNetwork && now - state.lookingSince < BLIND_GIVEUP_MS) blind(me, state, now - state.lookingSince)?.let { return it }
             return IslandAction.Host
@@ -161,10 +170,14 @@ object Islands {
             // who sees moves (§6.7): if the other cannot see me it will never come, so after a while I go, whatever the ids.
             if (state.members.isNotEmpty() || best == null) return IslandAction.Stay
             if (strangers.isNotEmpty()) return IslandAction.Stay // a bridge keeps its post at the border
-            val waited = now - (state.seenSince[best.island] ?: now)
-            val blind = best.sees?.let { state.island !in it && waited >= ASYM_WAIT_MS } ?: (waited >= SCAN_WAIT_MS)
-            val merge = best.roster.isNotEmpty() || best.island < me || blind
-            return if (merge) IslandAction.Join(best.island, best.ssid, best.passphrase) else IslandAction.Stay
+            val target = bestFree ?: best
+            // §6.13: on a home Wi-Fi I go to a free phone's island; a free phone never moves to a lonely one on a home Wi-Fi.
+            if (state.onWifiNetwork && !target.onWifi) return IslandAction.Join(target.island, target.ssid, target.passphrase)
+            if (!state.onWifiNetwork && target.onWifi && target.roster.isEmpty()) return IslandAction.Stay
+            val waited = now - (state.seenSince[target.island] ?: now)
+            val blind = target.sees?.let { state.island !in it && waited >= ASYM_WAIT_MS } ?: (waited >= SCAN_WAIT_MS)
+            val merge = target.roster.isNotEmpty() || target.island < me || blind
+            return if (merge) IslandAction.Join(target.island, target.ssid, target.passphrase) else IslandAction.Stay
         }
 
         // El puente fijo (§6.2): a member that can hold two connections stays in its island and joins a neighbor too.

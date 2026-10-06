@@ -191,6 +191,20 @@ El que está colgado de un Wi-Fi de casa arrastra cualquier isla que sostenga ca
 - Reemplaza la regla de 0.9.2 ("funda primero el conectado"), que hacía que la isla dependiera justo del que salta.
 - **Experimento descartado:** un Wi-Fi propio de la app (*hotspot solo local*). En el Moto E7 Plus la app lo prende sola y el Wi-Fi de casa se suelta, pero Android le pone un nombre al azar (`AndroidShare_4539`), apaga el Wi-Fi Direct mientras está prendido y los demás necesitarían un canal extra (Bluetooth) para saber cómo entrar. El código quedó en `WifiIslands.setAway`, sin botón en la app.
 
+### 6.13 El radar: el cartel dice quién sostiene la isla (0.9.5)
+
+**Lo que pasó con 0.9.4:** el celular con Wi-Fi de casa soltó su isla para buscar la de Mito, y Mito, que antes estaba en la isla del Capitán, salió a buscar esa. Cada uno buscaba la isla del otro y ninguno la tenía. Además, mientras uno se sumaba, la regla del puente vio un cartel viejo y mandó fundar cada 5 s.
+
+| Pieza | Regla |
+|---|---|
+| El cartel lo dice | `w = 1`: mi celular está colgado de un Wi-Fi de casa. Se vuelve a colgar el cartel apenas cambia |
+| El libre sostiene | Sin isla, un celular libre se suma a la isla de otro libre; si solo hay islas solas de celulares con Wi-Fi de casa, **funda la suya**. Solo se suma a una de esas si ya tiene gente |
+| El de Wi-Fi de casa se muda | Primero a la isla de un libre (la vea o la busque por nombre, §6.12). Anfitrión solo, ve la isla de un libre: se muda en el acto, sin mirar los ids. Un libre nunca se muda a la isla sola de uno con Wi-Fi de casa |
+| No volver a esa | Si un libre se cae de una isla que tenía uno con Wi-Fi de casa, no la vuelve a buscar: funda la suya en el acto, y el otro viene |
+| Radar | Un cartel nuevo o cambiado se decide en 300 ms, sin esperar la vuelta de 5 s |
+| Tiempos | Mirar antes de fundar: 8 a 15 s (antes 30 a 60). Buscar carteles: cada 30 s (antes 60). Esperas para mudarse: 20 s si el cartel dice que no me ve, 30 s si solo la veo en la lista (antes 90 y 120) |
+| Sumándose | Mientras un celular se está sumando (hasta que abre el caño o pasan 30 s) no se decide nada más |
+
 ## 7. Llamadas y videollamadas en la isla (0.8.0)
 
 Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en celular. Por eso anda **solo dentro de la isla** (o por un puente fijo), donde todo está a uno o dos saltos por Wi-Fi Direct.
