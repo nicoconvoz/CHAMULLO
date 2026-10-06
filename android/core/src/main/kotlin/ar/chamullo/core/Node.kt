@@ -96,7 +96,7 @@ class Node(
     private val cardRetries = LinkedHashMap<String, Retry>()
     private var road: Road? = null
     // Receipts and candies (Proof of Relay): what I carried, what I sent, and the payments already seen.
-    private class Carried(val src: ByteArray, val commit: ByteArray, val myRecord: ByteArray)
+    private class Carried(val src: ByteArray, val commit: ByteArray, val myRecord: ByteArray, val key: HopKey, val origin: ByteArray)
     private val carried = LinkedHashMap<String, Carried>()
     private val sent = LinkedHashMap<String, Sealed>()
     private val paymentsSeen = LinkedHashSet<String>()
@@ -114,6 +114,13 @@ class Node(
     }
 
     var shoutsSent = 0L; private set
+    // For the ledger (Proof of Relay §6.4, §7): journeys I confirmed as origin, and my claims with their journey.
+    private val journeys = ArrayList<Journey>()
+    private val claims = ArrayList<Pair<Claim, Journey>>()
+
+    /** Journeys confirmed and claims ready since the last call: the ledger layer publishes them. */
+    fun takeForLedger(): Pair<List<Journey>, List<Pair<Claim, Journey>>> =
+        (journeys.toList() to claims.toList()).also { journeys.clear(); claims.clear() }
     /** Why copies left my pocket without being handed on: for the twin's report. */
     val dropped = LinkedHashMap<String, Int>()
     private fun drop(id: String, why: String) { if (pockets.remove(id) != null) { pending.remove(id); dropped.merge(why, 1, Int::plus); savePockets() } }
@@ -352,6 +359,9 @@ class Node(
         if (!c.src.contentEquals(p.src) || !p.proves(c.commit) || p.journey.none { it.contentEquals(c.myRecord) }) return emptyList()
         candies++
         store.saveCandies(candies)
+        // With the journey confirmed, my claim can go to the ledger (Proof of Relay §7).
+        claims += Claim(c.origin, c.key) to p.sealed
+        while (claims.size > 500) claims.removeAt(0)
         return listOf(NodeEvent.CandyEarned(candies))
     }
 
@@ -413,7 +423,7 @@ class Node(
                 store.saveMessage(Message(opened.sender.toHex(), false, body.text, opened.ts, id, MessageState.RECEIVED))
                 // The journey: who carried it, read with the key that came inside. The receipt carries only hashes.
                 val hops = opened.journeySecret?.let { env.journey(it) } ?: emptyList()
-                val receipt = Letter.Ack(env.msgId, env.blobs.map { Crypto.hash(it) }, opened.deliverySecret ?: ByteArray(0))
+                val receipt = Letter.Ack(env.msgId, env.blobs.map { Crypto.hash(it) }, opened.deliverySecret ?: ByteArray(0), Journey.validity(hops))
                 store.contact(opened.sender)?.let { sendLetter(it, receipt) }
                 val valid = hops.filter { it.valid && !it.giver.contentEquals(env.src) } // the carriers: the origin's own hop is not one
                 listOf(NodeEvent.LetterReceived(from, body.text, id, valid.map { it.giver.toHex() }, body.service, valid.map { it.alternatives }))
@@ -424,7 +434,8 @@ class Node(
                 store.setState(acked, MessageState.DELIVERED)
                 // The origin checks the receipt with the secret only the reader could know, signs it and pays the carriers.
                 sent.remove(acked)?.takeIf { it.deliverySecret.contentEquals(body.revealed) && body.journey.isNotEmpty() }?.let {
-                    val pay = Payment.confirm(it, body.journey, body.revealed)
+                    val pay = Payment.confirm(it, body.journey, body.revealed, body.validity)
+                    journeys += pay.sealed
                     paymentsSeen += acked
                     forwardPayment(pay, it.envelope.maxHops)
                 }
@@ -459,7 +470,7 @@ class Node(
         when (plan) {
             is Compass.Plan.Eco -> {
                 if (!fresh || p.reshouts >= MAX_RESHOUTS) return
-                val copy = p.shout ?: env.withHop(giverOf(p), now).routed(emptyList(), plan.localTtl, 0).also { p.shout = it; carriedBy(p, it) }
+                val copy = p.shout ?: env.withHopKept(giverOf(p), now).let { (e, k) -> e.routed(emptyList(), plan.localTtl, 0).also { p.shout = it; carriedBy(p, it, k) } }
                 p.reshouts++
                 enqueue(copy.encode())
             }
@@ -492,8 +503,9 @@ class Node(
         if (zone.contains(here)) return false
         val down = b.peersIn(zone).filter { !it.contentEquals(identity.nodeId) }.take(BRIDGE_PEERS)
         if (down.isEmpty()) return false
-        val copy = p.env.withHop(giverOf(p), clock()).routed(emptyList(), null, 0)
-        carriedBy(p, copy)
+        val (hop, key) = p.env.withHopKept(giverOf(p), clock())
+        val copy = hop.routed(emptyList(), null, 0)
+        carriedBy(p, copy, key)
         val bytes = copy.encode()
         for (peer in down) { b.send(peer, bytes); internetBytes += bytes.size }
         pockets.remove(id); savePockets()
@@ -530,8 +542,9 @@ class Node(
             h.done += taker
         } else if (taker !in h.copied) {
             if (!p.env.accepts(a, giverOf(p).id)) return emptyList()
-            val copy = p.env.withHop(giverOf(p), clock(), a, h.alternatives).routed(listOf(a.taker), null, h.detour)
-            carriedBy(p, copy)
+            val (hop, key) = p.env.withHopKept(giverOf(p), clock(), a, h.alternatives)
+            val copy = hop.routed(listOf(a.taker), null, h.detour)
+            carriedBy(p, copy, key)
             enqueue(copy.encode())
             h.copied += taker // I let go when the taker says it got it
         }
@@ -557,11 +570,12 @@ class Node(
         return emptyList()
     }
 
-    // What I need to cash my candy later: the hash of the record I wrote (not for my own letters: the origin does not charge).
-    private fun carriedBy(p: Pocket, copy: Envelope) {
+    // What I need to cash my candy later: my record and the key I sealed it with (not for my own letters: the origin does
+    // not charge).
+    private fun carriedBy(p: Pocket, copy: Envelope, key: HopKey) {
         if (p.sealed != null) return
         val commit = copy.deliveryCommit ?: return
-        carried[copy.msgId.toHex()] = Carried(copy.src, commit, Crypto.hash(copy.blobs.last()))
+        carried[copy.msgId.toHex()] = Carried(copy.src, commit, Crypto.hash(copy.blobs.last()), key, copy.originSection())
         while (carried.size > 2000) carried.remove(carried.keys.first())
     }
 

@@ -69,13 +69,13 @@ class RelayServer(private val clock: () -> Long = System::currentTimeMillis) {
         if (!bridges.containsKey(from)) return reply(ex, 403) // only bridges hand frames over: no spam from strangers
         val to = query(ex)["to"]?.takeIf { bridges.containsKey(it) } ?: return reply(ex, 404)
         if (body.isEmpty() || body.size > Relay.MAX_FRAME) return reply(ex, 413)
+        bytes.merge(from, body.size.toLong(), Long::plus) // counted before it can be read: the economy never sees less
         val box = boxes.getOrPut(to) { Mailbox() }
         synchronized(box) {
             box.frames.addLast(body to clock())
             while (box.frames.size > MAX_MAILBOX) box.frames.removeFirst()
             (box as Object).notifyAll()
         }
-        bytes.merge(from, body.size.toLong(), Long::plus)
         reply(ex, 200)
     }
 

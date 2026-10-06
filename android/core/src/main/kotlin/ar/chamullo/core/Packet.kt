@@ -18,6 +18,7 @@ sealed interface Packet {
         const val LINK_PAYMENT = 15L
         const val LINK_OFFER = 8L
         const val LINK_ACCEPT = 9L
+        const val LINK_CLAIM = 16L
 
         fun isChamullo(b: ByteArray) = b.size >= 4 && b[0] == MAGIC[0] && b[1] == MAGIC[1] && b[2].toInt() == VERSION
 
@@ -38,6 +39,7 @@ sealed interface Packet {
                         LINK_PAYMENT -> Payment.decode(tlv)
                         LINK_OFFER -> Offer.decode(tlv)
                         LINK_ACCEPT -> Accept.decode(tlv)
+                        LINK_CLAIM -> Claim.decode(tlv)
                         else -> throw WireException("unknown link message $type")
                     }
                 }
@@ -146,7 +148,8 @@ sealed interface Letter {
     /** [service] says which service on the network the letter belongs to: "chat" for now, ICEBREAK and others later. */
     data class Text(val text: String, val service: String = "chat") : Letter
     /** The receipt (Proof of Relay §6): which letter, the hashes of its journey and the secret only its reader knew. */
-    class Ack(val msgId: ByteArray, val journey: List<ByteArray> = emptyList(), val revealed: ByteArray = ByteArray(0)) : Letter
+    /** [validity]: which hops held, one bit each (Proof of Relay §6.2). */
+    class Ack(val msgId: ByteArray, val journey: List<ByteArray> = emptyList(), val revealed: ByteArray = ByteArray(0), val validity: ByteArray = ByteArray(0)) : Letter
     /** La mudanza (Discovery & Routing §5): only my new card, so my contacts know my new barrio. */
     class Moved(val card: Card) : Letter
 }
@@ -230,8 +233,12 @@ class Envelope(
      * and recipient read it. With [accept] the record names the taker and carries its signature; without, it was a shout
      * to everyone. [alternatives]: how many stable neighbors offered progress (Discovery & Routing §8).
      */
-    fun withHop(giver: Signer, now: Long, accept: Accept? = null, alternatives: Int = 0): Envelope {
-        val jPub = journeyKey ?: return withHop()
+    fun withHop(giver: Signer, now: Long, accept: Accept? = null, alternatives: Int = 0): Envelope =
+        withHopKept(giver, now, accept, alternatives).first
+
+    /** The same, keeping what the giver needs to cash its hop later (Proof of Relay §7). */
+    fun withHopKept(giver: Signer, now: Long, accept: Accept? = null, alternatives: Int = 0): Pair<Envelope, HopKey> {
+        val jPub = journeyKey ?: return withHop() to HopKey(blobs.size, ByteArray(0), ByteArray(0), ByteArray(0))
         val i = blobs.size
         val taker = accept?.taker ?: ByteArray(0); val acceptSig = accept?.sig ?: ByteArray(0); val hopTs = accept?.ts ?: now
         val hopSig = giver.sign("HOP", acceptBody(msgId, i, seedAfter(i), giver.id, taker, hopTs) + acceptSig)
@@ -240,8 +247,11 @@ class Envelope(
         val e = Crypto.randomBytes(32); val n = Crypto.randomBytes(24)
         val blob = Crypto.boxPublicKey(e) + n + Crypto.box(record, n, jPub, e)
         val list = Writer().apply { for (b in blobs + listOf(blob)) varint(b.size.toLong()).raw(b) }.bytes()
-        return Envelope(src, dstTag, nonce, ts, exp, originTlv, sig, hopCount + 1, transitOf(list, receivers, localTtl, detour))
+        return Envelope(src, dstTag, nonce, ts, exp, originTlv, sig, hopCount + 1, transitOf(list, receivers, localTtl, detour)) to HopKey(i, e, blob, record)
     }
+
+    /** The part the origin signed, and nothing a carrier added: what a ledger needs to check a journey or a claim. */
+    fun originSection(): ByteArray = Envelope(src, dstTag, nonce, ts, exp, originTlv, sig, 0).encode()
 
     /**
      * Reads the journey with the key found inside the letter (Proof of Relay §6.1): every hop in order, valid if both
@@ -282,7 +292,7 @@ class Envelope(
         val card = inner[21]?.let { runCatching { Card.decode(it) }.getOrNull() }?.takeIf { it.nodeId.contentEquals(sender) && it.verify() }
         val body: Letter = when {
             inner[6] != null -> Letter.Text(String(inner.getValue(6)), service)
-            inner[12] != null -> Letter.Ack(inner.getValue(12), (inner[18] ?: ByteArray(0)).toList().chunked(32) { it.toByteArray() }, inner[20] ?: ByteArray(0))
+            inner[12] != null -> Letter.Ack(inner.getValue(12), (inner[18] ?: ByteArray(0)).toList().chunked(32) { it.toByteArray() }, inner[20] ?: ByteArray(0), inner[23] ?: ByteArray(0))
             else -> Letter.Moved(card ?: return null)
         }
         if (!Identity.verify(sender, "MSG", msgId + Tlv.u64(sentTs) + content(body), inner.getValue(8))) return null
@@ -309,7 +319,7 @@ class Envelope(
         // What the sender signs: the text and service, or the whole receipt.
         internal fun content(body: Letter): ByteArray = when (body) {
             is Letter.Text -> body.text.toByteArray() + 0.toByte() + body.service.toByteArray()
-            is Letter.Ack -> body.msgId + body.journey.fold(ByteArray(0)) { a, h -> a + h } + body.revealed
+            is Letter.Ack -> body.msgId + body.journey.fold(ByteArray(0)) { a, h -> a + h } + body.revealed + body.validity
             is Letter.Moved -> body.card.encode()
         }
 
@@ -335,7 +345,8 @@ class Envelope(
                     (body as? Letter.Ack)?.let { 18L to it.journey.fold(ByteArray(0)) { a, h -> a + h } },
                     (body as? Letter.Text)?.service?.takeIf { it != "chat" }?.let { 19L to it.toByteArray() },
                     (body as? Letter.Ack)?.let { 20L to it.revealed },
-                    ((body as? Letter.Moved)?.card ?: senderCard)?.let { 21L to it.encode() }
+                    ((body as? Letter.Moved)?.card ?: senderCard)?.let { 21L to it.encode() },
+                    (body as? Letter.Ack)?.validity?.takeIf { it.isNotEmpty() }?.let { 23L to it }
                 )
             )
             val ephBoxSecret = Crypto.randomBytes(32)
@@ -448,44 +459,41 @@ class RoadInvite(val from: ByteArray, val to: ByteArray, val fromBox: ByteArray,
 /* ======================= the payment: the origin confirms the journey, every carrier checks its own record ======================= */
 
 /**
- * Proof of Relay §6–7: the recipient revealed the delivery secret and the hashes of the journey; the origin checked
- * them and signs the confirmation with the same ephemeral key that sealed the letter. It floods the payment; each
- * carrier that finds the hash of its own record in the journey earns a candy. Nobody needs to see the whole route.
+ * The origin's confirmation travelling to the carriers (Proof of Relay §6, Discovery & Routing §10.7): the sealed
+ * [Journey], pointed like a letter toward its zone. Each carrier that finds the hash of its own record earns a candy and
+ * can present its [Claim] to the ledger. Nobody needs to see the whole route.
  */
-class Payment(
-    val msgId: ByteArray, val src: ByteArray, val journey: List<ByteArray>, val revealed: ByteArray, val confirm: ByteArray, val ttl: Int,
-    val zone: Zone? = null, val receivers: List<ByteArray> = emptyList()
-) : Packet {
-    fun journeyHash() = Crypto.hash("CHAMULLO/1/JRNY".toByteArray() + 0.toByte() + msgId + journey.fold(ByteArray(0)) { a, h -> a + h })
+class Payment(val sealed: Journey, val ttl: Int, val zone: Zone? = null, val receivers: List<ByteArray> = emptyList()) : Packet {
+    val msgId: ByteArray get() = sealed.msgId
+    val src: ByteArray get() = sealed.src
+    val journey: List<ByteArray> get() = sealed.hashes
+    val revealed: ByteArray get() = sealed.revealed
+    val confirm: ByteArray get() = sealed.confirm
+
+    fun journeyHash() = sealed.hash()
 
     /** True if [deliveryCommit] (from the letter I carried) matches the revealed secret and the origin signed this journey. */
     fun proves(deliveryCommit: ByteArray) =
         Crypto.hash(revealed).contentEquals(deliveryCommit) && Identity.verify(src, "CONF", msgId + journeyHash(), confirm)
 
-    fun withTtl(t: Int) = Payment(msgId, src, journey, revealed, confirm, t, zone, receivers)
+    fun withTtl(t: Int) = Payment(sealed, t, zone, receivers)
 
     /** Pointed like a letter (Discovery & Routing §10.7): toward [zone], to [receivers] (empty: everyone). Not signed. */
-    fun routed(zone: Zone?, receivers: List<ByteArray>, ttl: Int) = Payment(msgId, src, journey, revealed, confirm, ttl, zone, receivers)
+    fun routed(zone: Zone?, receivers: List<ByteArray>, ttl: Int) = Payment(sealed, ttl, zone, receivers)
 
     fun isReceiver(nodeId: ByteArray) = receivers.isEmpty() || receivers.any { it.contentEquals(nodeId.copyOf(Envelope.SHORT_ID)) }
 
-    override fun encode() = Packet.link(Packet.LINK_PAYMENT, listOf(
-        2L to msgId, 4L to src, 6L to journey.fold(ByteArray(0)) { a, h -> a + h }, 8L to revealed, 10L to confirm, 11L to byteArrayOf(ttl.toByte())
-    ) + listOfNotNull(zone?.let { 13L to it.encode() },
-        receivers.takeIf { it.isNotEmpty() }?.let { r -> 15L to r.fold(ByteArray(0)) { a, b -> a + b.copyOf(Envelope.SHORT_ID) } }))
+    override fun encode() = Packet.link(Packet.LINK_PAYMENT, listOf(2L to sealed.encode(), 11L to byteArrayOf(ttl.toByte())) +
+        listOfNotNull(zone?.let { 13L to it.encode() },
+            receivers.takeIf { it.isNotEmpty() }?.let { r -> 15L to r.fold(ByteArray(0)) { a, b -> a + b.copyOf(Envelope.SHORT_ID) } }))
 
     companion object {
-        fun confirm(sealed: Sealed, journey: List<ByteArray>, revealed: ByteArray, ttl: Int = 8): Payment {
-            val env = sealed.envelope
-            val unsigned = Payment(env.msgId, env.src, journey, revealed, ByteArray(64), ttl)
-            val sig = Crypto.sign(sealed.ephemeralSeed, Identity.signingInput("CONF", env.msgId + unsigned.journeyHash()))
-            return Payment(env.msgId, env.src, journey, revealed, sig, ttl, env.destZone)
-        }
+        fun confirm(sealed: Sealed, journey: List<ByteArray>, revealed: ByteArray, validity: ByteArray, ttl: Int = 8): Payment =
+            Payment(Journey.confirm(sealed, journey, revealed, validity), ttl, sealed.envelope.destZone)
 
         fun decode(t: Map<Long, ByteArray>): Payment {
-            Tlv.requireKnown(t, setOf(2, 4, 6, 8, 10))
-            return Payment(t.getValue(2), t.getValue(4), t.getValue(6).toList().chunked(32) { it.toByteArray() }, t.getValue(8), t.getValue(10),
-                (t[11]?.firstOrNull()?.toInt() ?: 0) and 0xff, Zone.decodeOrNull(t[13]),
+            Tlv.requireKnown(t, setOf(2))
+            return Payment(Journey.decode(t.getValue(2)), (t[11]?.firstOrNull()?.toInt() ?: 0) and 0xff, Zone.decodeOrNull(t[13]),
                 (t[15] ?: ByteArray(0)).toList().chunked(Envelope.SHORT_ID) { it.toByteArray() })
         }
     }

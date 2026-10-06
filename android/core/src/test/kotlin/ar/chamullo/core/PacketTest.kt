@@ -216,11 +216,52 @@ class PacketTest {
     @Test
     fun `a payment can be pointed at a zone without touching what the origin signed`() {
         val sealed = Envelope.seal(ana, dani.card(), Letter.Text("x"), 1_000)
-        val pay = Payment.confirm(sealed, listOf(ByteArray(32)), ByteArray(32)).routed(barrio, listOf(beto.nodeId.copyOf(8)), 5)
+        val pay = Payment.confirm(sealed, listOf(ByteArray(32)), ByteArray(32), byteArrayOf(1)).routed(barrio, listOf(beto.nodeId.copyOf(8)), 5)
         val back = Packet.parse(pay.encode()) as Payment
         assertEquals(barrio, back.zone)
         assertEquals(5, back.ttl)
         assertEquals(1, back.receivers.size)
         assertTrue(Identity.verify(back.src, "CONF", back.msgId + back.journeyHash(), back.confirm))
+    }
+
+    /* ---------- cobrar: the carrier keeps the key of its record (Proof of Relay §7) ---------- */
+
+    private fun journeyOf(): Triple<Sealed, Envelope, List<HopKey>> {
+        val sealed = Envelope.seal(ana, dani.card(), Letter.Text("x"), 1_000)
+        var env = sealed.envelope
+        val keys = ArrayList<HopKey>()
+        env.withHopKept(sealed.signer(), 1_001, env.offer(env.src, beto.nodeId).accept(beto, 1_001), 3).let { (e, k) -> env = e; keys += k }
+        env.withHopKept(beto.signer(), 1_002, env.offer(beto.nodeId, caro.nodeId).accept(caro, 1_002), 1).let { (e, k) -> env = e; keys += k }
+        env.withHopKept(caro.signer(), 1_003).let { (e, k) -> env = e; keys += k }
+        return Triple(sealed, env, keys)
+    }
+
+    @Test
+    fun `the destination's receipt says which hops held, and the confirmation seals exactly that`() {
+        val (sealed, env, _) = journeyOf()
+        val opened = env.open(dani)!!
+        val validity = Journey.validity(env.journey(opened.journeySecret!!))
+        assertEquals(listOf(true, true, true), (0 until 3).map { Journey.bit(validity, it) })
+        val j = Journey.confirm(sealed, env.blobs.map { Crypto.hash(it) }, opened.deliverySecret!!, validity)
+        assertTrue(j.verify())
+        assertFalse(Journey(j.origin, j.hashes, j.revealed, Journey.validity(listOf(Hop(ByteArray(0), false))), j.confirm).verify(), "another validity, another seal")
+        assertFalse(Journey(j.origin, j.hashes, Crypto.randomBytes(32), j.validity, j.confirm).verify(), "only the reader knew r")
+    }
+
+    @Test
+    fun `a carrier proves its hop with the key it kept, and nobody else can`() {
+        val (sealed, env, keys) = journeyOf()
+        val opened = env.open(dani)!!
+        val j = Journey.confirm(sealed, env.blobs.map { Crypto.hash(it) }, opened.deliverySecret!!, Journey.validity(env.journey(opened.journeySecret!!)))
+        val betoClaim = Claim(sealed.envelope.originSection(), keys[1])
+        val ok = betoClaim.check(j)!!
+        assertArrayEquals(beto.nodeId, ok.giver)
+        assertArrayEquals(caro.nodeId, ok.taker)
+        assertEquals(1, ok.alternatives)
+        assertEquals(null, Claim(sealed.envelope.originSection(), keys[0]).check(j), "the origin does not charge for its own letter")
+        val forged = HopKey(1, Crypto.randomBytes(32), keys[1].blob, keys[1].record)
+        assertEquals(null, Claim(sealed.envelope.originSection(), forged).check(j), "without the key, no proof")
+        val back = Packet.parse(betoClaim.encode()) as Claim
+        assertArrayEquals(beto.nodeId, back.check(j)!!.giver)
     }
 }

@@ -315,7 +315,7 @@ class NodeTest {
         val ana = Identity.generate("Ana"); val caro = Identity.generate("Caro")
         val env = Envelope.letter(ana, caro.card(), Letter.Text("hola"), now)
         beto.onFrame(env.encode()) // beto carries it
-        val fake = Payment(env.msgId, env.src, listOf(Crypto.hash(byteArrayOf(1))), Crypto.randomBytes(32), ByteArray(64), ttl = 4)
+        val fake = Payment(Journey(env.originSection(), listOf(Crypto.hash(byteArrayOf(1))), Crypto.randomBytes(32), byteArrayOf(1), ByteArray(64)), ttl = 4)
         beto.onFrame(fake.encode())
         assertEquals(0, beto.candies)
     }

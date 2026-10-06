@@ -121,6 +121,7 @@ Registro TLV, cifrado en el renglón: `2` giver, `4` i, `6` ts, `8` `hop_sig`, `
 - `hop_sig_i = sig_giver("HOP", msg_id | i | s_{i-1} | giver | taker | ts | accept_sig_i)` y `accept_sig_i = sig_taker("ACPT", msg_id | i | s_{i-1} | giver | taker | ts)`.
 - El primer renglón lo escribe el origen con la clave efímera `src`: `giver_1 = src`.
 - **Grito a todos** (eco local o eco acotado, Discovery & Routing §10.4): `taker` y `accept_sig` van vacíos. Ese salto vale si `hop_sig` verifica; la continuidad con el siguiente no se exige, porque cualquiera de los que oyeron pudo seguirla.
+- **Implementado (v0.3):** el giver guarda su `HopKey` (`e_i_sec`, `blob_i`, `HOP_i`). El acuse del destino lleva `validez` firmada (TLV interno `23`), y la confirmación del origen sella `j` **con** esa `validez`. El `PAYMENT` viaja con el `Journey` completo: sección de origen, `L`, `r`, `validez` y `CONFIRM`. Cada cartero que cobra su caramelo prepara su `CLAIM` (LINK `16`) para la libreta. `Claim.check` hace las cinco verificaciones del §7, incluido volver a sellar el renglón con `e_i_sec`.
 - **Entrega escuchada:** si el destino abre una copia dirigida a otro taker, la carta vale igual. El último renglón no nombra al destino y por eso no cobra nadie por ese salto.
 
 ## 5. El compromiso previo: aceptar es comprometerse a firmar
