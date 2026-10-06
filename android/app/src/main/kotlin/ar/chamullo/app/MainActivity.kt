@@ -112,6 +112,7 @@ class MainActivity : Activity() {
             drawBar(unread)
             page.removeAllViews()
             wifiWarning()
+            homeWifiHint()
             when (current) {
                 0 -> contactsTab(s)
                 1 -> chatsTab(s)
@@ -130,6 +131,22 @@ class MainActivity : Activity() {
             addView(text("📶 Prendé el Wi-Fi", 17f, Ui.RED, bold = true))
             addView(text("CHAMULLO arma su propia red Wi-Fi con los celulares de alrededor, sin router ni Internet. Solo necesita el Wi-Fi prendido: no hace falta conectarse a ninguna red.", 13f, Ui.MUTED))
             addView(button("Prender Wi-Fi") { openWifiSwitch(this@MainActivity) })
+        })
+    }
+
+    // Field test 0.9.8 (Camino y Carretera §6.16): with every Wi-Fi network forgotten the island never broke, up to half a
+    // block. Android 10+ lets no app disconnect or forget a network, so CHAMULLO says so and opens the list in one tap.
+    private fun homeWifiHint() {
+        val wifi = getSystemService(android.net.wifi.WifiManager::class.java) ?: return
+        @Suppress("DEPRECATION") val info = wifi.connectionInfo ?: return
+        if (info.networkId == -1) return
+        @Suppress("DEPRECATION") val ssid = info.ssid?.trim('"')?.takeIf { it.isNotBlank() && it != "<unknown ssid>" } ?: "una red Wi-Fi"
+        if (ssid in Settings.homeNetworks(this)) return
+        page.addView(card {
+            addView(text("📶 Estás conectado a \"$ssid\"", 16f, bold = true))
+            addView(text("En la calle, el Wi-Fi que se conecta y desconecta solo corta la isla y las llamadas. Para que no se corte, desconectate u olvidá las redes guardadas: Android no deja que una app lo haga por vos.", 13f, Ui.MUTED))
+            addView(button("Abrir redes Wi-Fi") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) } })
+            addView(button("Acá estoy en casa, no avisar", primary = false) { Settings.addHomeNetwork(this@MainActivity, ssid); render() })
         })
     }
 

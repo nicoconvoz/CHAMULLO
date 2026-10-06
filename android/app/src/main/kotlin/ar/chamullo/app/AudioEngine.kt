@@ -12,8 +12,7 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.TimeUnit
+import ar.chamullo.core.Voice
 
 /**
  * The voice of a call (Camino y Carretera §7): 16 kHz mono 16-bit PCM in 20 ms pieces (640 bytes, 256 kbit/s), plenty
@@ -22,7 +21,11 @@ import java.util.concurrent.TimeUnit
 class AudioEngine(private val context: Context, private val onPiece: (ByteArray) -> Unit) {
     @Volatile private var running = false
     @Volatile var muted = false
-    private val incoming = LinkedBlockingQueue<ByteArray>()
+    // §7.3: numbered pieces, each sent three times; the receiver orders them and plays with a margin.
+    private val packer = Voice.Packer()
+    private val unpacker = Voice.Unpacker()
+    private val playout = Voice.Playout(delay = MARGIN)
+    private var legacySeq = 0L
     private var record: AudioRecord? = null
     private var track: AudioTrack? = null
     private val audio = context.getSystemService(AudioManager::class.java)
@@ -57,33 +60,30 @@ class AudioEngine(private val context: Context, private val onPiece: (ByteArray)
             while (running) {
                 var got = 0
                 while (got < PIECE && running) { val n = r.read(buf, got, PIECE - got); if (n <= 0) break; got += n }
-                if (got == PIECE && !muted) onPiece(buf.copyOf())
+                if (got == PIECE && !muted) onPiece(packer.next(buf))
             }
         }
         runCatching { r.stop() }; runCatching { r.release() }
     }
 
-    // The jitter buffer (Camino y Carretera §7.1): gather [PREBUFFER] pieces before sounding; when a piece is missing,
-    // fill its 20 ms with the last one, softer, and then silence, instead of letting the speaker run dry; if pieces pile
-    // up (the island stalled), keep only the newest so the voice stays live.
+    // The jitter buffer (Camino y Carretera §7.3): one piece every 20 ms, in order. A piece that never came is filled with
+    // the last one at half volume, then silence; with nothing at all, silence, and after a second of it, gather again.
     private fun play() {
         val t = track ?: return
         val silence = ByteArray(PIECE)
         var last: ByteArray? = null
         var missing = 0
+        var dry = 0
         runCatching {
             t.play()
             while (running) {
-                if (incoming.size < PREBUFFER && missing == 0 && last == null) { Thread.sleep(5); continue } // gathering
-                if (incoming.size > MAX_QUEUED) while (incoming.size > PREBUFFER) incoming.poll()
-                val p = incoming.poll(PIECE_MS + 5, TimeUnit.MILLISECONDS)
+                val next = playout.next()
                 val out = when {
-                    p != null -> { missing = 0; last = p; p }
-                    missing++ == 0 && last != null -> softer(last!!)
-                    else -> silence
+                    next == null -> { if (++dry > DRY_RESET) { playout.reset(); dry = 0; last = null }; silence }
+                    next.second != null -> { dry = 0; missing = 0; last = next.second; next.second!! }
+                    else -> { dry = 0; if (missing++ == 0 && last != null) softer(last!!) else silence }
                 }
-                if (missing > LOST_PIECES) { last = null; missing = 0 } // a real gap: gather again
-                t.write(out, 0, out.size)
+                t.write(out, 0, out.size) // blocks: the speaker sets the 20 ms pace
             }
         }
         runCatching { t.stop() }; runCatching { t.release() }
@@ -101,7 +101,11 @@ class AudioEngine(private val context: Context, private val onPiece: (ByteArray)
         return out
     }
 
-    fun onRemote(piece: ByteArray) { if (running && piece.size <= PIECE * 4) incoming.offer(piece) }
+    fun onRemote(payload: ByteArray) {
+        if (!running) return
+        if (Voice.isLegacy(payload)) { playout.put(legacySeq++, payload); return } // a phone before 0.9.9
+        for ((seq, pcm) in unpacker.accept(payload)) playout.put(seq, pcm)
+    }
 
     var speaker: Boolean
         get() = audio.isSpeakerphoneOn
@@ -110,7 +114,7 @@ class AudioEngine(private val context: Context, private val onPiece: (ByteArray)
     fun stop() {
         if (!running) return
         running = false
-        incoming.clear()
+        playout.reset()
         audio.isSpeakerphoneOn = false
         audio.mode = AudioManager.MODE_NORMAL
     }
@@ -119,12 +123,9 @@ class AudioEngine(private val context: Context, private val onPiece: (ByteArray)
         const val RATE = 16_000
         /** 20 ms at 16 kHz, 16-bit mono. */
         const val PIECE = RATE / 50 * 2
-        const val PIECE_MS = 20L
-        /** 60 ms gathered before sounding. */
-        const val PREBUFFER = 3
-        /** 200 ms waiting at most. */
-        const val MAX_QUEUED = 10
-        /** After this many missing pieces in a row (100 ms) it is a gap, not a hiccup: gather again. */
-        const val LOST_PIECES = 5
+        /** 100 ms of margin: time for a piece's second and third copies to arrive. */
+        const val MARGIN = 5
+        /** A second without voice: gather the margin again before sounding. */
+        const val DRY_RESET = 50
     }
 }

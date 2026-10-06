@@ -67,6 +67,11 @@ object Settings {
 
     fun setCatalog(c: Context, json: String) = prefs(c).edit().putString("catalog", json).apply()
 
+    /** Home Wi-Fi networks where the owner said "acá estoy en casa": no warning there (Camino y Carretera §6.16). */
+    fun homeNetworks(c: Context): Set<String> = prefs(c).getStringSet("homeNetworks", emptySet()) ?: emptySet()
+
+    fun addHomeNetwork(c: Context, ssid: String) = prefs(c).edit().putStringSet("homeNetworks", homeNetworks(c) + ssid).apply()
+
     /** The tab the home screen shows. */
     fun tab(c: Context) = prefs(c).getInt("tab", 0)
 

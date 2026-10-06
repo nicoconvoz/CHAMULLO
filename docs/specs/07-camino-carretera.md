@@ -221,6 +221,13 @@ Una isla **es** la red propia de CHAMULLO: un grupo Wi-Fi Direct (`DIRECT-CH-xxx
 
 **El alcance:** 60 m es lo que logra Wi-Fi Direct a campo abierto y viéndose. Entre paredes, con celulares económicos, lo esperable es **10 a 25 m**: cada pared se come señal, y la potencia de la antena la fija el chip, no la app. Además, un anfitrión colgado de un Wi-Fi de casa reparte su antena entre las dos redes, y la isla recibe menos tiempo de aire. Para el mayor alcance, la isla la tiene que sostener un celular sin Wi-Fi de casa.
 
+### 6.16 Sin Wi-Fi de casa, la isla no se corta (prueba de campo 0.9.8)
+
+**Lo que probó el Capitán:** olvidó todas las redes Wi-Fi guardadas, así que su celular no se conectaba a ninguna. **La isla no se cortó nunca y la llamada llegó a media cuadra.** Queda confirmado: lo que cortaba era el Wi-Fi de casa, que arrastraba la isla de canal en canal y le quitaba tiempo de aire.
+
+- Android 10+ no deja que una app desconecte u olvide redes Wi-Fi (`disconnect()` y `disableNetwork()` siempre fallan para apps nuevas).
+- Por eso la app **avisa**: si el celular está conectado a una red Wi-Fi, la pantalla principal lo dice y ofrece **"Abrir redes Wi-Fi"**, para desconectarse u olvidar las redes en dos toques. Con **"Acá estoy en casa, no avisar"**, esa red no se vuelve a mencionar.
+
 ## 7. Llamadas y videollamadas en la isla (0.8.0)
 
 Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en celular. Por eso anda **solo dentro de la isla** (o por un puente fijo), donde todo está a uno o dos saltos por Wi-Fi Direct.
@@ -234,6 +241,20 @@ Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en
 | Voz | `AUDIO`: 20 ms de PCM 16 kHz mono de 16 bits (640 B, 256 kbit/s), sin códec, con el cancelador de eco y el supresor de ruido del celular. Del otro lado, a lo sumo 160 ms en cola: si se junta más, se tira lo viejo |
 | Video | `VIDEO`: H.264 640×480, 15 cuadros por segundo, 800 kbit/s, con el codificador y el decodificador del propio celular. Cada pedazo lleva banderas (configuración, cuadro clave, cámara apagada, "mandame un cuadro clave") y el giro de la cámara. La configuración viaja antes de cada cuadro clave |
 | Vida | `PING` cada 2 s. Sin voz ni señales en 25 s: "se cortó" (§7.2) |
+
+### 7.3 La voz que no se corta (0.9.9)
+
+**Lo que pasó:** a media cuadra, la voz se cortaba muchas veces. Es digital, pero no viaja en un solo paquete: va en 50 pedacitos de 20 ms por segundo, y con señal floja se pierden algunos. Cada uno perdido era un agujerito.
+
+| Pieza | Regla |
+|---|---|
+| Número | Cada pedacito lleva su número (`seq`): se ordenan solos y los repetidos se tiran |
+| μ-law | La voz se comprime a la mitad con G.711 μ-law (el de los teléfonos): 320 bytes por pedacito |
+| Tres copias | Cada paquete lleva su pedacito y los dos anteriores (`COPIES = 3`, unos 970 bytes). Para perder un pedacito se tienen que perder tres paquetes seguidos |
+| Colchón | `MARGIN = 5` pedacitos (100 ms), para que lleguen las copias. Uno que falta se tapa con el anterior a media voz y después silencio. Un segundo sin voz y se vuelve a juntar el colchón |
+| Compatible | Un pedacito de 640 bytes justos es de un celular anterior a 0.9.9 y se toca tal cual |
+
+- Las reglas están en el núcleo (`Voice.kt`, con pruebas en `VoiceTest.kt`); el parlante y el micrófono, en `AudioEngine`.
 
 ### 7.2 Un corte de segundos no es el final (0.9.4)
 
