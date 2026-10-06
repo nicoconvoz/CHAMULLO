@@ -1,6 +1,6 @@
 # CHAMULLO — Documentación técnica
 
-Versión del documento: 2 · Estado del código: app 0.2.1 (octubre 2026)
+Versión del documento: 3 · Estado del código: app 0.2.2 (octubre 2026)
 
 > Este documento describe **lo que está construido y funcionando hoy**. El diseño completo de la red
 > (identidad, sobre, recibos, economía, routing, interfaz de aire) está en [`docs/specs/`](specs/). Cuando el
@@ -138,7 +138,7 @@ crecientes y la **regla par/impar**: un campo desconocido impar se ignora, uno p
 | Micro | `0xC5 | id(2) | índice | n | g | pedazo(16)` (`Micro.kt`) |
 | Comodines | `g = ⌈n/4⌉` pedazos de paridad XOR; se reconstruye **un pedazo perdido por grupo** |
 | Largo alcance | Si el chip tiene Coded PHY, la trama entera sale además en un anuncio extendido |
-| Chips viejos | Sin anuncios extendidos se usa el anunciante clásico de Android (start/stop por micro) |
+| Chips viejos | Sin anuncios extendidos: **varios megáfonos a la vez** con el anunciante clásico (hasta 4, 1 s cada micro), así cada micro sale al aire ≈ 10 veces |
 | Escucha | Filtro por fabricante `0xFFFF` + prefijo `0xC5`; se reinicia cada 10 min (Android corta las de más de 30 min) |
 | Ritmo | 250 ms por micro, cola por **cartas enteras** (máx. 12); latido firmado cada 15 s |
 | Saludo | **"¡Hola!" en un solo grito** (`0xC6 | id corto(8) | largo alcance | nombre ≤ 12 B`) cada 3 s, adelante de la cola. Muestra quién está cerca; no está firmado |
@@ -244,6 +244,7 @@ La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo
 | 0.1.8 | Comodines (FEC) y reintentos; devolución de tarjeta | Se perdían pedazos y tarjetas |
 | 0.1.9 | Caja negra, cola por cartas enteras, latido cada 15 s | La cola cortaba cartas por la mitad |
 | 0.2.0 | **Carretera**: Wi-Fi Direct en cadena viva | Transmitir mucho y rápido |
+| 0.2.2 | Varios megáfonos a la vez en chips viejos | Lo que gritaba un chip viejo llegaba "a veces": cada micro salía una vez o ninguna |
 | 0.2.1 | Saludo de un solo grito; la carretera abre solo con un vecino estable | "Vecinos: 0": la carretera abierta de entrada le robaba antena al grito |
 
 ## 13. Pendientes conocidos

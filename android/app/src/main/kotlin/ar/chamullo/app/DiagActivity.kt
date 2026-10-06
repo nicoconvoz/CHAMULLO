@@ -55,6 +55,7 @@ class DiagActivity : Activity() {
                 (r as? WifiRoad)?.let { "  Viajando por: ${it.riding ?: "ninguna"} · caños abiertos: ${it.peers}" },
                 (r as? WifiRoad)?.let { "  Prueba de velocidad: ${it.lastSpeed ?: "sin hacer"}" },
                 (r as? GritoRadio)?.let { "  Anuncios extendidos: ${yes(it.extended)} · largo alcance: ${yes(it.coded)}" },
+                (r as? GritoRadio)?.takeIf { !it.extended }?.let { "  Megáfonos a la vez: ${it.megaphoneLimit}" },
                 (r as? GritoRadio)?.let { "  Escuchando: ${yes(it.listening)} · cartas en cola: ${it.waiting}" },
                 (r as? GritoRadio)?.let { "  Cartas completas armadas: ${it.assembled}" },
                 (r as? GritoRadio)?.let { "  Último grito escuchado: " + if (it.lastHeardAt == 0L) "nunca" else "hace ${(System.currentTimeMillis() - it.lastHeardAt) / 1000} s" },

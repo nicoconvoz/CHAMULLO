@@ -91,7 +91,7 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit, pri
         handler.removeCallbacks(rescan)
         runCatching { if (scanning) adapter?.bluetoothLeScanner?.stopScan(scanCallback) }
         scanning = false
-        runCatching { adapter?.bluetoothLeAdvertiser?.stopAdvertising(classicCallback) }
+        for (m in megaphones) { runCatching { adapter?.bluetoothLeAdvertiser?.stopAdvertising(m) }; m.busy = false }
         for (cb in callbacks.values) runCatching { adapter?.bluetoothLeAdvertiser?.stopAdvertisingSet(cb) }
         sets.clear(); starting = null; busy = false; queue.clear()
     } }
@@ -126,11 +126,11 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit, pri
 
     // Each emission stays on the air for a few advertising events, then the next one takes its place.
     private fun pump() {
+        if (!extended) { pumpClassic(); return }
         if (busy || starting != null || queue.isEmpty()) return
         val group = queue.first()
         val e = group.removeFirst()
         if (group.isEmpty()) queue.removeFirst()
-        if (e.mode == Mode.CLASSIC && !extended) { classic(e); return }
         val set = sets[e.mode]
         if (set == null) { startSet(e); return }
         busy = true
@@ -140,25 +140,55 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit, pri
         handler.postDelayed({ set.enableAdvertising(false, 0, 0); busy = false; pump() }, HOLD_MS)
     }
 
-    // Classic advertiser: start, stay on the air for HOLD_MS, stop, next.
-    private fun classic(e: Emission) {
-        val advertiser = adapter?.bluetoothLeAdvertiser ?: run { lastError = "Bluetooth apagado"; return }
+    /*
+     * Several megaphones at once (chips without extended advertising). Starting a classic advert takes time, so one
+     * micro every 250 ms went on the air once or not at all and the other phone rarely got a whole frame. Chips
+     * usually allow a few simultaneous adverts: each megaphone holds its micro for CLASSIC_HOLD_MS, so every micro
+     * is aired about ten times at the same overall speed. If the chip allows fewer, the limit adjusts itself.
+     */
+    private inner class Megaphone : AdvertiseCallback() {
+        var busy = false
+        var micro: ByteArray? = null
+        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) { shouts++ }
+        override fun onStartFailure(errorCode: Int) {
+            busy = false
+            if (errorCode == ADVERTISE_FAILED_TOO_MANY_ADVERTISERS && megaphoneLimit > 1) {
+                megaphoneLimit--
+                FieldLog.add("BT", "el chip admite menos megáfonos: bajo a $megaphoneLimit")
+                micro?.let { queue.addFirst(ArrayDeque(listOf(Emission(Mode.CLASSIC, it)))) }
+            } else {
+                lastError = "el grito corto falló (código $errorCode)"
+                FieldLog.add("BT", "grito clásico falló, código $errorCode")
+            }
+            pump()
+        }
+    }
+
+    private val megaphones = List(MAX_MEGAPHONES) { Megaphone() }
+    @Volatile var megaphoneLimit = MAX_MEGAPHONES; private set
+
+    private fun pumpClassic() {
+        val advertiser = adapter?.bluetoothLeAdvertiser ?: run { lastError = "este celular no puede anunciar por Bluetooth"; return }
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
             .setConnectable(false).setTimeout(0).build()
-        busy = true
-        runCatching { advertiser.startAdvertising(settings, data(e), classicCallback) }.onFailure { lastError = it.message; FieldLog.add("BT", "excepción al gritar: ${it.message}") }
-        handler.postDelayed({
-            runCatching { advertiser.stopAdvertising(classicCallback) }
-            busy = false
-            pump()
-        }, HOLD_MS)
-    }
-
-    private val classicCallback = object : AdvertiseCallback() {
-        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) { shouts++ }
-        override fun onStartFailure(errorCode: Int) { lastError = "el grito corto falló (código $errorCode)"; FieldLog.add("BT", "grito clásico falló, código $errorCode") }
+        while (queue.isNotEmpty()) {
+            val m = megaphones.take(megaphoneLimit).firstOrNull { !it.busy } ?: return
+            val group = queue.first()
+            val e = group.removeFirst()
+            if (group.isEmpty()) queue.removeFirst()
+            if (e.mode != Mode.CLASSIC) continue
+            m.busy = true
+            m.micro = e.bytes
+            runCatching { advertiser.startAdvertising(settings, data(e), m) }
+                .onFailure { m.busy = false; lastError = it.message; FieldLog.add("BT", "excepción al gritar: ${it.message}"); return }
+            handler.postDelayed({
+                runCatching { advertiser.stopAdvertising(m) }
+                m.busy = false
+                pump()
+            }, CLASSIC_HOLD_MS)
+        }
     }
 
     private val callbacks = Mode.values().associateWith { mode ->
@@ -245,6 +275,8 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit, pri
         const val COMPANY = 0xFFFF
         const val MAX_FRAME = 240
         const val HOLD_MS = 250L
+        const val CLASSIC_HOLD_MS = 1_000L
+        const val MAX_MEGAPHONES = 4
         const val DEDUP_MS = 5_000L
         const val MAX_FRAMES = 12
         const val CAMINO_MAX = 4_096
