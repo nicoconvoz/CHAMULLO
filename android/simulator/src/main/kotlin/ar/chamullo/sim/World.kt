@@ -101,6 +101,26 @@ class World(
         p.node.bridge = if (on) CloudPort(p) else null
     }
 
+    /**
+     * La libreta (Economy & Governance §9): every phone keeps the ledger of its pueblo; [founder] writes alone until a
+     * closed period has [genesisContributors] contributors, then the court comes from the rule.
+     */
+    fun startLedger(founder: String, periodMs: Long = 5 * 60_000L, maturityMs: Long = 2 * 60_000L, nobles: Int = 20, genesisContributors: Int = 21) {
+        val f = phones.getValue(founder).identity.nodeId
+        ledgerFounder = founder
+        for (p in phones.values) p.node.ledger = ar.chamullo.core.Ledger(ar.chamullo.core.Ledger.Params(p.cell.up(Zone.PUEBLO), f,
+            periodMs = periodMs, maturityMs = maturityMs, nobles = nobles, genesisContributors = genesisContributors))
+    }
+    var ledgerFounder: String? = null; private set
+
+    /** The book as the founder's phone keeps it (every copy agrees): pages, the court and the Lucas of each one. */
+    fun book(): ar.chamullo.core.Ledger? = ledgerFounder?.let { phones[it]?.node?.ledger }
+
+    /** How many phones keep exactly the founder's book: everyone, if word of mouth works. */
+    fun booksInAgreement(): Int { val n = book()?.pages?.size ?: return 0; return phones.values.count { it.node.ledger?.pages?.size == n } }
+
+    fun nameOf(id: ByteArray?): String? = id?.let { byId[it.toHex().take(16)]?.name }
+
     /** The phones lending Internet. */
     fun bridges(): List<String> = phones.values.filter { it.internet }.map { it.name }
 
@@ -194,8 +214,12 @@ class World(
         val court = courts.entries.joinToString(",") { (v, c) -> "{\"v\":${q(v)},\"king\":${q(c.king ?: "")},\"nobles\":[${c.nobles.joinToString(",") { q(it) }}]}" }
         val share = Economy.dailyShare(nat.scores)
         val kb = (airLetterBytes + internetBytes()) / 1024.0
+        val b = book()
+        val bookCourt = b?.court()
+        val rich = b?.balances()?.entries?.sortedByDescending { it.value }?.take(5)?.joinToString(",") { "[${q(byId[it.key.take(16)]?.name ?: "?")},${it.value}]" } ?: ""
         val bridgeLucas = phones.values.filter { it.internet }.sumOf { share[it.name] ?: 0 }
-        return "{\"t\":$now,\"range\":$wifiRangeM,\"phones\":[$ph],\"netKb\":${(internetBytes() / 1024.0).toInt()},\"airKb\":${(airLetterBytes / 1024.0).toInt()}," +
+        return "{\"t\":$now,\"range\":$wifiRangeM,\"phones\":[$ph],\"book\":{\"pages\":${b?.pages?.size ?: 0},\"agree\":${booksInAgreement()},\"supply\":${b?.supply() ?: 0}," +
+            "\"king\":${q(nameOf(bookCourt?.king) ?: "")},\"nobles\":${bookCourt?.nobles?.size ?: 0},\"rich\":[$rich]},\"netKb\":${(internetBytes() / 1024.0).toInt()},\"airKb\":${(airLetterBytes / 1024.0).toInt()}," +
             "\"lucasPerKb\":${if (kb > 0) "%.2f".format(java.util.Locale.ROOT, 1000 / kb) else "0"},\"bridgeLucas\":$bridgeLucas,\"sent\":${r.sent},\"delivered\":${r.delivered},\"p50\":${r.latencyP50s},\"ferry\":${r.ferryTrips}," +
             "\"candies\":${r.candies.values.sum()},\"king\":${q(nat.king ?: "")},\"nobles\":[${nat.nobles.joinToString(",") { q(it) }}],\"courts\":[$court]," +
             "\"history\":[${samples.takeLast(240).joinToString(",") { "[${it.t / 1000},${it.sent},${it.delivered},${it.pockets},${it.islands},${it.ferry},${it.candies}]" }}]," +

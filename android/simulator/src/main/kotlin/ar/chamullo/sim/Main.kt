@@ -1,5 +1,7 @@
 package ar.chamullo.sim
 
+import ar.chamullo.core.hex
+
 import java.io.File
 import java.util.Locale
 import kotlin.math.cos
@@ -58,6 +60,12 @@ private fun run(s: Scenario): String {
     sb.appendLine("| Viajes de ferry | ${rep.ferryTrips} |")
     sb.appendLine("| Caramelos cobrados (recibos verificados) | ${rep.candies.values.sum()} |")
     sb.appendLine("| Cartas en bolsillos al final | ${w.history().lastOrNull()?.pockets ?: 0} |")
+    w.book()?.let { b ->
+        val court = b.court()
+        sb.appendLine("| La libreta | ${b.pages.size} páginas, igual en ${w.booksInAgreement()} de ${s.villages.sumOf { it.phones }} celulares |")
+        sb.appendLine("| 👑 Rey de la libreta | ${w.nameOf(court.king) ?: "—"}${if (court.nobles.isEmpty()) " (génesis: escribe el fundador)" else " y ${court.nobles.size} nobles"} |")
+        sb.appendLine("| Lucas pagadas por la libreta | ${b.supply()} (los que más: ${b.balances().entries.sortedByDescending { it.value }.take(3).joinToString(", ") { "${w.nameOf(hex(it.key)) ?: "?"} ${it.value}" }}) |")
+    }
     if (w.internetBytes() > 0) {
         val share = Economy.dailyShare(Economy.national(rep.carries).scores)
         val kb = (w.airLetterBytes + w.internetBytes()) / 1024.0

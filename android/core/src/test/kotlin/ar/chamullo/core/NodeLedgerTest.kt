@@ -58,5 +58,23 @@ class NodeLedgerTest {
         assertEquals(air.node("fundador").ledger!!.pages.size, late.ledger!!.pages.size)
     }
 
+    @Test
+    fun `the pages also cross the big jump by the Internet bridges`() {
+        val air = Air()
+        val founder = Identity.generate("Fundador")
+        val params = { Ledger.Params(Zone.of(lat, -58.43, Zone.PUEBLO), founder.nodeId, periodMs = 30_000, maturityMs = 1, genesisContributors = 50) }
+        val far = air.add("lejos").also { it.locate(lat, -58.41) } // same pueblo, out of reach (no link in the air)
+        air.add("fundador", founder).locate(lat, -58.43)
+        air.nodes.values.forEach { it.ledger = Ledger(params()) }
+        val cloud = object : Bridge {
+            override fun peersIn(zone: Zone) = listOf(far.identity.nodeId).filter { zone.contains(far.cell()!!) }
+            override fun send(to: ByteArray, frame: ByteArray) { far.onFrame(frame) }
+        }
+        air.node("fundador").bridge = cloud
+        air.run(30_000 + Node.LEDGER_PAGE_MS * 2)
+        assertTrue(air.node("fundador").ledger!!.pages.isNotEmpty())
+        assertEquals(air.node("fundador").ledger!!.pages.size, far.ledger!!.pages.size)
+    }
+
     private fun Air.node(n: String) = nodes.getValue(n)
 }

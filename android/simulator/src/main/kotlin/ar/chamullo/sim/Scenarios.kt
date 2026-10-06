@@ -50,6 +50,8 @@ object Scenarios {
             if (i >= v.phones - v.internet) w.setInternet(name, true) // the last ones of each village lend Internet
         }
         // Nobody knows everybody: you know whoever you write to, and every letter carries the sender's card back.
+        // The first phone founds the ledger of the pueblo (Economy & Governance §10).
+        w.startLedger(w.phonesOf(s.villages.first().name).first())
         return w
     }
 }

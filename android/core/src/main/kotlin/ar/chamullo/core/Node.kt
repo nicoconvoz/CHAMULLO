@@ -657,7 +657,7 @@ class Node(
         if (m.kind == LedgerMsg.PAGE) {
             val page = runCatching { Page.decode(m.payload) }.getOrNull() ?: return emptyList()
             if (page.index < l.pages.size) return emptyList() // already in my book
-            if (l.accept(page)) { forget(page); proposal = null; ledgerSeen += key; return relay(m, key) }
+            if (l.accept(page)) { forget(page); proposal = null; ledgerSeen += key; overBridge(l, page); return relay(m, key) }
             if (page.index > l.pages.size) enqueue(LedgerMsg(LedgerMsg.HAVE, Tlv.u64(l.pages.size.toLong()), 1).encode())
             return emptyList()
         }
@@ -715,6 +715,14 @@ class Node(
         forget(page)
         proposal = null
         gossip(LedgerMsg.PAGE, page.encode())
+        ledger?.let { overBridge(it, page) }
+    }
+
+    // A pueblo is ~20 km: word of mouth does not cross it all. Bridges hand each new page to bridges elsewhere in it.
+    private fun overBridge(l: Ledger, page: Page) {
+        val b = bridge ?: return
+        val frame = LedgerMsg(LedgerMsg.PAGE, page.encode(), LEDGER_TTL).encode()
+        for (peer in b.peersIn(l.params.pueblo).filter { !it.contentEquals(identity.nodeId) }.take(BRIDGE_PEERS * 2)) { b.send(peer, frame); internetBytes += frame.size }
     }
 
     private fun forget(page: Page) { for (e in page.entries) ledgerPool.remove(Crypto.hash(e).toHex()) }
