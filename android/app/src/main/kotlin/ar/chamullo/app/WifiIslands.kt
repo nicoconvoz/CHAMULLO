@@ -132,19 +132,57 @@ class WifiIslands(
         })
     }
 
+    // Wi-Fi Direct does one thing at a time: each step waits for the answer of the one before. Asking all at once, or
+    // starting over every 15 s while a search (about a minute) still runs, only got BUSY (code 2) back.
     private val discoverLoop: Runnable = object : Runnable {
         override fun run() {
             if (!running) return
-            val ch = channel ?: return
-            p2p!!.clearServiceRequests(ch, null)
-            p2p.addServiceRequest(ch, WifiP2pDnsSdServiceRequest.newInstance(), null)
-            p2p.discoverServices(ch, object : WifiP2pManager.ActionListener {
-                override fun onSuccess() {}
-                override fun onFailure(reason: Int) { lastError = "no se pudo buscar islas (código $reason); ¿Wi-Fi prendido?" }
-            })
+            handler.removeCallbacks(this)
+            search(attempt = 0)
             handler.postDelayed(this, DISCOVER_MS)
         }
     }
+
+    private fun search(attempt: Int) {
+        val ch = channel ?: return
+        val m = p2p ?: return
+        fun step(next: () -> Unit) = object : WifiP2pManager.ActionListener {
+            override fun onSuccess() = next()
+            override fun onFailure(reason: Int) = busy(reason, attempt, next)
+        }
+        m.clearServiceRequests(ch, step {
+            m.addServiceRequest(ch, WifiP2pDnsSdServiceRequest.newInstance(), step {
+                m.discoverPeers(ch, step { // some phones only answer service searches while peers are being searched too
+                    m.discoverServices(ch, object : WifiP2pManager.ActionListener {
+                        override fun onSuccess() { lastError = null }
+                        override fun onFailure(reason: Int) = busy(reason, attempt) { }
+                    })
+                })
+            })
+        })
+    }
+
+    // Busy: stop whatever search is running, wait a little (longer each time) and start the chain again.
+    private fun busy(reason: Int, attempt: Int, orElse: () -> Unit) {
+        if (reason != WifiP2pManager.BUSY) {
+            lastError = when (reason) {
+                WifiP2pManager.P2P_UNSUPPORTED -> "este celular no tiene Wi-Fi Direct"
+                WifiP2pManager.NO_SERVICE_REQUESTS -> "la búsqueda de islas se cortó; reintento"
+                else -> "no se pudo buscar islas (código $reason); ¿Wi-Fi y ubicación prendidos?"
+            }
+            orElse(); return
+        }
+        lastError = "el Wi-Fi Direct estaba ocupado; reintento"
+        if (attempt >= 4) return
+        val ch = channel ?: return
+        p2p?.stopPeerDiscovery(ch, null)
+        handler.postDelayed({ if (running) search(attempt + 1) }, 3_000L * (attempt + 1))
+    }
+
+    // Before founding an island, look around a while: one founds, the other (still looking) joins it. Each phone waits a
+    // different time, by its id, so two phones that start together do not found at the same moment.
+    private val startedAt = System.currentTimeMillis()
+    private val lookFirstMs = FOUND_AFTER_MS + (me.take(4).toLong(16) % FOUND_SPREAD_MS)
 
     /* ---------- decisions ---------- */
 
@@ -153,8 +191,12 @@ class WifiIslands(
             if (!running) return
             val now = System.currentTimeMillis()
             carteles.values.removeAll { now - it.second > CARTEL_TTL_MS }
-            if (!busy && ferrying == null) act(Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn, bridgingTo, canBridge),
-                carteles.values.map { it.first }, now, myCell, stuck))
+            if (!busy && ferrying == null) {
+                val a = Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn, bridgingTo, canBridge),
+                    carteles.values.map { it.first }, now, myCell, stuck)
+                if (a == IslandAction.Host && island == null && now - startedAt < lookFirstMs) Unit // still looking around
+                else act(a)
+            }
             handler.postDelayed(this, DECIDE_MS)
         }
     }
@@ -181,6 +223,7 @@ class WifiIslands(
                 busy = false; host = true; island = me
                 FieldLog.add("ISLA", "fundé mi isla: $ssid")
                 startServer(); publishCartel()
+                handler.postDelayed(discoverLoop, 2_000) // forming a group stops the search on many phones: start it again
             }
             override fun onFailure(reason: Int) { busy = false; lastError = "no se pudo fundar la isla (código $reason)"; FieldLog.add("ISLA", "fundar falló, código $reason") }
         })
@@ -197,7 +240,7 @@ class WifiIslands(
                 closeLinks(); host = false; members.clear()
                 val config = WifiP2pConfig.Builder().setNetworkName(a.ssid).setPassphrase(a.passphrase).build()
                 p2p.connect(ch, config, object : WifiP2pManager.ActionListener {
-                    override fun onSuccess() { island = a.island; busy = false; publishCartel(); then?.invoke() }
+                    override fun onSuccess() { island = a.island; busy = false; publishCartel(); handler.postDelayed(discoverLoop, 2_000); then?.invoke() }
                     override fun onFailure(reason: Int) { busy = false; island = null; lastError = "no pude sumarme (código $reason)"; FieldLog.add("ISLA", "sumarme falló, código $reason") }
                 })
             }
@@ -435,7 +478,9 @@ class WifiIslands(
         // A Wi-Fi Direct group owner answers at this address on its own network, also to plain Wi-Fi clients.
         const val GROUP_OWNER = "192.168.49.1"
         const val MAX_FRAME = 1_048_576
-        const val DISCOVER_MS = 15_000L
+        const val DISCOVER_MS = 60_000L
+        const val FOUND_AFTER_MS = 30_000L
+        const val FOUND_SPREAD_MS = 30_000L
         const val DECIDE_MS = 5_000L
         const val CARTEL_TTL_MS = 60_000L
         const val FERRY_STAY_MS = 20_000L

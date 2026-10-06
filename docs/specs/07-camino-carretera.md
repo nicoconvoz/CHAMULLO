@@ -82,3 +82,9 @@ Implementación de referencia de las decisiones: `android/core/.../Islands.kt` (
 - **Se cae:** si deja de ver a ese anfitrión, si deja su isla o si Android pierde la red.
 - **En el gemelo:** la mitad de los celulares puede hacerlo (depende del modelo). Dos pueblos que se tocan por el borde cruzan una carta en menos de un minuto, sin ferry.
 
+### 6.3 Buscar islas en un celular de verdad (lecciones de campo, 0.5.5)
+
+- **Un paso por vez:** Wi-Fi Direct atiende un pedido a la vez. La búsqueda encadena "limpiar búsquedas", "agregar búsqueda de carteles", "buscar celulares" y "buscar carteles", y cada paso espera la respuesta del anterior. En la 0.5.4 iban todos juntos y cada 15 s, y la búsqueda (que tarda cerca de un minuto) contestaba `BUSY` (código 2). En el campo, cada celular fundaba su isla y nunca veía al otro.
+- **Ocupado:** si contesta `BUSY`, se corta la búsqueda en curso y se reintenta a los 3, 6, 9 y 12 s. La búsqueda completa se relanza cada 60 s, y también después de fundar una isla o sumarse a una, porque muchos celulares la cortan al formar un grupo.
+- **Mirar antes de fundar:** un celular sin isla espera de 30 a 60 s (según su id) antes de fundar la suya. Así uno funda y el otro, que todavía está mirando, se suma. La regla de `Islands.decide` no cambia: la espera la pone la app.
+
