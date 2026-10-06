@@ -91,5 +91,18 @@ class NodeLedgerTest {
         assertEquals(first.ledger!!.balance(founder.nodeId), again.ledger!!.balance(founder.nodeId))
     }
 
+    @Test
+    fun `a kept book that breaks the rules is thrown away, so a bad page never comes back`() {
+        val founder = Identity.generate("Fundador")
+        val params = Ledger.Params(Zone.of(lat, -58.43, Zone.PUEBLO), founder.nodeId, periodMs = 30_000, maturityMs = 1, genesisContributors = 50)
+        val store = MemoryStore()
+        val good = Ledger(params).let { it.propose(founder, emptyList(), 10) }
+        store.appendPage(good.encode())
+        store.appendPage(Ledger(params).propose(Identity.generate("Chanta"), emptyList(), 20).encode()) // not the founder
+        val n = Node(founder, store) { 100 }.apply { ledger = Ledger(params) }
+        assertEquals(1, n.ledger!!.pages.size)
+        assertEquals(1, store.loadPages().size, "the bad page left the disk too")
+    }
+
     private fun Air.node(n: String) = nodes.getValue(n)
 }

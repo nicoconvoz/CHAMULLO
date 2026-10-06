@@ -54,18 +54,7 @@ class DiagActivity : Activity() {
             })
             bridgeInfo = text("", 14f); addView(card { addView(bridgeInfo) })
             addView(title("Libreta del pueblo"))
-            addView(text("La libreta anota quién llevó cartas y reparte las Lucas. Para llevarla hace falta la clave del fundador de la red.", 13f, Ui.MUTED))
-            val founderField = input("Clave del fundador (64 letras y números)").apply { setText(Settings.founder(this@DiagActivity)) }
-            addView(founderField)
-            addView(button("Guardar la clave del fundador", primary = false) {
-                Settings.setFounder(this@DiagActivity, founderField.text.toString())
-                stopService(Intent(this@DiagActivity, GritoService::class.java))
-                startForegroundService(Intent(this@DiagActivity, GritoService::class.java))
-                recreate()
-            })
-            addView(button("Soy el fundador: usar mi clave", primary = false) {
-                Hub.ask({ it.identity.nodeId.toHex() }) { me -> founderField.setText(me) }
-            })
+            addView(text("La libreta anota quién llevó cartas y reparte las Lucas. Hay una sola por pueblo, nacida de la firma del fundador de la red.", 13f, Ui.MUTED))
             ledgerInfo = text("", 14f); addView(card { addView(ledgerInfo) })
             addView(title("Caja negra"))
             addView(button("Compartir registro") {
@@ -81,8 +70,9 @@ class DiagActivity : Activity() {
 
     private fun refresh() {
         Hub.ask({ n -> Triple(n.identity.nodeId.toHex(), n.ledger, n.available()) }) { (me, l, lucas) ->
-            ledgerInfo.text = if (l == null) "Sin libreta todavía (falta la clave del fundador o la ubicación).\nMi clave: $me"
-            else "Páginas: ${l.pages.size}\nRey: ${l.court().king?.toHex()?.take(8) ?: "—"}${if (l.court().nobles.isEmpty()) " (génesis)" else " · ${l.court().nobles.size} nobles"}\nMis Lucas: $lucas\nMi clave: $me"
+            val founder = "Fundador de la red: ${Settings.FOUNDER.take(8)}${if (me == Settings.FOUNDER) " (sos vos)" else ""}"
+            ledgerInfo.text = if (l == null) "Sin libreta todavía: espera la ubicación.\n$founder\nMi clave: $me"
+            else "$founder\nPáginas: ${l.pages.size}\nRey: ${l.court().king?.toHex()?.take(8) ?: "—"}${if (l.court().nobles.isEmpty()) " (génesis)" else " · ${l.court().nobles.size} nobles"}\nMis Lucas: $lucas\nMi clave: $me"
         }
         val r = Hub.relay
         bridgeInfo.text = if (r == null) "Apagado." else

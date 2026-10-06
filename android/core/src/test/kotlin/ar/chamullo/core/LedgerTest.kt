@@ -153,4 +153,20 @@ class LedgerTest {
         val page = Ledger(params).propose(founder, emptyList(), 10).encode()
         assertFalse(Page.decode(page) === Page.decode(page))
     }
+
+    @Test
+    fun `periods count from the first page, not from 1970 - a real clock does not close twenty thousand days at once`() {
+        val day = 24 * 3600_000L
+        val real = Ledger.Params(pueblo, founder.nodeId, periodMs = day)
+        val l = Ledger(real)
+        val today = 1_791_250_000_000L // October 2026
+        assertTrue(l.accept(l.write(founder, emptyList(), today)))
+        assertFalse(l.canClose(today + 10_000), "the first day is not over")
+        assertFalse(l.accept(l.write(founder, listOf(l.closePeriod(today + 10_000)), today + 10_000)))
+        val tomorrow = (today / day + 1) * day
+        assertTrue(l.canClose(tomorrow))
+        assertTrue(l.accept(l.write(founder, listOf(l.closePeriod(tomorrow)), tomorrow)))
+        assertFalse(l.canClose(tomorrow + 10_000), "one close per day")
+        assertEquals(Ledger.KING_WAGE, l.balance(founder.nodeId))
+    }
 }

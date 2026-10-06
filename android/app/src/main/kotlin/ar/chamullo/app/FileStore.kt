@@ -21,6 +21,10 @@ class FileStore(context: Context) : Store {
         runCatching { book.appendBytes(ar.chamullo.core.Writer().varint(page.size.toLong()).raw(page).bytes()) }
     }
 
+    @Synchronized override fun replacePages(pages: List<ByteArray>) {
+        runCatching { book.writeBytes(ar.chamullo.core.Writer().apply { for (p in pages) varint(p.size.toLong()).raw(p) }.bytes()) }
+    }
+
     @Synchronized override fun loadPages(): List<ByteArray> = runCatching {
         val r = ar.chamullo.core.Reader(book.readBytes())
         buildList { while (r.remaining > 0) add(r.take(r.varint().toInt())) }

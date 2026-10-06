@@ -128,7 +128,12 @@ class Node(
         set(value) {
             field = value
             // The book I kept: replayed page by page, so a restart does not lose it.
-            value?.let { l -> for (b in store.loadPages()) runCatching { l.accept(Page.decode(b)) } }
+            value?.let { l ->
+                val kept = store.loadPages()
+                var good = 0
+                for (b in kept) { if (runCatching { l.accept(Page.decode(b)) }.getOrDefault(false)) good++ else break }
+                if (good < kept.size) store.replacePages(kept.take(good)) // the rest broke the rules: thrown away
+            }
         }
     private val ledgerPool = LinkedHashMap<String, ByteArray>() // entries waiting for a page
     private val ledgerSeen = LinkedHashSet<String>()
@@ -743,7 +748,7 @@ class Node(
             }
             ok
         }
-        if (entries.isEmpty()) return
+        if (entries.isEmpty() && l.pages.isNotEmpty()) return // the first page goes even empty: it is the genesis (§10)
         val page = l.propose(identity, entries, now)
         if (court.nobles.isEmpty()) { if (take(l, page)) sealed(page); return } // genesis: the founder alone
         proposal = page; proposalAt = now

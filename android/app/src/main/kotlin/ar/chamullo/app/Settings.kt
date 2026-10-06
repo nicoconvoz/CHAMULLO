@@ -21,8 +21,11 @@ object Settings {
 
     fun setLendInternet(c: Context, on: Boolean) = prefs(c).edit().putBoolean("lendInternet", on).apply()
 
-    /** The founder's id (Economy & Governance §10): with it, this phone keeps the ledger of its pueblo. */
-    fun founder(c: Context) = prefs(c).getString("founder", "") ?: ""
+    /**
+     * The founder of the network (Economy & Governance §10): written in the protocol, not configured, so every CHAMULLO
+     * follows one book per pueblo. Only the phone holding the founder's 16 words can write the genesis.
+     */
+    const val FOUNDER = "6e63751b4968bab08674c09598c2cf800808838e5c505103880f616cc509490a"
 
-    fun setFounder(c: Context, id: String) = prefs(c).edit().putString("founder", id.trim().lowercase()).apply()
+    @Suppress("UNUSED_PARAMETER") fun founder(c: Context) = FOUNDER
 }

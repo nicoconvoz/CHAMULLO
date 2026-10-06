@@ -185,13 +185,15 @@ class Ledger(val params: Params) {
     fun closePeriod(ts: Long): Entry.Close = Entry.Close(state.period, sharesOf(state, ts))
 
     /** Whether the open period can be closed in a page at [ts]. */
-    fun canClose(ts: Long) = ts >= (state.period + 1) * params.periodMs
+    fun canClose(ts: Long) = book.isNotEmpty() && ts >= (state.period + 1) * params.periodMs
 
     private fun check(page: Page, endorsementsNeeded: Boolean = true): State? {
         if (page.index != book.size || !page.prev.contentEquals(lastHash()) || page.pueblo != params.pueblo) return null
         if (book.isNotEmpty() && page.ts < book.last().ts) return null
         val h = page.hash()
         val s = state.copy()
+        // The first page sets which period we are in: periods count from the book's birth, not from 1970.
+        if (book.isEmpty()) s.period = page.ts / params.periodMs
         val entries = page.entries.map { Entry.parse(it) ?: return null }
         // Who may write: the king, or the first noble with a valid deposition as the first entry.
         val court = courtOf(s)

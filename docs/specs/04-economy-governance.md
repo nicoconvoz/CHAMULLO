@@ -233,6 +233,8 @@ Al principio no hay recibos, así que no hay ranking.
 - El **fundador** opera como Rey y Nobleza provisorios de la libreta nacional y de cada pueblo nuevo.
 - Desde el primer período con al menos **21 contribuyentes con puntaje > 0**, la Corte se elige por la regla del §8 y el fundador pasa a ser un nodo más.
 - La regla de transición DEBE estar escrita en la página génesis, para que nadie pueda postergarla.
+- **Implementado:** la clave pública del fundador está escrita en el protocolo (en la app: `Settings.FOUNDER = 6e63751b4968bab08674c09598c2cf800808838e5c505103880f616cc509490a`) y no se configura. Así hay una sola libreta por pueblo: si cada uno pudiera elegir fundador, el pueblo se partiría en libretas que nunca se juntan, con bolsas distintas y cobros dobles. Solo el celular que tiene las 16 palabras del fundador puede escribir la página génesis, que es la primera, aunque vaya vacía.
+- **Los períodos cuentan desde la página génesis**, no desde 1970. La 0.5.0 contaba desde el cero de los relojes y cerraba un período cada 10 s. La 0.5.1 lo corrige, y un libro guardado que no cumple las reglas se descarta al arrancar.
 
 ## 11. Fraude: qué cubre y qué no
 

@@ -21,6 +21,8 @@ interface Store {
     /** The ledger's pages, in order (Economy & Governance §9): kept so the book survives a restart. */
     fun appendPage(page: ByteArray) {}
     fun loadPages(): List<ByteArray> = emptyList()
+    /** Keeps only these pages: a kept book that broke the rules is not carried forward. */
+    fun replacePages(pages: List<ByteArray>) {}
 }
 
 /** [keepPages]: false in the twin, where a thousand phones share one process and nobody restarts. */
@@ -40,6 +42,7 @@ class MemoryStore(private val keepPages: Boolean = true) : Store {
     private val pages = ArrayList<ByteArray>()
     override fun appendPage(page: ByteArray) { if (keepPages) pages += page }
     override fun loadPages() = pages.toList()
+    override fun replacePages(pages: List<ByteArray>) { this.pages.clear(); if (keepPages) this.pages += pages }
     override fun saveContact(card: Card) { contacts[card.nodeId.toHex()] = card }
     override fun contacts() = contacts.values.toList()
     override fun saveMessage(m: Message) { messages += m }
