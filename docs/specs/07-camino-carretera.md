@@ -88,3 +88,14 @@ Implementación de referencia de las decisiones: `android/core/.../Islands.kt` (
 - **Ocupado:** si contesta `BUSY`, se corta la búsqueda en curso y se reintenta a los 3, 6, 9 y 12 s. La búsqueda completa se relanza cada 60 s, y también después de fundar una isla o sumarse a una, porque muchos celulares la cortan al formar un grupo.
 - **Mirar antes de fundar:** un celular sin isla espera de 30 a 60 s (según su id) antes de fundar la suya. Así uno funda y el otro, que todavía está mirando, se suma. La regla de `Islands.decide` no cambia: la espera la pone la app.
 
+### 6.4 Islas en la lista de Wi-Fi (0.5.6)
+
+En el campo, la búsqueda de carteles (DNS-SD) no funcionó entre dos celulares: "Carteles vistos: 0", y a veces "código 0" (error interno de Android). Por eso hay una segunda vía, que no depende de esa búsqueda:
+
+- **Toda isla es también una red Wi-Fi común** llamada `DIRECT-CH-` más seis dígitos hex del id de su anfitrión. Cualquier celular la ve en su lista de redes.
+- **La clave sale del nombre:** `clave = hex(H("CHAMULLO/1/ISLAND" 0x00 ssid))[0..20]`. Cualquier CHAMULLO puede sumarse sin cartel. No hace falta ocultarla: la isla es solo el aire, las cartas van selladas y firmadas, y el caño con el anfitrión tiene su propio saludo.
+- **Una isla de la lista cuenta como el cartel de un anfitrión**, con su lista de miembros vacía. `Islands.decide` aplica la misma regla: dos anfitriones solos que se ven en la lista se juntan, y se suma el de id mayor.
+- **Las islas se nombran con seis dígitos hex en todos lados** (cartel, lista de Wi-Fi, estado), así las dos vías hablan de la misma isla. Si hay cartel de esa isla, gana el cartel, que trae más datos.
+- La app pide escanear cada minuto, aunque Android puede frenarla, y además lee los escaneos que hace el propio sistema.
+- **Diagnóstico** muestra las dos vías por separado: "Carteles vistos" e "islas en la lista de Wi-Fi".
+

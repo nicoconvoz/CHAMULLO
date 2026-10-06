@@ -68,6 +68,26 @@ object Islands {
 
     fun turnOf(now: Long) = now / FERRY_TURN_MS
 
+    /* Islands seen in the Wi-Fi list (Camino y Carretera §6.4): a Wi-Fi Direct group is also a plain Wi-Fi network named
+     * DIRECT-CH-xxxxxx. Its key comes from that name, so any CHAMULLO joins it without a cartel. The island is only the
+     * air: letters stay sealed and signed, and the pipe to the host has its own handshake. */
+    const val SSID_PREFIX = "DIRECT-CH-"
+
+    /** An island is named by the first six hex digits of its host's id: the same in the cartel and in the Wi-Fi list. */
+    fun islandId(nodeId: String) = nodeId.take(6)
+
+    fun ssidOf(nodeId: String) = SSID_PREFIX + islandId(nodeId)
+
+    fun passphraseFor(ssid: String): String = Crypto.hash("CHAMULLO/1/ISLAND".toByteArray() + 0.toByte() + ssid.toByteArray()).toHex().take(20)
+
+    /** A CHAMULLO island found in the Wi-Fi list, as a host's cartel; null for any other network. */
+    fun fromScan(ssid: String): Cartel? {
+        if (!ssid.startsWith(SSID_PREFIX)) return null
+        val id = ssid.removePrefix(SSID_PREFIX)
+        if (id.length != 6 || id.any { it !in "0123456789abcdef" }) return null
+        return Cartel(id, "", id, ssid, passphraseFor(ssid), host = true, roster = emptyList())
+    }
+
     /**
      * [myCell] and [stuck]: where I am and the destination zone of a letter I hold that nobody on my island gets closer
      * (Discovery & Routing §10.6). With them, I may be the ferry of need.

@@ -453,5 +453,7 @@ En el puente fijo, Android le pide permiso al dueño la primera vez, y eso todav
 | 0.5.4 | "Prestar Internet y ganar Lucas" aparece en la presentación y en la pantalla principal | Estaba escondido en Diagnóstico |
 | 0.5.5 | La búsqueda de islas va un paso por vez, reintenta si el Wi-Fi Direct está ocupado y relanza después de formar un grupo. Antes de fundar, el celular mira 30 a 60 s (spec 07 §6.3) | En el campo, cada celular fundó su isla y la búsqueda contestaba `BUSY` (código 2): nunca se vieron |
 
+| 0.5.6 | Segunda vía para encontrar islas: la lista de redes Wi-Fi (`DIRECT-CH-xxxxxx`), con la clave sacada del nombre. Las islas se nombran con 6 dígitos hex. Diagnóstico muestra las dos vías (spec 07 §6.4) | En el campo, con la 0.5.5: "Carteles vistos: 0". La búsqueda DNS-SD no se veía entre esos dos celulares |
+
 **Cómo se documenta:** cada cambio va a su spec (la regla) y a esta bitácora (qué y por qué). El informe del gemelo se regenera con `./gradlew :simulator:run`.
 

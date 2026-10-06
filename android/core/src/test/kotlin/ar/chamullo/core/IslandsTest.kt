@@ -199,4 +199,29 @@ class IslandsTest {
         val c = Cartel("0123456789abcdef", "Hermano", "aaaa", "", "", host = false, roster = emptyList(), bridgeTo = "bbbbbbbbbbbbbbbb")
         assertEquals(c, Cartel.fromTxt(c.toTxt()))
     }
+
+    /* ---------- islands seen in the Wi-Fi list (Camino y Carretera §6.4) ---------- */
+
+    @Test
+    fun `an island in the Wi-Fi list is a host with the key that comes from its name`() {
+        val c = Islands.fromScan("DIRECT-CH-6e6375")!!
+        assertTrue(c.host)
+        assertEquals("6e6375", c.island)
+        assertEquals("DIRECT-CH-6e6375", c.ssid)
+        assertEquals(Islands.passphraseFor("DIRECT-CH-6e6375"), c.passphrase)
+        assertEquals(20, c.passphrase.length)
+        assertTrue(Islands.passphraseFor("DIRECT-CH-6e6375") != Islands.passphraseFor("DIRECT-CH-abcdef"))
+        assertEquals(null, Islands.fromScan("DIRECT-xy-Android_1234"))
+        assertEquals(null, Islands.fromScan("DIRECT-CH-zzzzzz"))
+        assertEquals(null, Islands.fromScan("Fibertel WiFi 5G"))
+    }
+
+    @Test
+    fun `two lonely hosts that only see each other in the Wi-Fi list still merge - the bigger id joins`() {
+        val big = "ffff000011112222"; val small = "1111000011112222"
+        val a = Islands.decide(big, IslandState(Islands.islandId(big), true, emptyList()), listOf(Islands.fromScan("DIRECT-CH-" + small.take(6))!!), now = 0)
+        assertEquals(IslandAction.Join("111100", "DIRECT-CH-111100", Islands.passphraseFor("DIRECT-CH-111100")), a)
+        val b = Islands.decide(small, IslandState(Islands.islandId(small), true, emptyList()), listOf(Islands.fromScan("DIRECT-CH-" + big.take(6))!!), now = 0)
+        assertEquals(IslandAction.Stay, b)
+    }
 }

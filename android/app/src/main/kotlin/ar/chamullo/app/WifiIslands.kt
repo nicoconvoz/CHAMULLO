@@ -10,6 +10,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pManager
@@ -60,8 +61,13 @@ class WifiIslands(
 
     private val me = identity.nodeId.toHex().take(16)
     private val myName = identity.name
-    val ssid = "DIRECT-CH-" + me.take(6)
-    private val passphrase = Crypto.hash("CHAMULLO/1/ROADKEY".toByteArray() + identity.seed).toHex().take(20)
+    val ssid = Islands.ssidOf(me)
+    // The island's key comes from its name (Camino y Carretera §6.4): whoever sees DIRECT-CH-xxxxxx in the Wi-Fi list can
+    // join. The island is only the air; letters stay sealed and the pipe to the host has its own handshake.
+    private val passphrase = Islands.passphraseFor(ssid)
+    private val myIsland = Islands.islandId(me)
+    private val wifi = context.applicationContext.getSystemService(WifiManager::class.java)
+    @Volatile var scannedSeen = 0; private set
 
     // What I know about the islands around me.
     private val carteles = LinkedHashMap<String, Pair<Cartel, Long>>()
@@ -97,7 +103,10 @@ class WifiIslands(
     private var bridgeLink: Link? = null
     val cartelesSeen get() = carteles.size
     val memberCount get() = if (host) members.size else 0
-    val islandName get() = island?.let { id -> if (id == me) "mía" else carteles[id]?.first?.name?.ifBlank { id.take(6) } ?: id.take(6) }
+    val islandName get() = island?.let { id -> if (id == myIsland) "mía" else hostOf(id)?.name?.ifBlank { id } ?: id }
+
+    // Islands are named by six hex digits everywhere (cartel or Wi-Fi list): the host of one, if I know its cartel.
+    private fun hostOf(island: String): Cartel? = carteles.values.map { it.first }.firstOrNull { it.host && it.island == island }
 
     override fun start() {
         if (!supported) { lastError = "necesita Android 10 o más nuevo con Wi-Fi Direct"; return }
@@ -105,8 +114,13 @@ class WifiIslands(
         handler.post {
             channel = p2p!!.initialize(context, Looper.getMainLooper(), null)
             context.registerReceiver(connectionReceiver, IntentFilter(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION))
+            context.registerReceiver(scanReceiver, IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION))
             p2p.setDnsSdResponseListeners(channel, { _, _, _ -> }, { _, record, _ ->
-                Cartel.fromTxt(record)?.takeIf { it.nodeId != me }?.let { carteles[it.nodeId] = it to System.currentTimeMillis() }
+                Cartel.fromTxt(record)?.takeIf { it.nodeId != me }?.let { c ->
+                    val fresh = c.nodeId !in carteles
+                    carteles[c.nodeId] = c.copy(island = Islands.islandId(c.island), bridgeTo = Islands.islandId(c.bridgeTo)) to System.currentTimeMillis()
+                    if (fresh) FieldLog.add("ISLA", "veo el cartel de ${c.name.ifBlank { c.nodeId.take(6) }}${if (c.host) " (anfitrión)" else ""}")
+                }
             })
             p2p.removeGroup(channel, null) // start clean: no leftover group from a previous run
             publishCartel()
@@ -139,7 +153,28 @@ class WifiIslands(
             if (!running) return
             handler.removeCallbacks(this)
             search(attempt = 0)
+            runCatching { @Suppress("DEPRECATION") wifi?.startScan() } // Android may throttle it; results also come from its own scans
+            readScan()
             handler.postDelayed(this, DISCOVER_MS)
+        }
+    }
+
+    // The second way to find islands: the plain Wi-Fi list, where every island shows up as DIRECT-CH-xxxxxx. It does not
+    // depend on the cartel search (DNS-SD), which in the field did not work between some phones.
+    private val scanReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, i: Intent?) = readScan()
+    }
+
+    private fun readScan() {
+        val now = System.currentTimeMillis()
+        val seen = runCatching { wifi?.scanResults.orEmpty().mapNotNull { Islands.fromScan(it.SSID ?: "") } }.getOrDefault(emptyList())
+            .filter { it.island != myIsland }
+        scannedSeen = seen.size
+        for (c in seen) {
+            if (hostOf(c.island)?.let { !it.nodeId.startsWith("scan:") } == true) continue // its cartel already says more
+            val key = "scan:" + c.island
+            if (key !in carteles) FieldLog.add("ISLA", "veo la isla ${c.island} en la lista de Wi-Fi")
+            carteles[key] = c.copy(nodeId = key) to now
         }
     }
 
@@ -192,6 +227,7 @@ class WifiIslands(
             val now = System.currentTimeMillis()
             carteles.values.removeAll { now - it.second > CARTEL_TTL_MS }
             if (!busy && ferrying == null) {
+                readScan()
                 val a = Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn, bridgingTo, canBridge),
                     carteles.values.map { it.first }, now, myCell, stuck)
                 if (a == IslandAction.Host && island == null && now - startedAt < lookFirstMs) Unit // still looking around
@@ -201,7 +237,7 @@ class WifiIslands(
         }
     }
 
-    private fun rosterOfMyIsland(): List<String> = island?.let { carteles[it]?.first?.roster } ?: emptyList()
+    private fun rosterOfMyIsland(): List<String> = island?.let { hostOf(it)?.roster } ?: emptyList()
 
     private fun act(a: IslandAction) {
         when (a) {
@@ -220,7 +256,7 @@ class WifiIslands(
         val config = WifiP2pConfig.Builder().setNetworkName(ssid).setPassphrase(passphrase).enablePersistentMode(false).build()
         p2p!!.createGroup(ch, config, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
-                busy = false; host = true; island = me
+                busy = false; host = true; island = myIsland
                 FieldLog.add("ISLA", "fundé mi isla: $ssid")
                 startServer(); publishCartel()
                 handler.postDelayed(discoverLoop, 2_000) // forming a group stops the search on many phones: start it again
@@ -296,8 +332,8 @@ class WifiIslands(
             handler.postDelayed({ join(target) { ferrying = null; onHeading(null) } }, Islands.FERRY_BOARDING_MS)
             return
         }
-        val back = carteles[current]?.first ?: run { ferrying = null; onHeading(null); return }
-        home = IslandAction.Join(current, back.ssid, back.passphrase)
+        val homeSsid = Islands.SSID_PREFIX + current // the key comes from the name: no cartel needed to come back
+        home = IslandAction.Join(current, homeSsid, Islands.passphraseFor(homeSsid))
         FieldLog.add("ISLA", "me toca el ferry: embarco cartas y voy a la isla ${a.island.take(6)}")
         handler.postDelayed({
             join(target) {
@@ -376,6 +412,7 @@ class WifiIslands(
         running = false
         handler.removeCallbacks(discoverLoop); handler.removeCallbacks(decideLoop)
         runCatching { context.unregisterReceiver(connectionReceiver) }
+        runCatching { context.unregisterReceiver(scanReceiver) }
         closeLinks()
         runCatching { server?.close() }; server = null
         channel?.let { ch -> runCatching { p2p?.removeGroup(ch, null) }; publishedService?.let { runCatching { p2p?.removeLocalService(ch, it, null) } } }
