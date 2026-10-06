@@ -21,6 +21,8 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- Wi-Fi Direct search and the Wi-Fi list need location; without this type Android cuts it when the app is in the back. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Only to read version.txt from the download page when there is internet; letters never use it. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -51,6 +53,6 @@
         <service
             android:name=".GritoService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="connectedDevice|location" />
     </application>
 </manifest>

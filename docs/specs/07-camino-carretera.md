@@ -99,3 +99,10 @@ En el campo, la búsqueda de carteles (DNS-SD) no funcionó entre dos celulares:
 - La app pide escanear cada minuto, aunque Android puede frenarla, y además lee los escaneos que hace el propio sistema.
 - **Diagnóstico** muestra las dos vías por separado: "Carteles vistos" e "islas en la lista de Wi-Fi".
 
+### 6.5 La causa de fondo: la ubicación con la app de fondo (0.5.7)
+
+Con la depuración USB del Moto E7 Plus del Capitán (Android 10), Android lo dijo claro: `getScanResults not allowed … has no location permission`. La ubicación estaba dada "solo mientras se usa la app". Con la app en pantalla las islas se abrían al instante (al entrar a la Plaza), pero de fondo Android cortaba la ubicación, y con ella la búsqueda de Wi-Fi Direct y la lista de redes. De ahí venían "Carteles vistos: 0" y los códigos 0 y 2.
+
+- **Arreglo:** el servicio declara el tipo `location` además de `connectedDevice` (manifiesto, `FOREGROUND_SERVICE_LOCATION` y `startForeground`). Así conserva la ubicación "mientras se usa" estando de fondo.
+- **Comprobado en el celular:** de fondo, sin rechazos de permiso, con la búsqueda corriendo (`mDiscoveryStarted true`) y la isla en pie.
+

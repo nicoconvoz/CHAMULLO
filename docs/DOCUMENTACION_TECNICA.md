@@ -455,5 +455,7 @@ En el puente fijo, Android le pide permiso al dueño la primera vez, y eso todav
 
 | 0.5.6 | Segunda vía para encontrar islas: la lista de redes Wi-Fi (`DIRECT-CH-xxxxxx`), con la clave sacada del nombre. Las islas se nombran con 6 dígitos hex. Diagnóstico muestra las dos vías (spec 07 §6.4) | En el campo, con la 0.5.5: "Carteles vistos: 0". La búsqueda DNS-SD no se veía entre esos dos celulares |
 
+| 0.5.7 | El servicio declara el tipo `location` además de `connectedDevice` (spec 07 §6.5) | Depuración USB en el Moto E7 Plus (Android 10): de fondo, Android negaba la ubicación, y sin ella no hay búsqueda Wi-Fi Direct ni lista de redes. Comprobado en el celular, con la app de fondo |
+
 **Cómo se documenta:** cada cambio va a su spec (la regla) y a esta bitácora (qué y por qué). El informe del gemelo se regenera con `./gradlew :simulator:run`.
 

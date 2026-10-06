@@ -31,7 +31,11 @@ class GritoService : Service() {
         nm.createNotificationChannel(NotificationChannel(CH_RUN, "El grito encendido", NotificationManager.IMPORTANCE_LOW))
         nm.createNotificationChannel(NotificationChannel(CH_MSG, "Cartas nuevas", NotificationManager.IMPORTANCE_HIGH))
         val ongoing = notification(CH_RUN, "CHAMULLO escuchando", "Tu celular es parte de la red.", MainActivity::class.java)
-        if (Build.VERSION.SDK_INT >= 29) startForeground(ID_RUN, ongoing, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        // Location too: Android only lets Wi-Fi Direct search and read the Wi-Fi list with location, and a service in the
+        // back keeps "while in use" location only if it says so. Field test 0.5.6: without it, no island was ever found.
+        val located = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (Build.VERSION.SDK_INT >= 29) startForeground(ID_RUN, ongoing,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or (if (located) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0))
         else startForeground(ID_RUN, ongoing)
 
         val identity = Vault(this).identity() ?: run { stopSelf(); return }
