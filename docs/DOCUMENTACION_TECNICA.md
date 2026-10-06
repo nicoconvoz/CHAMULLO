@@ -365,3 +365,8 @@ Rediseño del Capitán después de las pruebas de campo: **el Bluetooth complica
 
 Probar 0.3.0 con dos teléfonos Android 10+ con el Wi-Fi y la Ubicación prendidos: Diagnóstico → "Isla: …" →
 **Prueba de velocidad en la isla**. Si algo falla, compartir la caja negra.
+
+
+## Decisión: la moneda se llama Lucas
+
+La billetera de la app paga la recompensa en **Lucas**, la moneda propia de CHAMULLO (spec 04). Reemplaza a ICE, que queda como moneda de ICEBREAK: un servicio más sobre la red, del que CHAMULLO no depende. Los caramelos siguen siendo los recibos verificados; el reparto diario los convierte en Lucas.

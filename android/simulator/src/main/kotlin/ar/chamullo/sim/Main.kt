@@ -69,7 +69,7 @@ private fun run(s: Scenario): String {
         sb.appendLine("| **Nacional** | **${nat.king}** | ${nat.nobles.joinToString(", ")} | ${f(nat.scores[nat.king] ?: 0.0)} |")
         sb.appendLine()
         val bag = Economy.dailyShare(nat.scores, 1000).entries.sortedByDescending { it.value }.take(5)
-        sb.appendLine("Reparto de una bolsa diaria de 1000 ICE: " + bag.joinToString(", ") { "${it.key} ${it.value}" } + ".")
+        sb.appendLine("Reparto de una bolsa diaria de 1000 Lucas: " + bag.joinToString(", ") { "${it.key} ${it.value}" } + ".")
         sb.appendLine()
     }
     sb.appendLine("_Tiempo de cómputo: ${f(secs)} s._")

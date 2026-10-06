@@ -23,7 +23,7 @@ lo simulado es la radio: alcance Wi-Fi 80 m, 3 s para sumarse a una isla, 30 ms 
 | Plaza | Plaza-13 | Plaza-17, Plaza-20 | 11.3 |
 | **Nacional** | **Plaza-13** | Plaza-17, Plaza-20, Plaza-5 | 11.3 |
 
-Reparto de una bolsa diaria de 1000 ICE: Plaza-13 266, Plaza-17 214, Plaza-20 176, Plaza-5 73, Plaza-9 66.
+Reparto de una bolsa diaria de 1000 Lucas: Plaza-13 266, Plaza-17 214, Plaza-20 176, Plaza-5 73, Plaza-9 66.
 
 _Tiempo de cómputo: 2.5 s._
 
@@ -48,7 +48,7 @@ Pueblos de 8 celulares, bordes a ~70 m. Las cartas cruzan solo con el ferry.
 | Sur | Sur-3 | Sur-6, Sur-5 | 11.7 |
 | **Nacional** | **Norte-7** | Norte-1, Sur-3, Norte-4 | 26.3 |
 
-Reparto de una bolsa diaria de 1000 ICE: Norte-7 325, Norte-1 184, Sur-3 146, Norte-4 112, Norte-8 82.
+Reparto de una bolsa diaria de 1000 Lucas: Norte-7 325, Norte-1 184, Sur-3 146, Norte-4 112, Norte-8 82.
 
 _Tiempo de cómputo: 1.8 s._
 
@@ -74,7 +74,7 @@ Norte y Sur no se ven: todo pasa por el pueblo del medio, y su gente cobra por e
 | Sur | Sur-2 | Sur-6, Sur-1 | 10.6 |
 | **Nacional** | **Medio-3** | Medio-1, Sur-2, Norte-1 | 54.3 |
 
-Reparto de una bolsa diaria de 1000 ICE: Medio-3 534, Medio-1 150, Sur-2 104, Norte-1 67, Norte-6 57.
+Reparto de una bolsa diaria de 1000 Lucas: Medio-3 534, Medio-1 150, Sur-2 104, Norte-1 67, Norte-6 57.
 
 _Tiempo de cómputo: 1.6 s._
 

@@ -17,8 +17,8 @@ Las ideas de esta spec son del Capitán del proyecto.
 
 | Metáfora | Mecanismo |
 |---|---|
-| **Mandar cartas es gratis; llevarlas tiene premio.** | Mensajería básica sin costo; ICE solo por contribución comprobada (§4) |
-| **Los caramelos se ganan y se gastan.** | Emisión diaria acotada y consumo en prioridad e ICE Store (§4, §6) |
+| **Mandar cartas es gratis; llevarlas tiene premio.** | Mensajería básica sin costo; Lucas solo por contribución comprobada (§4) |
+| **Los caramelos se ganan y se gastan.** | Emisión diaria acotada y consumo en prioridad y en la Tienda de Lucas (§4, §6) |
 | **Donde sobran caminos se paga menos, donde faltan se paga más, siempre en equilibrio.** | Factor de escasez con piso y techo (§5.2) |
 | **El jefe muta.** Manda el que más aporta. | Rey y Nobleza recalculados cada período por regla pública (§8) |
 | **El Rey y la Nobleza.** | Rey escribe la libreta, Nobleza la sella con más de 2/3 (§8, §9) |
@@ -32,7 +32,7 @@ Las ideas de esta spec son del Capitán del proyecto.
 | Piso | Qué contiene | ¿Tiene jefe? |
 |---|---|---|
 | **Planta baja: protocolo** | Identidad, sobre, cadena de saltos, recibos | **No.** Cualquiera verifica cualquier firma sin consultar a nadie. |
-| **Primer piso: economía** | Libretas de ICE, ranking, títulos | **Sí:** la Corte, local y nacional, que muta según el aporte. |
+| **Primer piso: economía** | Libretas de Lucas, ranking, títulos | **Sí:** la Corte, local y nacional, que muta según el aporte. |
 
 La identidad sigue sin autoridad central (Identity §11). La Corte gobierna **solo** la economía: no puede impedir que dos nodos se comuniquen ni alterar un sobre.
 
@@ -40,41 +40,41 @@ La identidad sigue sin autoridad central (Identity §11). La Corte gobierna **so
 
 | Término | Significado |
 |---|---|
-| **ICE** | Unidad de cuenta única para todo el país. Es la misma moneda del ecosistema ICEBREAK. |
+| **Lucas** | La moneda de CHAMULLO: lo que paga la billetera de la app como recompensa por llevar cartas. Unidad de cuenta única para todo el país. Es propia de CHAMULLO: no depende de ICEBREAK ni de ninguna otra app. |
 | **Pueblo** | Localidad: unidad geográfica con su propia libreta y su propia Corte (§7). |
 | **Período** | Ventana de cálculo de ranking y títulos. Valor inicial propuesto: **7 días**. |
 | **Puntaje** | Medida ponderada de la contribución de un nodo en un período (§5). |
 | **Corte** | El Rey y la Nobleza de un pueblo o del país. |
-| **Libreta** | Registro público y encadenado de saldos y movimientos de ICE (§9). |
+| **Libreta** | Registro público y encadenado de saldos y movimientos de Lucas (§9). |
 
-## 4. De dónde sale y a dónde va el ICE
+## 4. De dónde sale y a dónde van las Lucas
 
 ### 4.1 Gratuidad
 
-- Enviar y recibir mensajes en el **carril gratis** (§6.2) NO DEBE costar ICE.
-- Ningún nodo necesita ICE para participar en la red.
+- Enviar y recibir mensajes en el **carril gratis** (§6.2) NO DEBE costar Lucas.
+- Ningún nodo necesita Lucas para participar en la red.
 
 ### 4.2 Emisión: un reparto fijo, no una imprenta
 
-- Cada día, cada pueblo reparte un **presupuesto fijo** de ICE (`E_pueblo`) entre sus contribuyentes, en proporción a su puntaje:
+- Cada día, cada pueblo reparte un **presupuesto fijo** de Lucas (`E_pueblo`) entre sus contribuyentes, en proporción a su puntaje:
 
   ```text
   ICE_día(R) = E_pueblo × puntaje(R) / Σ puntaje(todos)
   ```
 
-- Como el total es fijo, inflar puntajes no imprime ICE extra; solo cambia cómo se reparte. Ese es el **equilibrio**: si todos suben, nadie gana más que antes.
+- Como el total es fijo, inflar puntajes no imprime Lucas extra; solo cambia cómo se reparte. Ese es el **equilibrio**: si todos suben, nadie gana más que antes.
 - `E_pueblo` se deriva de un presupuesto nacional (`E_nación`) según la actividad de cada pueblo. La fórmula de asignación queda abierta (§12).
 - Solo cuentan contribuciones con **Proof of Relay** válido (Proof of Relay §7). Estar disponible sin trabajar no paga: es la lección de las antenas falsas de Helium.
 
 ### 4.3 Consumo: los desagües
 
-El ICE se gasta en:
+Las Lucas se gastan en:
 
 1. **Prioridad de ruteo** (§6.1).
-2. **ICE Store:** apps y servicios del ecosistema.
+2. **Tienda de Lucas:** apps y servicios del ecosistema.
 3. **Pagos entre personas.**
 
-Una fracción del ICE gastado en prioridad DEBERÍA **quemarse** (salir de circulación) para compensar la emisión diaria. El porcentaje queda abierto (§12).
+Una fracción de las Lucas gastadas en prioridad DEBERÍA **quemarse** (salir de circulación) para compensar la emisión diaria. El porcentaje queda abierto (§12).
 
 ## 5. Puntaje de contribución
 
@@ -118,7 +118,7 @@ La recompensa de una entrega se **reparte** entre los relays del camino. No se p
 
 ### 6.1 Prioridad paga
 
-- Un origen PUEDE adjuntar una oferta de ICE para que su sobre tenga prioridad. El campo TLV de origen se registrará en Packet Format.
+- Un origen PUEDE adjuntar una oferta de Lucas para que su sobre tenga prioridad. El campo TLV de origen se registrará en Packet Format.
 - Los relays que lo transportan cobran esa oferta, repartida según §5.3 y liquidada por la libreta al presentar el Proof of Relay.
 
 ### 6.2 Carril gratis garantizado
@@ -137,7 +137,7 @@ Una unidad geográfica con su propia libreta y su propia Corte. La forma de deli
 
 - El **pueblo de origen** de un nodo es aquel donde acumuló **más puntaje en los últimos 90 días**. No hay que registrarse: si alguien se muda de verdad, su pueblo cambia solo con el tiempo, y un viaje corto no lo cambia.
 - Los **títulos valen solo en el pueblo de origen**. Fuera de él, el nodo es pueblo llano.
-- El trabajo hecho en otro pueblo se anota en la libreta de **ese** pueblo y suma al ranking **de ese** pueblo. El ICE llega al nodo por la cámara compensadora (§9.3).
+- El trabajo hecho en otro pueblo se anota en la libreta de **ese** pueblo y suma al ranking **de ese** pueblo. Las Lucas llegan al nodo por la cámara compensadora (§9.3).
 
 ### 7.3 Cuentas de operador: muchas antenas, una persona
 
@@ -170,7 +170,7 @@ Una persona PUEDE asociar varios nodos (teléfonos, antenas) a una **cuenta de o
 
 1. **Nadie nombra a nadie.** Los títulos salen de una **regla determinista** aplicada a las libretas públicas. Cualquier nodo puede recalcularlos y obtener el mismo resultado.
 2. **Los títulos vencen.** Se recalculan cada período y no se heredan. Quien deja de aportar vuelve al pueblo llano.
-3. **Los beneficios no multiplican el ICE.** Un título NO DEBE dar más ICE por el mismo trabajo, porque eso congelaría la Corte. Beneficios permitidos:
+3. **Los beneficios no multiplican las Lucas.** Un título NO DEBE dar más Lucas por el mismo trabajo, porque eso congelaría la Corte. Beneficios permitidos:
    - prestigio, insignias y voz en propuestas de cambio de parámetros;
    - una cuota de prioridad gratis;
    - una **remuneración fija por el trabajo** de mantener y sellar la libreta.
@@ -188,7 +188,7 @@ Una persona PUEDE asociar varios nodos (teléfonos, antenas) a una **cuenta de o
 
 - Una secuencia de **páginas** encadenadas por hash. Cada página contiene:
   - los Proof of Relay presentados;
-  - los movimientos de ICE: reparto diario, gastos, pagos y quemas;
+  - los movimientos de Lucas: reparto diario, gastos, pagos y quemas;
   - el hash de la página anterior.
 - Cada página va firmada por el Rey y por más de 2/3 de la Nobleza local.
 - La libreta es **pública**: cualquiera puede auditarla y recalcular saldos, puntajes y títulos.
@@ -204,7 +204,7 @@ Cuando una carta cruza pueblos (Ana en Mendoza, Caro de Junín que la lleva):
 
 1. Cada libreta local anota el trabajo hecho **en** su pueblo.
 2. Periódicamente, la libreta nacional **neta** los saldos entre pueblos: "Mendoza debe 500 a Junín, Junín debe 300 a Mendoza, entonces Mendoza transfiere 200".
-3. Como el ICE es el mismo en todo el país, no hay tipos de cambio.
+3. Como las Lucas son las mismas en todo el país, no hay tipos de cambio.
 
 ## 10. Arranque (génesis)
 
@@ -235,7 +235,7 @@ Al principio no hay recibos, así que no hay ranking.
 2. **Límites de los pueblos:** ¿cuadrícula fija o límites administrativos?
 3. **Costo de identidad:** ¿prueba de trabajo, maduración mínima o aval de nodos existentes?
 4. **Consenso formal:** elegir un algoritmo BFT concreto para la firma de páginas por más de 2/3 de la Nobleza.
-5. **Varios países:** ¿cómo se compensan ICE entre cortes nacionales?
+5. **Varios países:** ¿cómo se compensan Lucas entre cortes nacionales?
 6. **Marco legal:** un token con valor económico puede quedar alcanzado por regulación financiera. Se trata en la *Legal & Regulatory Deployment Guide*.
 7. **Concentración de antenas:** ¿el puntaje nacional de una cuenta suma lineal o con rendimiento decreciente por cada antena extra?
-8. **ICEBREAK:** hoy su libreta de ICE la firma la clave del tesoro del fundador. ¿Migra al modelo de Corte de CHAMULLO o conviven las dos?
+8. **ICEBREAK:** es un servicio más sobre la red y tiene su propia moneda (ICE). ¿Acepta Lucas, hay cambio entre ICE y Lucas, o no se tocan?
