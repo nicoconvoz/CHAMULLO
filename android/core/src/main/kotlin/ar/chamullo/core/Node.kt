@@ -7,11 +7,15 @@ sealed interface NodeEvent {
     data object NeighborsChanged : NodeEvent
     data class PlazaReceived(val id: String, val name: String, val text: String) : NodeEvent
     data class PlazaHeard(val id: String, val name: String) : NodeEvent
+    /** A neighbor handed me the key of its Wi-Fi road (la carretera). */
+    class RoadInvited(val from: ByteArray, val name: String, val ssid: String, val passphrase: String) : NodeEvent
 }
 
 class PlazaLine(val id: String, val name: String, val text: String, val ts: Long, val mine: Boolean, val heardBy: List<String>)
 
-class Neighbor(val beacon: Beacon, val lastSeen: Long) {
+class Neighbor(val beacon: Beacon, val lastSeen: Long, val beats: Int = 1) {
+    /** Heard more than once: the camino is stable enough to open a carretera. */
+    val stable get() = beats >= Node.STABLE_BEATS
     val name get() = beacon.name
     val nodeId get() = beacon.nodeId
     val coded get() = beacon.coded
@@ -45,6 +49,8 @@ class Node(
     private class Retry(val frame: ByteArray, var left: Int, var nextAt: Long)
     private val plazaRetries = LinkedHashMap<String, Retry>()
     private val cardRetries = LinkedHashMap<String, Retry>()
+    private var road: Road? = null
+    private val roadInvitedAt = HashMap<String, Long>()
     private val plaza = ArrayList<PlazaEntry>().apply {
         for (l in store.loadPlaza()) add(PlazaEntry(l.id, l.name, l.text, l.ts, l.mine, LinkedHashSet(l.heardBy)))
     }
@@ -66,11 +72,22 @@ class Node(
         for (r in plazaRetries.values + cardRetries.values) if (r.left > 0 && now >= r.nextAt) { r.left--; r.nextAt = now + RETRY_MS; enqueue(r.frame) }
         plazaRetries.values.removeAll { it.left == 0 }
         cardRetries.values.removeAll { it.left == 0 }
+        road?.let { r ->
+            for (n in neighbors.values) {
+                val key = n.nodeId.toHex()
+                if (!n.stable || now - (roadInvitedAt[key] ?: Long.MIN_VALUE / 2) < ROAD_INVITE_MS) continue
+                roadInvitedAt[key] = now
+                enqueue(RoadInvite.to(identity, n.nodeId, n.beacon.boxPublic, r.ssid, r.passphrase, now).encode())
+            }
+        }
         if (newNeighbor) {
             newNeighbor = false
             for (p in pockets.values) if (p.reshouts < MAX_RESHOUTS) { p.reshouts++; enqueue(p.env.encode()) }
         }
     }
+
+    /** My Wi-Fi road is up: its key goes, sealed, to every stable neighbor (Camino y Carretera). */
+    fun setRoad(ssid: String, passphrase: String) { road = Road(ssid, passphrase); roadInvitedAt.clear() }
 
     fun offerCard(neighbor: Neighbor) = offerTo(neighbor.nodeId, neighbor.beacon.boxPublic)
 
@@ -121,6 +138,7 @@ class Node(
             is Envelope -> onEnvelope(p)
             is Plaza -> onPlaza(p)
             is Heard -> onHeard(p)
+            is RoadInvite -> onRoadInvite(p)
             else -> emptyList()
         }
     }
@@ -129,7 +147,7 @@ class Node(
         if (b.nodeId.contentEquals(identity.nodeId) || !b.verify()) return emptyList()
         val key = b.nodeId.toHex()
         val isNew = key !in neighbors
-        neighbors[key] = Neighbor(b, clock())
+        neighbors[key] = Neighbor(b, clock(), (neighbors[key]?.beats ?: 0) + 1)
         if (isNew) newNeighbor = true
         return if (isNew) listOf(NodeEvent.NeighborsChanged) else emptyList()
     }
@@ -140,6 +158,12 @@ class Node(
         keepPlaza(PlazaEntry(p.id, p.name, p.text, p.ts, false))
         enqueue(Heard.of(identity, p.id, clock()).encode())
         return listOf(NodeEvent.PlazaReceived(p.id, p.name, p.text))
+    }
+
+    private fun onRoadInvite(i: RoadInvite): List<NodeEvent> {
+        val r = i.open(identity) ?: return emptyList()
+        val name = neighbors[i.from.toHex()]?.name ?: store.contact(i.from)?.name ?: ""
+        return listOf(NodeEvent.RoadInvited(i.from, name, r.ssid, r.passphrase))
     }
 
     private fun onHeard(h: Heard): List<NodeEvent> {
@@ -207,6 +231,8 @@ class Node(
         const val MAX_SEEN = 4_000
         const val MAX_OUTBOX = 400
         const val RETRY_MS = 10_000L
+        const val STABLE_BEATS = 2
+        const val ROAD_INVITE_MS = 5 * 60_000L
         const val PLAZA_RETRIES = 3
         const val CARD_RETRIES = 5
     }

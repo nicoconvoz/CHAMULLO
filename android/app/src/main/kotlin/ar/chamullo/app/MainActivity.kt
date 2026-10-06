@@ -96,6 +96,7 @@ class MainActivity : Activity() {
             when {
                 !r.supported -> "${r.label}: este celular no lo tiene."
                 r.active -> "${r.label}: gritando ✓" + if (r.peers > 0) " (${r.peers} cerca)" else ""
+                r is WifiRoad -> "Carretera: prendé el Wi-Fi para abrirla (no se conecta a ninguna red)."
                 r is WifiRadio -> "Wi-Fi: prendé el Wi-Fi para gritar más lejos (no se conecta a ninguna red)."
                 else -> "Bluetooth: apagado (es el respaldo; no se conecta a nada)."
             }

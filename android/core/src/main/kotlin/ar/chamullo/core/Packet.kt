@@ -14,6 +14,7 @@ sealed interface Packet {
         const val LINK_CARD_OFFER = 11L
         const val LINK_PLAZA = 12L
         const val LINK_HEARD = 13L
+        const val LINK_ROAD_INVITE = 14L
 
         fun isChamullo(b: ByteArray) = b.size >= 4 && b[0] == MAGIC[0] && b[1] == MAGIC[1] && b[2].toInt() == VERSION
 
@@ -30,6 +31,7 @@ sealed interface Packet {
                         LINK_CARD_OFFER -> CardOffer.decode(tlv)
                         LINK_PLAZA -> Plaza.decode(tlv)
                         LINK_HEARD -> Heard.decode(tlv)
+                        LINK_ROAD_INVITE -> RoadInvite.decode(tlv)
                         else -> throw WireException("unknown link message $type")
                     }
                 }
@@ -251,6 +253,41 @@ class Heard(val nodeId: ByteArray, val plazaId: String, val name: String, val ts
         fun decode(t: Map<Long, ByteArray>): Heard {
             Tlv.requireKnown(t, setOf(2, 4, 6, 10))
             return Heard(t.getValue(2), t.getValue(4).toHex(), String(t[7] ?: ByteArray(0)), Tlv.readU64(t.getValue(6)), t.getValue(10))
+        }
+    }
+}
+
+/* ======================= la carretera: the key of my Wi-Fi road, sealed for one neighbor ======================= */
+
+class Road(val ssid: String, val passphrase: String)
+
+class RoadInvite(val from: ByteArray, val to: ByteArray, val fromBox: ByteArray, val nonce: ByteArray, val sealed: ByteArray) : Packet {
+    override fun encode() = Packet.link(Packet.LINK_ROAD_INVITE, listOf(2L to from, 4L to to, 6L to fromBox, 8L to nonce, 10L to sealed))
+
+    /** The road key, if this invite is for [me] and its owner signed it. */
+    fun open(me: Identity): Road? {
+        if (!to.contentEquals(me.nodeId)) return null
+        val plain = Crypto.boxOpen(sealed, nonce, fromBox, me.boxSecret) ?: return null
+        return runCatching {
+            val t = Tlv.decode(plain)
+            val ssid = t.getValue(2); val pass = t.getValue(4); val ts = t.getValue(6)
+            if (!Identity.verify(from, "ROAD", ssid + 0.toByte() + pass + ts + to, t.getValue(8))) return null
+            Road(String(ssid), String(pass))
+        }.getOrNull()
+    }
+
+    companion object {
+        fun to(me: Identity, nodeId: ByteArray, boxPublic: ByteArray, ssid: String, passphrase: String, now: Long): RoadInvite {
+            val ts = Tlv.u64(now)
+            val sig = me.sign("ROAD", ssid.toByteArray() + 0.toByte() + passphrase.toByteArray() + ts + nodeId)
+            val plain = Tlv.encode(listOf(2L to ssid.toByteArray(), 4L to passphrase.toByteArray(), 6L to ts, 8L to sig))
+            val nonce = Crypto.randomBytes(24)
+            return RoadInvite(me.nodeId, nodeId, me.boxPublic, nonce, Crypto.box(plain, nonce, boxPublic, me.boxSecret))
+        }
+
+        fun decode(t: Map<Long, ByteArray>): RoadInvite {
+            Tlv.requireKnown(t, setOf(2, 4, 6, 8, 10))
+            return RoadInvite(t.getValue(2), t.getValue(4), t.getValue(6), t.getValue(8), t.getValue(10))
         }
     }
 }

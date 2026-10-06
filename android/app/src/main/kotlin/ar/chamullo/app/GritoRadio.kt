@@ -24,6 +24,7 @@ import ar.chamullo.core.Packet
 import ar.chamullo.core.Beacon
 import ar.chamullo.core.CardOffer
 import ar.chamullo.core.Envelope
+import ar.chamullo.core.Fragments
 import ar.chamullo.core.Heard
 import ar.chamullo.core.Plaza
 import ar.chamullo.core.toHex
@@ -94,7 +95,12 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) : R
         sets.clear(); starting = null; busy = false; queue.clear()
     } }
 
-    override fun shout(frame: ByteArray) { handler.post {
+    override fun shout(frame: ByteArray) {
+        if (frame.size > CAMINO_MAX) { FieldLog.add("BT", "${describe(frame)} de ${frame.size} bytes: va solo por la carretera"); return }
+        for (part in Fragments.split(frame, MAX_FRAME)) shoutOne(part)
+    }
+
+    private fun shoutOne(frame: ByteArray) { handler.post {
         if (!enabled) return@post
         val group = ArrayDeque<Emission>()
         if (coded && frame.size <= maxAdvLen - 20) group.addLast(Emission(Mode.LONG, frame))
@@ -231,6 +237,7 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) : R
         const val HOLD_MS = 250L
         const val DEDUP_MS = 5_000L
         const val MAX_FRAMES = 12
+        const val CAMINO_MAX = 4_096
 
         fun describe(frame: ByteArray): String = when (val p = Packet.parseOrNull(frame)) {
             is Beacon -> "latido de ${p.name.ifBlank { "?" }}"
@@ -238,6 +245,7 @@ class GritoRadio(context: Context, private val onFrame: (ByteArray) -> Unit) : R
             is Heard -> "lo escuchó ${p.name.ifBlank { "?" }}"
             is CardOffer -> "tarjeta"
             is Envelope -> "carta cifrada"
+            is ar.chamullo.core.RoadInvite -> "llave de carretera"
             null -> if (frame.size > 3 && frame[3].toInt() == Packet.KIND_FRAGMENT) "trozo de carta" else "desconocido"
         }
         const val RESCAN_MS = 10 * 60_000L

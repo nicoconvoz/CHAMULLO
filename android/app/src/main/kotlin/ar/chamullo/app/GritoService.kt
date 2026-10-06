@@ -34,8 +34,10 @@ class GritoService : Service() {
         val identity = Vault(this).identity() ?: run { stopSelf(); return }
         val incoming: (ByteArray) -> Unit = { frame -> Hub.worker.post { handle(frame) } }
         val bluetooth = GritoRadio(this, incoming)
-        radios = listOf(WifiRadio(this, incoming), bluetooth)
-        val node = Node(identity, FileStore(this), GritoRadio.MAX_FRAME, bluetooth.coded) { System.currentTimeMillis() }
+        val road = WifiRoad(this, identity, incoming) { ssid, pass -> Hub.post { it.setRoad(ssid, pass) } }
+        radios = listOf(road, WifiRadio(this, incoming), bluetooth)
+        // Frames up to 60 KB stay whole: the carretera carries them in one piece; caminos split small ones.
+        val node = Node(identity, FileStore(this), ROAD_FRAME, bluetooth.coded) { System.currentTimeMillis() }
         Hub.radios = radios
         Hub.worker.post { Hub.node = node }
         radios.forEach { it.start() }
@@ -65,6 +67,7 @@ class GritoService : Service() {
                         synchronized(Hub.pendingCards) { if (Hub.pendingCards.none { it.nodeId.contentEquals(event.card.nodeId) }) Hub.pendingCards += event.card } // repeated offers: one dialog
                         notify(ID_CARD, notification(CH_MSG, "${event.card.name} quiere intercambiar tarjetas", "Tocá para aceptar.", MainActivity::class.java))
                     }
+                is NodeEvent.RoadInvited -> (radios.firstOrNull { it is WifiRoad } as? WifiRoad)?.join(event.ssid, event.passphrase)
                 is NodeEvent.LetterReceived ->
                     notify(event.msgId.hashCode(), notification(CH_MSG, event.from.name, event.text, ChatActivity::class.java, event.from.nodeId))
                 else -> Unit
@@ -76,6 +79,7 @@ class GritoService : Service() {
                 is NodeEvent.PlazaReceived -> "plaza de ${event.name}: ${event.text.take(30)}"
                 is NodeEvent.PlazaHeard -> "${event.name} escuchó mi plaza"
                 NodeEvent.NeighborsChanged -> "vecino nuevo"
+                is NodeEvent.RoadInvited -> "${event.name.ifBlank { "un vecino" }} me dio la llave de su carretera ${event.ssid}"
             })
             Hub.emit(event)
         }
@@ -116,5 +120,6 @@ class GritoService : Service() {
         const val ID_CARD = 2
         const val ID_UPDATE = 3
         const val TICK_MS = 200L
+        const val ROAD_FRAME = 60_000
     }
 }

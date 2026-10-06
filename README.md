@@ -46,6 +46,7 @@ Pendiente de formalizar: formato de paquetes, descubrimiento, routing, Proof of 
 - [Economy & Governance Specification v0.1](docs/specs/04-economy-governance.md): ICE, escasez, carril gratis, pueblos, cuentas de operador, Rey y Nobleza, libretas y cámara compensadora.
 - [Discovery & Routing Specification v0.1](docs/specs/05-discovery-routing.md): zonas, tarjeta de contacto, brújula y río, búsqueda local y privacidad de ruta.
 - [Air Interface "El Grito" Specification v0.1](docs/specs/06-air-interface.md): modo de conexión propio sobre la radio de largo alcance del celular, con turnos y enlace inspirados en el sidelink de 3GPP.
+- [Camino y Carretera v0.1](docs/specs/07-camino-carretera.md): el grito descubre (camino) y abre Wi-Fi Direct de teléfono a teléfono (carretera) en una cadena viva.
 
 ## App Android
 

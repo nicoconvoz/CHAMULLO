@@ -113,4 +113,15 @@ class PacketTest {
         assertEquals(msg.id, h.plazaId)
         assertEquals("Beto", h.name)
     }
+
+    @Test
+    fun `a road key travels sealed to one neighbor and is signed by its owner`() {
+        val beaconDani = Beacon.of(dani, coded = false, now = 1)
+        val invite = Packet.parse(RoadInvite.to(ana, beaconDani.nodeId, beaconDani.boxPublic, "DIRECT-CH-ana", "clave-secreta-123", now = 2).encode()) as RoadInvite
+        assertNull(invite.open(beto))
+        val road = invite.open(dani)!!
+        assertEquals("DIRECT-CH-ana", road.ssid)
+        assertEquals("clave-secreta-123", road.passphrase)
+        assertFalse(invite.encode().toHex().contains("clave-secreta-123".toByteArray().toHex()))
+    }
 }

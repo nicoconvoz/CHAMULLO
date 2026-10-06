@@ -11,6 +11,9 @@
     <!-- The Wi-Fi shout: Wi-Fi Aware, phone to phone, without joining any network. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- La carretera: ride a neighbor's Wi-Fi Direct group as a local-only network (no internet). -->
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" tools:targetApi="tiramisu" />
     <!-- Android 12+: no neverForLocation here on purpose, see ACCESS_FINE_LOCATION above. -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
@@ -24,6 +27,7 @@
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-feature android:name="android.hardware.wifi.aware" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi.direct" android:required="false" />
 
     <application
         android:allowBackup="false"

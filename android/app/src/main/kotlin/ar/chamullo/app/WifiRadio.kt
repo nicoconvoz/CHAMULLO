@@ -17,6 +17,7 @@ import android.net.wifi.aware.WifiAwareManager
 import android.net.wifi.aware.WifiAwareSession
 import android.os.Handler
 import android.os.Looper
+import ar.chamullo.core.Fragments
 
 /**
  * The Wi-Fi shout: Wi-Fi Aware (NAN) lets phones find each other and exchange short messages directly, without
@@ -103,6 +104,11 @@ class WifiRadio(private val context: Context, private val onFrame: (ByteArray) -
     private fun receive(message: ByteArray) { heard++; onFrame(message) }
 
     override fun shout(frame: ByteArray) {
+        if (frame.size > GritoRadio.CAMINO_MAX) return
+        for (part in Fragments.split(frame, GritoRadio.MAX_FRAME)) shoutOne(part)
+    }
+
+    private fun shoutOne(frame: ByteArray) {
         handler.post {
             if (subscribe == null || found.isEmpty()) return@post
             queue.addLast(frame)

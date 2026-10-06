@@ -193,4 +193,27 @@ class NodeTest {
         repeat(60) { now += 1_000; ana.tick(); offers += offersIn(ana.drainOutbox()) }
         assertEquals(1 + Node.CARD_RETRIES, offers)
     }
+
+    @Test
+    fun `carretera - a stable neighbor gets my road key, once in a while, never before the road exists`() {
+        val air = Air("ana", "beto").apply { link("ana", "beto") }
+        air.run(2 * Node.BEACON_MS + 1_000) // ana hears two heartbeats: the camino is stable
+        assertTrue(air.events["beto"].orEmpty().none { it is NodeEvent.RoadInvited }, "no road yet, no invite")
+        air.node("ana").setRoad("DIRECT-CH-ana", "clave-1234567890")
+        air.run(2_000)
+        val invite = air.events.getValue("beto").filterIsInstance<NodeEvent.RoadInvited>().single()
+        assertEquals("DIRECT-CH-ana", invite.ssid)
+        assertEquals("clave-1234567890", invite.passphrase)
+        assertEquals("Ana", invite.name)
+        air.run(30_000)
+        assertEquals(1, air.events.getValue("beto").count { it is NodeEvent.RoadInvited }, "not again so soon")
+    }
+
+    @Test
+    fun `carretera - a neighbor heard only once is not stable yet`() {
+        val air = Air("ana", "beto").apply { link("ana", "beto") }
+        air.node("ana").setRoad("DIRECT-CH-ana", "clave-1234567890")
+        air.run(1_000)
+        assertTrue(air.events["beto"].orEmpty().none { it is NodeEvent.RoadInvited })
+    }
 }
