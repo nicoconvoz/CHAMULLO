@@ -31,4 +31,23 @@ object Settings {
     const val FOUNDER = "6e63751b4968bab08674c09598c2cf800808838e5c505103880f616cc509490a"
 
     @Suppress("UNUSED_PARAMETER") fun founder(c: Context) = FOUNDER
+
+    /** Favorite contacts (a star, first in the lists), like ICEBREAK's chat favorites. */
+    fun favorites(c: Context): Set<String> = prefs(c).getStringSet("favorites", emptySet()) ?: emptySet()
+
+    fun toggleFavorite(c: Context, id: String) {
+        val now = favorites(c).toMutableSet()
+        if (!now.remove(id)) now += id
+        prefs(c).edit().putStringSet("favorites", now).apply()
+    }
+
+    /** When I last looked at a chat: newer letters from that contact are unread. */
+    fun seenAt(c: Context, id: String) = prefs(c).getLong("seen-$id", 0)
+
+    fun markSeen(c: Context, id: String) = prefs(c).edit().putLong("seen-$id", System.currentTimeMillis()).apply()
+
+    /** The tab the home screen shows. */
+    fun tab(c: Context) = prefs(c).getInt("tab", 0)
+
+    fun setTab(c: Context, i: Int) = prefs(c).edit().putInt("tab", i).apply()
 }

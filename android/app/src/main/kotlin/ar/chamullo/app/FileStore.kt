@@ -41,7 +41,8 @@ class FileStore(context: Context) : Store {
             for (i in 0 until cs.length()) Card.decode(hex(cs.getString(i))).let { contacts[it.nodeId.toHex()] = it }
             val ms = j.getJSONArray("messages")
             for (i in 0 until ms.length()) ms.getJSONObject(i).let {
-                messages += Message(it.getString("peer"), it.getBoolean("mine"), it.getString("text"), it.getLong("ts"), it.getString("msgId"), MessageState.valueOf(it.getString("state")))
+                val media = it.optJSONObject("media")?.let { m -> ar.chamullo.core.MediaRef(m.getInt("kind"), m.getString("name"), m.getString("mime"), m.getInt("size")) }
+                messages += Message(it.getString("peer"), it.getBoolean("mine"), it.getString("text"), it.getLong("ts"), it.getString("msgId"), MessageState.valueOf(it.getString("state")), media)
             }
             val pk = j.optJSONArray("pockets") ?: JSONArray()
             pockets = List(pk.length()) { hex(pk.getString(it)) }
@@ -59,6 +60,12 @@ class FileStore(context: Context) : Store {
     @Synchronized override fun loadPockets() = pockets
     @Synchronized override fun saveContact(card: Card) { contacts[card.nodeId.toHex()] = card; flush() }
     @Synchronized override fun contacts() = contacts.values.toList()
+    @Synchronized override fun deleteContact(nodeId: ByteArray) { contacts.remove(nodeId.toHex()); flush() }
+
+    // Attachments live as files beside the store, one per message id: the chat list stays small.
+    private val mediaDir = File(context.filesDir, "media").apply { mkdirs() }
+    override fun saveMedia(msgId: String, bytes: ByteArray) { runCatching { File(mediaDir, msgId).writeBytes(bytes) } }
+    override fun loadMedia(msgId: String): ByteArray? = runCatching { File(mediaDir, msgId).takeIf { it.exists() }?.readBytes() }.getOrNull()
     @Synchronized override fun saveMessage(m: Message) { messages += m; flush() }
     @Synchronized override fun messages(peer: ByteArray) = messages.filter { it.peer == peer.toHex() }
     @Synchronized override fun setState(msgId: String, state: MessageState) {
@@ -69,7 +76,10 @@ class FileStore(context: Context) : Store {
     private fun flush() {
         val j = JSONObject()
             .put("contacts", JSONArray(contacts.values.map { it.encode().toHex() }))
-            .put("messages", JSONArray(messages.map { JSONObject().put("peer", it.peer).put("mine", it.mine).put("text", it.text).put("ts", it.ts).put("msgId", it.msgId).put("state", it.state.name) }))
+            .put("messages", JSONArray(messages.map { m ->
+                JSONObject().put("peer", m.peer).put("mine", m.mine).put("text", m.text).put("ts", m.ts).put("msgId", m.msgId).put("state", m.state.name)
+                    .apply { m.media?.let { put("media", JSONObject().put("kind", it.kind).put("name", it.name).put("mime", it.mime).put("size", it.size)) } }
+            }))
             .put("pockets", JSONArray(pockets.map { it.toHex() }))
             .put("plaza", JSONArray(plaza.map { JSONObject().put("id", it.id).put("name", it.name).put("text", it.text).put("ts", it.ts).put("mine", it.mine).put("heardBy", JSONArray(it.heardBy)) }))
         val tmp = File(file.parentFile, "store.json.tmp")

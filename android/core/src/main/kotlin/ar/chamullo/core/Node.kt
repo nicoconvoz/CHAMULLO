@@ -5,7 +5,7 @@ sealed interface NodeEvent {
     /** [journey]: the valid givers, in order; [alternatives]: for each, how many neighbors could have carried it instead. */
     data class LetterReceived(
         val from: Card, val text: String, val msgId: String, val journey: List<String> = emptyList(), val service: String = "chat",
-        val alternatives: List<Int> = emptyList()
+        val alternatives: List<Int> = emptyList(), val media: MediaRef? = null
     ) : NodeEvent
     data class Delivered(val msgId: String) : NodeEvent
     data object NeighborsChanged : NodeEvent
@@ -320,6 +320,20 @@ class Node(
         return id
     }
 
+    /** An attachment (Packet Format §5.6): kept in my chat and its bytes in my store. Null if it is over [Media.MAX_BYTES]. */
+    fun sendMedia(to: Card, media: Letter.Media): String? {
+        if (media.data.size > Media.MAX_BYTES) return null
+        store.saveContact(to)
+        val sealed = sendLetter(to, media)
+        val id = sealed.envelope.msgId.toHex()
+        sent[id] = sealed
+        while (sent.size > 500) sent.remove(sent.keys.first())
+        store.saveMedia(id, media.data)
+        store.saveMessage(Message(to.nodeId.toHex(), true, Media.summary(media.kind, media.name), clock(), id, MessageState.SENT,
+            MediaRef(media.kind, media.name, media.mime, media.data.size)))
+        return id
+    }
+
     // Every letter of mine carries my current card; I keep it in my pocket and write its first hop (giver_1 = src).
     private fun sendLetter(to: Card, body: Letter, maxHops: Int? = null, priority: Long = 0): Sealed {
         val sealed = Envelope.seal(identity, to, body, clock(), maxHops = maxHops ?: Compass.maxHops(cell, to.zone), senderCard = card(), priority = priority)
@@ -458,6 +472,18 @@ class Node(
         // Every letter brings the sender's current card: that is how I learn their barrio (Discovery & Routing §5).
         opened.senderCard?.let { fresh -> if ((store.contact(fresh.nodeId)?.ts ?: -1) <= fresh.ts) store.saveContact(fresh) }
         return when (val body = opened.body) {
+            is Letter.Media -> {
+                val from = store.contact(opened.sender) ?: Card(opened.sender, ByteArray(32), ByteArray(32), "Desconocido", 0, ByteArray(64))
+                val ref = MediaRef(body.kind, body.name, body.mime, body.data.size)
+                val text = Media.summary(body.kind, body.name)
+                store.saveMedia(id, body.data)
+                store.saveMessage(Message(opened.sender.toHex(), false, text, opened.ts, id, MessageState.RECEIVED, ref))
+                val hops = opened.journeySecret?.let { env.journey(it) } ?: emptyList()
+                val receipt = Letter.Ack(env.msgId, env.blobs.map { Crypto.hash(it) }, opened.deliverySecret ?: ByteArray(0), Journey.validity(hops))
+                store.contact(opened.sender)?.let { sendLetter(it, receipt) }
+                val valid = hops.filter { it.valid && !it.giver.contentEquals(env.src) }
+                listOf(NodeEvent.LetterReceived(from, text, id, valid.map { it.giver.toHex() }, "media", valid.map { it.alternatives }, ref))
+            }
             is Letter.Text -> {
                 val from = store.contact(opened.sender) ?: Card(opened.sender, ByteArray(32), ByteArray(32), "Desconocido", 0, ByteArray(64))
                 store.saveMessage(Message(opened.sender.toHex(), false, body.text, opened.ts, id, MessageState.RECEIVED))

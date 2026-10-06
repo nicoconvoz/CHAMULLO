@@ -2,13 +2,17 @@ package ar.chamullo.core
 
 enum class MessageState { SENT, DELIVERED, RECEIVED }
 
-data class Message(val peer: String, val mine: Boolean, val text: String, val ts: Long, val msgId: String, val state: MessageState)
+/** [media]: an attachment, whose bytes the store keeps under [msgId] (see [Store.saveMedia]). */
+data class Message(val peer: String, val mine: Boolean, val text: String, val ts: Long, val msgId: String, val state: MessageState, val media: MediaRef? = null)
 
 /** What a node keeps between runs. The Android app persists it; tests use [MemoryStore]. */
 interface Store {
     fun saveContact(card: Card)
     fun contacts(): List<Card>
     fun contact(nodeId: ByteArray): Card? = contacts().firstOrNull { it.nodeId.contentEquals(nodeId) }
+    fun deleteContact(nodeId: ByteArray) {}
+    fun saveMedia(msgId: String, bytes: ByteArray) {}
+    fun loadMedia(msgId: String): ByteArray? = null
     fun saveMessage(m: Message)
     fun messages(peer: ByteArray): List<Message>
     fun setState(msgId: String, state: MessageState)
@@ -44,6 +48,10 @@ class MemoryStore(private val keepPages: Boolean = true) : Store {
     override fun loadPages() = pages.toList()
     override fun replacePages(pages: List<ByteArray>) { this.pages.clear(); if (keepPages) this.pages += pages }
     override fun saveContact(card: Card) { contacts[card.nodeId.toHex()] = card }
+    override fun deleteContact(nodeId: ByteArray) { contacts.remove(nodeId.toHex()) }
+    private val media = HashMap<String, ByteArray>()
+    override fun saveMedia(msgId: String, bytes: ByteArray) { media[msgId] = bytes }
+    override fun loadMedia(msgId: String) = media[msgId]
     override fun contacts() = contacts.values.toList()
     override fun saveMessage(m: Message) { messages += m }
     override fun messages(peer: ByteArray) = messages.filter { it.peer == peer.toHex() }

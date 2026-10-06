@@ -154,6 +154,25 @@ sealed interface Letter {
     class Ack(val msgId: ByteArray, val journey: List<ByteArray> = emptyList(), val revealed: ByteArray = ByteArray(0), val validity: ByteArray = ByteArray(0)) : Letter
     /** La mudanza (Discovery & Routing §5): only my new card, so my contacts know my new barrio. */
     class Moved(val card: Card) : Letter
+
+    /** An attachment (Packet Format §5.6): [kind] from [ar.chamullo.core.Media], its file name, its type and its bytes. */
+    class Media(val kind: Int, val name: String, val mime: String, val data: ByteArray) : Letter {
+        fun encode(): ByteArray = Tlv.encode(listOf(2L to byteArrayOf(kind.toByte()), 4L to name.toByteArray(), 6L to mime.toByteArray(), 8L to data))
+
+        /** For a location: latitude and longitude. */
+        fun latLon(): Pair<Double, Double>? = runCatching { String(data).split(',').let { it[0].toDouble() to it[1].toDouble() } }.getOrNull()
+
+        /** For a shared contact: the card, if it is a good one. */
+        fun card(): Card? = runCatching { Card.decode(data) }.getOrNull()?.takeIf { it.verify() }
+
+        companion object {
+            fun location(lat: Double, lon: Double) = Media(ar.chamullo.core.Media.LOCATION, "Ubicación", "geo", "$lat,$lon".toByteArray())
+            fun contact(card: Card) = Media(ar.chamullo.core.Media.CONTACT, card.name, "chamullo/card", card.encode())
+            fun decode(b: ByteArray): Media = Tlv.decode(b).let { t ->
+                Media(t.getValue(2)[0].toInt(), String(t.getValue(4)), String(t.getValue(6)), t.getValue(8))
+            }
+        }
+    }
 }
 
 /** What the recipient finds inside: the real sender, the letter, and the keys to read its journey and prove the delivery. */
@@ -289,13 +308,14 @@ class Envelope(
         val r = Reader(origin.getValue(6))
         val ephBox = r.take(32); val boxNonce = r.take(24)
         val inner = Tlv.decode(Crypto.boxOpen(r.rest(), boxNonce, ephBox, me.boxSecret) ?: return null)
-        Tlv.requireKnown(inner, setOf(2, 4, 6, 8, 12, 14, 16, 18, 20))
+        Tlv.requireKnown(inner, setOf(2, 4, 6, 8, 12, 14, 16, 18, 20, 24))
         val sender = inner.getValue(2); val sentTs = Tlv.readU64(inner.getValue(4))
         val service = inner[19]?.let { String(it) } ?: "chat"
         // The sender's current card, only if it is really theirs (Discovery & Routing §5).
         val card = inner[21]?.let { runCatching { Card.decode(it) }.getOrNull() }?.takeIf { it.nodeId.contentEquals(sender) && it.verify() }
         val body: Letter = when {
             inner[6] != null -> Letter.Text(String(inner.getValue(6)), service)
+            inner[24] != null -> Letter.Media.decode(inner.getValue(24))
             inner[12] != null -> Letter.Ack(inner.getValue(12), (inner[18] ?: ByteArray(0)).toList().chunked(32) { it.toByteArray() }, inner[20] ?: ByteArray(0), inner[23] ?: ByteArray(0))
             else -> Letter.Moved(card ?: return null)
         }
@@ -325,6 +345,7 @@ class Envelope(
             is Letter.Text -> body.text.toByteArray() + 0.toByte() + body.service.toByteArray()
             is Letter.Ack -> body.msgId + body.journey.fold(ByteArray(0)) { a, h -> a + h } + body.revealed + body.validity
             is Letter.Moved -> body.card.encode()
+            is Letter.Media -> body.encode()
         }
 
         fun letter(sender: Identity, to: Card, body: Letter, now: Long, ttlMs: Long = 6 * 3600_000L, maxHops: Int = 8, senderCard: Card? = null): Envelope =
@@ -350,7 +371,8 @@ class Envelope(
                     (body as? Letter.Text)?.service?.takeIf { it != "chat" }?.let { 19L to it.toByteArray() },
                     (body as? Letter.Ack)?.let { 20L to it.revealed },
                     ((body as? Letter.Moved)?.card ?: senderCard)?.let { 21L to it.encode() },
-                    (body as? Letter.Ack)?.validity?.takeIf { it.isNotEmpty() }?.let { 23L to it }
+                    (body as? Letter.Ack)?.validity?.takeIf { it.isNotEmpty() }?.let { 23L to it },
+                    (body as? Letter.Media)?.let { 24L to it.encode() }
                 )
             )
             val ephBoxSecret = Crypto.randomBytes(32)

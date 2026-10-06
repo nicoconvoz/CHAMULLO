@@ -17,10 +17,16 @@ import android.widget.TextView
 
 /** Tiny view helpers: the app builds its screens in code to stay light (no AndroidX, no layout inflation). */
 object Ui {
+    // ICEBREAK's base skin, "Tinta" (icebreak_ui ib_skins.dart).
     const val INK = 0xFF121212.toInt()
-    const val MUTED = 0xFF686864.toInt()
+    const val MUTED = 0xFF6B6B67.toInt()
     const val SURFACE = 0xFFFFFFFF.toInt()
-    const val SOFT = 0xFFF4F4F1.toInt()
+    const val SOFT = 0xFFF1F1EE.toInt()
+    const val LINE = 0xFFD8D8D3.toInt()
+    const val BG = 0xFFE8E8E5.toInt()
+    const val BAR = 0xFF8D8D89.toInt()
+    const val BAR_ACTIVE = 0xFF111111.toInt()
+    const val RED = 0xFFE5383B.toInt()
     const val BLUE = 0xFF2F6FDB.toInt()
     const val GREEN = 0xFF1F9D43.toInt()
 
@@ -29,7 +35,7 @@ object Ui {
     fun Activity.screen(build: LinearLayout.() -> Unit): LinearLayout {
         val col = column { setPadding(dp(16), dp(16), dp(16), dp(24)) }
         col.build()
-        setContentView(ScrollView(this).apply { fitsSystemWindows = true; addView(col) })
+        setContentView(ScrollView(this).apply { fitsSystemWindows = true; setBackgroundColor(BG); addView(col) })
         return col
     }
 
@@ -82,4 +88,22 @@ object Ui {
     }
 
     fun View.gone(hidden: Boolean) { visibility = if (hidden) View.GONE else View.VISIBLE }
+
+    /** A square button with one of ICEBREAK's icons (IbSquare / IbIconButton). */
+    fun Activity.iconButton(icon: String, size: Int = 44, color: Int = INK, filled: Boolean = false, onClick: () -> Unit) =
+        android.widget.ImageView(this).apply {
+            setImageDrawable(Icons.of(icon, color, filled))
+            val pad = dp(size) / 5
+            setPadding(pad, pad, pad, pad)
+            layoutParams = LinearLayout.LayoutParams(dp(size), dp(size))
+            setOnClickListener { onClick() }
+        }
+
+    /** A round avatar with initials, like ICEBREAK's user card fallback. */
+    fun Activity.avatar(name: String, size: Int = 46) = TextView(this).apply {
+        text = name.split(' ').filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1).uppercase() }.ifBlank { "?" }
+        textSize = size / 3f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; typeface = Typeface.DEFAULT_BOLD
+        background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xFF2B2B2B.toInt()) }
+        layoutParams = LinearLayout.LayoutParams(dp(size), dp(size))
+    }
 }
