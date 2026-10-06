@@ -83,7 +83,7 @@ class OnboardingActivity : Activity() {
             addView(logo())
             addView(title("Ganá Lucas"))
             addView(card {
-                addView(text("🪙 Prestá Internet y ganá Lucas", 20f, bold = true))
+                addView(text("💰 Prestá Internet y ganá Lucas", 20f, bold = true))
                 addView(text("Donde no hay celulares cerca, tu Internet lleva las cartas de los demás al otro lado. Cada carta que llevás te paga Lucas, que gastás en la Tienda o para que tus cartas pasen primero.", 14f))
                 addView(text("Usa muy pocos datos. Lo podés apagar cuando quieras desde la pantalla principal.", 13f, Ui.MUTED))
             })

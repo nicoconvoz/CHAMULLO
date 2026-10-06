@@ -192,11 +192,11 @@ class MainActivity : Activity() {
     private fun appsTab(s: Snapshot) {
         page.addView(title("Apps"))
         page.addView(card {
-            addView(text("🪙 ${s.lucas} Lucas · 🍬 ${s.candies} caramelos", 16f, Ui.GREEN, bold = true))
+            addView(text("💰 ${s.lucas} Lucas · 🍬 ${s.candies} caramelos", 16f, Ui.GREEN, bold = true))
             addView(button("Tienda de Lucas") { startActivity(Intent(this@MainActivity, StoreActivity::class.java)) })
         })
         page.addView(card {
-            addView(text("🪙 Prestar Internet y ganar Lucas", 16f, bold = true))
+            addView(text("💰 Prestar Internet y ganar Lucas", 16f, bold = true))
             addView(text("Tu Internet lleva cartas donde no llegan los celulares, y cada una te paga Lucas.", 13f, Ui.MUTED))
             addView(button(if (Settings.lendInternet(this@MainActivity)) "✓ Prestando Internet (tocá para dejar de prestar)" else "Prestar Internet y ganar Lucas",
                 primary = !Settings.lendInternet(this@MainActivity)) { Settings.toggleLendInternet(this@MainActivity); render() })

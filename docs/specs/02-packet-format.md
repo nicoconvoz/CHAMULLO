@@ -284,3 +284,19 @@ Cada atestación de relay suma aproximadamente `NodeId` + firma + metadatos ≈ 
 2. **Herramienta de depuración:** definir un volcado de texto canónico (por ejemplo, CBOR-diag o JSON) para logs y pruebas, sin que sea el formato de cable.
 3. **Registro de extensiones:** ¿dónde vive y quién aprueba los tipos `1024`–`65535`? Lo resuelve la spec de Gobernanza.
 4. **Vectores de prueba:** publicar paquetes de ejemplo con sus bytes exactos, para que implementaciones distintas verifiquen que codifican igual.
+
+## 5.6 Adjuntos (v0.6)
+
+Un adjunto es una carta sellada más. Su contenido lleva el TLV interno `24` (par: un lector viejo la rechaza) con:
+
+| Tipo | Campo |
+|---|---|
+| `2` | Clase: 1 foto, 2 video, 3 archivo, 4 ubicación, 5 contacto, 6 nota de voz |
+| `4` | Nombre del archivo |
+| `6` | Tipo MIME (`geo` para ubicación, `chamullo/card` para contacto) |
+| `8` | Los bytes. Ubicación: `"lat,lon"`. Contacto: la tarjeta firmada |
+
+- El remitente firma el adjunto completo, igual que un texto.
+- Tope: **3 MB** por carta, para no tapar las islas. Las fotos viajan a 1280 px en JPEG 80.
+- El destino guarda los bytes aparte, bajo el id de la carta, y el chat guarda solo la referencia.
+
