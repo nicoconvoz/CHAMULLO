@@ -62,6 +62,7 @@ class WifiIslands(
     @Volatile var island: String? = null; private set
     @Volatile var host = false; private set
     private val members = LinkedHashMap<Link, String>()
+    private val ferryLinks = HashSet<Link>()
     @Volatile var ferrying: String? = null; private set
     private var home: IslandAction.Join? = null
     private var busy = false
@@ -219,7 +220,7 @@ class WifiIslands(
             runCatching {
                 val s = Socket()
                 s.connect(InetSocketAddress(owner, PORT), 4_000)
-                Link(s).start()
+                Link(s).apply { start(); if (ferrying != null) send(FERRY) }
                 FieldLog.add("ISLA", "en la isla: caño abierto con el anfitrión")
                 return
             }
@@ -310,11 +311,19 @@ class WifiIslands(
                         trusted = true
                         val who = handshake.peer!!.toHex()
                         FieldLog.add("ISLA", "caño verificado con ${who.take(6)}")
-                        if (host) handler.post { members[this] = who.take(8); FieldLog.add("ISLA", "se sumó un miembro (${members.size})"); publishCartel() }
+                        if (host) handler.post {
+                            members[this] = who.take(8)
+                            FieldLog.add("ISLA", "se sumó un miembro (${members.size})")
+                            publishCartel()
+                            // The last seat is for ferries: a regular member beyond the ordinary seats is asked to found its own island.
+                            handler.postDelayed({ if (!ferryLinks.contains(this) && members.size > Islands.MAX_MEMBERS - Islands.FERRY_SEATS) { send(FULL); handler.postDelayed({ close() }, 500) } }, 1_500)
+                        }
                     }
                     continue
                 }
                 when {
+                    f.startsWith(FERRY) -> handler.post { ferryLinks += this }
+                    f.startsWith(FULL) -> { FieldLog.add("ISLA", "la isla está llena: fundo la mía"); handler.post { island = null } }
                     f.startsWith(SPEED_START) -> { speedExpected = intOf(f, SPEED_START.size); speedGot = 0; speedStart = System.nanoTime() }
                     f.startsWith(SPEED) -> {
                         speedGot += f.size
@@ -331,7 +340,9 @@ class WifiIslands(
                         lastSpeed = "el otro recibió $it"; FieldLog.add("ISLA", "prueba de velocidad: el otro recibió $it")
                     }
                     else -> {
-                        if (host) for (l in links) if (l !== this) l.send(f) // the island is one hop: the host repeats to all
+                        // The host repeats island messages (heartbeats, plaza, cards) to everyone. Letters go through its node,
+                        // which re-shouts them with its own hop record, so the host earns its candy like any carrier.
+                        if (host && f.size > 3 && f[3].toInt() == ar.chamullo.core.Packet.KIND_LINK) for (l in links) if (l !== this) l.send(f)
                         onFrame(f)
                     }
                 }
@@ -344,7 +355,7 @@ class WifiIslands(
             links -= this
             runCatching { socket.close() }
             out.offer(ByteArray(0))
-            handler.post { if (members.remove(this) != null) publishCartel() }
+            handler.post { ferryLinks.remove(this); if (members.remove(this) != null) publishCartel() }
             FieldLog.add("ISLA", "se cerró un caño (quedan ${links.size})")
         }
     }
@@ -357,6 +368,8 @@ class WifiIslands(
         const val CARTEL_TTL_MS = 60_000L
         const val FERRY_STAY_MS = 20_000L
         const val HANDSHAKE_MS = 10_000L
+        private val FERRY = "CHFRY".toByteArray()
+        private val FULL = "CHFUL".toByteArray()
         private val SPEED = "CHSPD".toByteArray()
         private val SPEED_START = "CHSPS".toByteArray()
         private val SPEED_RESULT = "CHSPR".toByteArray()

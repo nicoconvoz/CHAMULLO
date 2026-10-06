@@ -1,6 +1,7 @@
 package ar.chamullo.core
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -86,5 +87,38 @@ class IslandsTest {
         val txt = c.toTxt()
         assertEquals(true, txt.entries.sumOf { it.key.length + it.value.length + 2 } <= 255)
         assertEquals(c, Cartel.fromTxt(txt))
+    }
+
+    @Test
+    fun `bridge - a member that sees people of another island but not its host founds a bridge island at the border`() {
+        val roster = listOf("m1", "m2")
+        val state = IslandState("aaaa", host = false, members = roster)
+        val seen = listOf(host("aaaa", roster), member("x1", island = "bbbb"))
+        assertEquals(IslandAction.Host, Islands.decide("m1", state, seen, now = 0))
+    }
+
+    @Test
+    fun `bridge - a lonely bridge host keeps its post instead of merging back`() {
+        val me = IslandState(island = "m1", host = true, members = emptyList())
+        val seen = listOf(host("aaaa", listOf("m2")), member("x1", island = "bbbb"))
+        assertEquals(IslandAction.Stay, Islands.decide("m1", me, seen, now = 0))
+    }
+
+    @Test
+    fun `ferry - one trip per turn, not a trip every few seconds`() {
+        val roster = listOf("m1")
+        val seen = listOf(host("aaaa", roster), host("bbbb"))
+        val turn = Islands.turnOf(0)
+        assertEquals(IslandAction.Stay, Islands.decide("m1", IslandState("aaaa", false, roster, ferriedTurn = turn), seen, now = 0))
+        assertTrue(Islands.decide("m1", IslandState("aaaa", false, roster, ferriedTurn = turn), seen, now = Islands.FERRY_TURN_MS) is IslandAction.Ferry)
+    }
+
+    @Test
+    fun `ferry seat - an island keeps one seat free for visiting ferries`() {
+        val almostFull = host("bbbb", (1 until Islands.MAX_MEMBERS).map { "m$it" })
+        assertEquals(IslandAction.Host, Islands.decide("zzzz", alone, listOf(almostFull), now = 0), "a newcomer does not take the ferry seat")
+        val roster = listOf("m1")
+        assertTrue(Islands.decide("m1", IslandState("aaaa", false, roster), listOf(host("aaaa", roster), almostFull), now = 0) is IslandAction.Ferry,
+            "a ferry can still visit")
     }
 }

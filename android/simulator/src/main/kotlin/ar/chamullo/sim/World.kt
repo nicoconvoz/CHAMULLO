@@ -1,0 +1,223 @@
+package ar.chamullo.sim
+
+import ar.chamullo.core.Cartel
+import ar.chamullo.core.Identity
+import ar.chamullo.core.IslandAction
+import ar.chamullo.core.IslandState
+import ar.chamullo.core.Islands
+import ar.chamullo.core.MemoryStore
+import ar.chamullo.core.Node
+import ar.chamullo.core.NodeEvent
+import ar.chamullo.core.Packet
+import ar.chamullo.core.toHex
+import kotlin.math.hypot
+import kotlin.random.Random
+
+/**
+ * The digital twin: real CHAMULLO nodes (the exact core the app ships) on simulated Wi-Fi Direct islands.
+ *
+ * Simulated: positions, Wi-Fi reach, the time a phone needs to join a group, frame latency and walking.
+ * Real: Node, envelopes, journeys, receipts, payments, candies and every island decision ([Islands.decide]).
+ */
+class World(
+    seed: Long = 1,
+    val wifiRangeM: Double = 80.0,
+    val connectMs: Long = 3_000,
+    val latencyMs: Long = 30,
+    val tickMs: Long = 100,
+    val areaM: Double = 400.0
+) {
+    private val random = Random(seed)
+    var now = 0L; private set
+
+    inner class Phone(val name: String, var x: Double, var y: Double, val village: String, val speed: Double) {
+        val identity = Identity.generate(name)
+        val id = identity.nodeId.toHex().take(16)
+        val node = Node(identity, MemoryStore(), 60_000) { now }
+        var island: String? = null
+        var host = false
+        var busyUntil = 0L
+        var target: String? = null
+        var targetIsFerry = false
+        var ferryHome: String? = null
+        var ferryBackAt: Long? = null
+        var ferriedTurn = -1L
+        var tx = x; var ty = y
+        val connected get() = now >= busyUntil
+    }
+
+    private val phones = LinkedHashMap<String, Phone>()
+    private val byId = HashMap<String, Phone>()
+    private class Delivery(val at: Long, val to: Phone, val from: Phone, val frame: ByteArray)
+    private val inFlight = ArrayList<Delivery>()
+
+    // What happened, for the report.
+    private val sentAt = HashMap<String, Long>()
+    private val deliveredAt = HashMap<String, Long>()
+    private val crossIsland = HashSet<String>()
+    var ferryTrips = 0; private set
+    private val carries = ArrayList<Carry>()
+
+    /** A confirmed carry, with what the economy needs: who, for whom, and how many alternatives there were. */
+    class Carry(val carrier: String, val origin: String, val destination: String, val alternatives: Int, val village: String)
+
+    fun addPhone(name: String, x: Double, y: Double, village: String, speed: Double = 0.0): String {
+        val p = Phone(name, x, y, village, speed)
+        phones[name] = p; byId[p.id] = p
+        return name
+    }
+
+    fun befriendAll() {
+        for (a in phones.values) for (b in phones.values) if (a !== b) a.node.store.saveContact(b.identity.card())
+    }
+
+    fun send(from: String, to: String, text: String): String {
+        val a = phones.getValue(from); val b = phones.getValue(to)
+        val id = a.node.send(b.identity.card(), text)
+        sentAt[id] = now
+        if (a.island != b.island) crossIsland += id
+        return id
+    }
+
+    fun phonesOf(village: String) = phones.values.filter { it.village == village }.map { it.name }
+
+    private fun dist(a: Phone, b: Phone) = hypot(a.x - b.x, a.y - b.y)
+    private fun sees(a: Phone, b: Phone) = a !== b && dist(a, b) <= wifiRangeM
+
+    private fun members(h: Phone) = phones.values.filter { it.island == h.id && !it.host && it.connected && sees(it, h) }
+
+    private fun hostOf(p: Phone): Phone? = p.island?.let { byId[it] }?.takeIf { it.host && it !== p }
+
+    private fun cartel(p: Phone) = Cartel(p.id, p.name, p.island ?: "", if (p.host) "DIRECT-CH-${p.id.take(6)}" else "", if (p.host) "clave" else "",
+        p.host, if (p.host) members(p).map { it.id.take(8) } else emptyList())
+
+    /** Islands as they are now: island id → names of the host and its connected members. */
+    fun islands(): Map<String, List<String>> = phones.values.filter { it.host }.associate { h -> h.id to (listOf(h.name) + members(h).map { it.name }) }
+
+    fun membersOfSomeIsland(): List<String> = islands().values.maxBy { it.size }
+
+    /** For probes: who each phone is, where it stands and which islands it can see. */
+    fun debug(): List<String> = phones.values.map { p ->
+        val seen = phones.values.filter { sees(p, it) }
+        val hostsSeen = seen.filter { it.host && it.island != p.island }.map { it.name }
+        val strangers = seen.filter { !it.host && it.island != null && it.island != p.island }.map { it.name }
+        "${p.name} x=${p.x.toInt()} isla=${p.island?.let { byId[it]?.name }} host=${p.host} ve-anfitriones=$hostsSeen ve-extraños=$strangers"
+    }
+
+    fun run(ms: Long) {
+        val end = now + ms
+        while (now < end) { now += tickMs; tick() }
+    }
+
+    private fun tick() {
+        walk()
+        // Links break when phones walk apart or the host stops hosting.
+        for (p in phones.values) if (!p.host && p.connected && p.island != null) {
+            val h = hostOf(p)
+            if (h == null || !sees(p, h)) p.island = null
+        }
+        for ((i, p) in phones.values.withIndex()) {
+            finishConnect(p)
+            if ((now / tickMs + i) % (Islands.FERRY_TURN_MS / 12 / tickMs) == 0L) decide(p) // every 5 s, staggered
+            p.node.tick()
+            for (f in p.node.drainOutbox()) emit(p, f)
+            collect(p, emptyList())
+        }
+        deliver()
+    }
+
+    private fun decide(p: Phone) {
+        if (!p.connected || p.ferryBackAt != null) return
+        val visible = phones.values.filter { sees(p, it) }.map { cartel(it) }
+        val roster = if (p.host) members(p).map { it.id.take(8) } else hostOf(p)?.let { h -> members(h).map { it.id.take(8) } } ?: emptyList()
+        when (val a = Islands.decide(p.id, IslandState(p.island, p.host, roster, p.ferriedTurn), visible, now)) {
+            IslandAction.Stay -> Unit
+            IslandAction.Host -> { p.host = true; p.island = p.id }
+            is IslandAction.Join -> connect(p, a.island, ferry = false)
+            is IslandAction.Ferry -> { p.ferryHome = p.island; p.ferriedTurn = Islands.turnOf(now); ferryTrips++; connect(p, a.island, ferry = true) }
+        }
+    }
+
+    private fun connect(p: Phone, island: String, ferry: Boolean) {
+        p.host = false; p.island = null; p.target = island; p.targetIsFerry = ferry; p.busyUntil = now + connectMs
+    }
+
+    private fun finishConnect(p: Phone) {
+        val t = p.target
+        if (t != null && p.connected) {
+            p.target = null
+            val h = byId[t]
+            // The host keeps the door: the last seat is only for ferries.
+            val seats = if (p.targetIsFerry) Islands.MAX_MEMBERS else Islands.MAX_MEMBERS - Islands.FERRY_SEATS
+            p.island = if (h != null && h.host && sees(p, h) && members(h).size < seats) t else null
+            if (p.ferryHome != null && p.ferryBackAt == null) p.ferryBackAt = now + 20_000
+        }
+        val back = p.ferryBackAt
+        if (back != null && now >= back && p.connected) {
+            val home = p.ferryHome
+            p.ferryHome = null; p.ferryBackAt = null
+            if (home != null) connect(p, home, ferry = false)
+        }
+    }
+
+    // A frame goes over the island links: a member to its host, a host to all its members.
+    private fun emit(p: Phone, frame: ByteArray, except: Phone? = null) {
+        if (!p.connected) return
+        val targets = if (p.host) members(p) else listOfNotNull(hostOf(p)?.takeIf { sees(p, it) })
+        for (t in targets) if (t !== except) inFlight += Delivery(now + latencyMs, t, p, frame)
+    }
+
+    private fun deliver() {
+        val due = inFlight.filter { it.at <= now }
+        inFlight.removeAll(due.toSet())
+        for (d in due) {
+            if (!d.to.connected) continue
+            // The host repeats island messages (heartbeats, plaza, cards) to everyone; letters go through its node,
+            // which re-shouts them with its own hop record, so the host earns its candy like any carrier.
+            if (d.to.host && d.frame.size > 3 && d.frame[3].toInt() == Packet.KIND_LINK) emit(d.to, d.frame, except = d.from)
+            collect(d.to, d.to.node.onFrame(d.frame))
+        }
+    }
+
+    private fun collect(p: Phone, events: List<NodeEvent>) {
+        for (e in events) when (e) {
+            is NodeEvent.LetterReceived -> {
+                deliveredAt.putIfAbsent(e.msgId, now)
+                val origin = e.from.nodeId.toHex().take(16)
+                for (carrier in e.journey) {
+                    val c = byId[carrier.take(16)] ?: continue
+                    val island = c.island
+                    val alternatives = phones.values.count { it !== c && it.island == island && it.island != null } // others who could have carried it here
+                    carries += Carry(c.name, byId[origin]?.name ?: "?", p.name, alternatives, c.village)
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    private fun walk() {
+        for (p in phones.values) {
+            if (p.speed <= 0) continue
+            if (hypot(p.tx - p.x, p.ty - p.y) < 2) { p.tx = random.nextDouble() * areaM; p.ty = random.nextDouble() * 60 }
+            val d = hypot(p.tx - p.x, p.ty - p.y); val s = minOf(d, p.speed * tickMs / 1000.0)
+            p.x += (p.tx - p.x) / d * s; p.y += (p.ty - p.y) / d * s
+        }
+    }
+
+    class Report(
+        val sent: Int, val delivered: Int, val deliveryRatio: Double,
+        val crossSent: Int, val crossDelivered: Int,
+        val latencyP50s: Double, val latencyP95s: Double,
+        val ferryTrips: Int, val candies: Map<String, Int>, val islands: Map<String, List<String>>, val carries: List<Carry>
+    )
+
+    fun report(): Report {
+        val lat = sentAt.keys.mapNotNull { id -> deliveredAt[id]?.let { (it - sentAt.getValue(id)) / 1000.0 } }.sorted()
+        fun pct(q: Double) = if (lat.isEmpty()) 0.0 else lat[minOf(lat.size - 1, (q * lat.size).toInt())]
+        return Report(
+            sentAt.size, sentAt.keys.count { it in deliveredAt }, if (sentAt.isEmpty()) 0.0 else sentAt.keys.count { it in deliveredAt }.toDouble() / sentAt.size,
+            crossIsland.size, crossIsland.count { it in deliveredAt }, pct(0.5), pct(0.95), ferryTrips,
+            phones.values.associate { it.name to it.node.candies }, islands().mapKeys { (k, _) -> byId[k]?.name ?: k }, carries.toList()
+        )
+    }
+}

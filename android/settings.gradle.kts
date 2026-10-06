@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "chamullo"
-include(":core", ":app")
+include(":core", ":app", ":simulator")

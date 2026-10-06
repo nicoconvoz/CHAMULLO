@@ -33,7 +33,8 @@ data class Cartel(
     }
 }
 
-data class IslandState(val island: String?, val host: Boolean, val members: List<String>)
+/** [ferriedTurn]: the ferry turn in which this phone already made its trip (one trip per turn). */
+data class IslandState(val island: String?, val host: Boolean, val members: List<String>, val ferriedTurn: Long = -1)
 
 sealed interface IslandAction {
     data object Stay : IslandAction
@@ -44,11 +45,18 @@ sealed interface IslandAction {
 
 object Islands {
     const val MAX_MEMBERS = 7
+    // One seat stays free for visiting ferries: newcomers join only while there are two or more seats left.
+    const val FERRY_SEATS = 1
     const val FERRY_TURN_MS = 60_000L
+
+    fun turnOf(now: Long) = now / FERRY_TURN_MS
 
     fun decide(me: String, state: IslandState, carteles: List<Cartel>, now: Long): IslandAction {
         val hosts = carteles.filter { it.host && it.island != state.island && it.ssid.isNotEmpty() }
-        val withRoom = hosts.filter { it.roster.size < MAX_MEMBERS }
+        // People of another island whose host nobody here can see: the border between two islands.
+        val visibleHosts = carteles.filter { it.host }.map { it.island }.toSet()
+        val strangers = carteles.filter { !it.host && it.island.isNotEmpty() && it.island != state.island && it.island !in visibleHosts }
+        val withRoom = hosts.filter { it.roster.size < MAX_MEMBERS - FERRY_SEATS }
         val best = withRoom.maxWithOrNull(compareBy<Cartel> { it.roster.size }.thenByDescending { it.island })
 
         // Not on any island: join the biggest one with room, or found my own.
@@ -57,15 +65,18 @@ object Islands {
         if (state.host) {
             // A lonely host merges into a neighbor: a bigger island, or another lonely one with a smaller id.
             if (state.members.isNotEmpty() || best == null) return IslandAction.Stay
+            if (strangers.isNotEmpty()) return IslandAction.Stay // a bridge keeps its post at the border
             val merge = best.roster.isNotEmpty() || best.island < me
             return if (merge) IslandAction.Join(best.island, best.ssid, best.passphrase) else IslandAction.Stay
         }
 
         // A member: in each turn one member of the roster is the ferry to a neighboring island.
-        val other = hosts.minByOrNull { it.island } ?: return IslandAction.Stay
+        // A bridge: I see people of another island but not its host, so I found a small island at the border.
+        val other = hosts.filter { it.roster.size < MAX_MEMBERS }.minByOrNull { it.island } ?: return if (strangers.isNotEmpty()) IslandAction.Host else IslandAction.Stay
         val roster = state.members.sorted()
         if (roster.isEmpty()) return IslandAction.Stay
-        val turn = ((now / FERRY_TURN_MS) % roster.size).toInt()
+        if (state.ferriedTurn == turnOf(now)) return IslandAction.Stay // one trip per turn
+        val turn = (turnOf(now) % roster.size).toInt()
         return if (roster[turn].take(8) == me.take(8)) IslandAction.Ferry(other.island, other.ssid, other.passphrase) else IslandAction.Stay
     }
 }

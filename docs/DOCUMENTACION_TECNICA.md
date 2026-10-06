@@ -1,6 +1,6 @@
 # CHAMULLO — Documentación técnica
 
-Versión del documento: 9 · Estado del código: app 0.4.1 (octubre 2026)
+Versión del documento: 10 · Estado del código: app 0.4.2 (octubre 2026)
 
 > Este documento describe **lo que está construido y funcionando hoy**. El diseño completo de la red
 > (identidad, sobre, recibos, economía, routing, interfaz de aire) está en [`docs/specs/`](specs/). Cuando el
@@ -228,6 +228,7 @@ del otro, y se muestra un solo aviso por persona.
 | Conjunto | Cantidad | Qué cubre |
 |---|---|---|
 | `android/core` (JUnit 5) | 79 | Vectores tweetnacl, identidad y frase, TLV y varints, sobres, tarjetas, plaza, llaves de carretera, micros con comodines, nodo en un "pueblo de prueba" (saltos, bolsillos, reintentos, una carretera por par, pasajero ocupado), saludo, **decisiones de islas y turnos del ferry** |
+| `android/simulator` (gemelo digital) | 7 | El núcleo real sobre islas Wi-Fi simuladas: formación de islas, ferry entre islas, recibos y caramelos; economía (escasez, diversidad, Corte, bolsa diaria) |
 | `sim/` (`node --test`) | 28 | Reglas de ruteo de la spec 05: río, lago, eco de barrio, privacidad, bolsillos, ninguna pérdida silenciosa |
 
 La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo con la caja negra**.
@@ -250,6 +251,7 @@ La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo
 | 0.2.1 | Saludo de un solo grito; la carretera abre solo con un vecino estable | "Vecinos: 0": la carretera abierta de entrada le robaba antena al grito |
 | 0.2.2 | Varios megáfonos a la vez en chips viejos | Lo que gritaba un chip viejo llegaba "a veces": cada micro salía una vez o ninguna |
 | 0.2.3 | Una sola carretera por par de vecinos; pasajero ocupado; cierre de carreteras vacías; aviso de versión cada 30 min | El Capitán: "si uno abre, el otro se conecta; ¿para qué abrir las dos?" |
+| 0.4.2 | Islas puente, asiento libre para el ferry, el anfitrión controla la puerta, un viaje de ferry por turno; el anfitrión cobra como cartero | Hallazgos del **gemelo digital** |
 | 0.4.1 | **Clave de firma propia** (`CN=CHAMULLO, O=nicoconvoz`) | Dejar la clave de depuración. Requiere desinstalar una vez y recuperar con las 16 palabras |
 | 0.4.0 | **Recibos con la semilla y caramelos**; ICEBREAK como servicio | Proof of Relay: cobrar solo lo que se puede probar |
 | 0.3.1 | Saludo secreto con firma en cada caño de la isla; bolsillos que sobreviven al reinicio | Intrusos con la llave del cartel; cartas perdidas al cerrar la app |
@@ -279,6 +281,28 @@ CHAMULLO es la red; los servicios viajan por ella. Cada carta lleva su **servici
 En la pantalla de inicio, **Servicios** muestra La Plaza e **ICEBREAK** como uno más. ICEBREAK hoy se abre en su web; el
 siguiente paso es que hable por cartas CHAMULLO con su propio nombre de servicio.
 
+## 12 quater. El gemelo digital (`android/simulator`)
+
+Simulador que corre **el núcleo real de la app** (`Node`, sobres, semilla, recibos, pagos, `Islands.decide`) sobre una radio
+Wi-Fi simulada: alcance 80 m, 3 s para sumarse a una isla, 30 ms por trama, celulares que caminan. Encima calcula la
+**economía de la spec 04**: escasez entre ×0,5 y ×3, diversidad con rendimiento decreciente, Rey y Nobleza por pueblo y
+nacional, y una bolsa diaria fija repartida por puntaje.
+
+```bash
+cd android
+./gradlew :simulator:run
+```
+
+Escribe el informe en [`docs/SIMULACION.md`](SIMULACION.md).
+
+| Escenario | Cartas | Hallazgo |
+|---|---|---|
+| Plaza llena (20) | 30/30 | Más de 7 no entran en una isla: se forman varias y el ferry las une |
+| Dos pueblos de 8 | 20/20 | Antes 0/20: islas llenas no dejaban entrar al ferry → **asiento libre** y el anfitrión controla la puerta |
+| Ruta de tres pueblos | 20/20 | Antes 0/20: nadie veía al anfitrión ajeno → **islas puente**. El **Rey nacional sale del pueblo del medio**, por escasez |
+
+Límite: el gemelo prueba **el diseño**. Las mañas reales de Wi-Fi Direct en cada celular solo se ven en campo.
+
 ## 13. Islas (0.3.0)
 
 Rediseño del Capitán después de las pruebas de campo: **el Bluetooth complicaba todo y transmitía muy poco**. En
@@ -300,7 +324,9 @@ Rediseño del Capitán después de las pruebas de campo: **el Bluetooth complica
 1. **Sin isla:** me sumo a la isla con lugar que tenga más miembros (desempate: id menor). Si no hay, **fundo** la mía.
 2. **Anfitrión con miembros:** me quedo; la isla depende de mí.
 3. **Anfitrión solo:** me sumo a una isla vecina si es más grande o si es otra isla sola con id menor que el mío. Así dos anfitriones solos se fusionan y nunca se cruzan.
-4. **Miembro:** si hay otra isla a la vista, el turno de ferry rota por la lista ordenada de miembros (`(hora / 60 s) mod miembros`). Al de turno le toca **Ferry**; los demás se quedan.
+4. **Puente:** un miembro que ve gente de otra isla pero no a su anfitrión **funda una isla puente** en el borde; un anfitrión puente solo no se fusiona de vuelta.
+5. **Asiento libre:** los nuevos se suman hasta 6 miembros; el 7.º lugar es para ferrys. El anfitrión controla la puerta: al que entra de más le avisa "llena".
+6. **Miembro:** si hay otra isla a la vista, el turno de ferry rota por la lista ordenada de miembros (`(hora / 60 s) mod miembros`). Al de turno le toca **Ferry**, **un viaje por turno**; los demás se quedan.
 
 ### 13.3 Cómo viaja una carta entre islas
 
