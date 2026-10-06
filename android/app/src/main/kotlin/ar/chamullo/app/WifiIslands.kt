@@ -152,6 +152,7 @@ class WifiIslands(
             if (!on) {
                 FieldLog.add("ISLA", "el Wi-Fi se apagó: sin Wi-Fi no hay islas")
                 lastError = "el Wi-Fi está apagado: prendelo (no hace falta conectarse a ninguna red)"
+                rejoin = if (!host) island else null; rejoinTries = 0 // a member looks for its island first when the Wi-Fi is back
                 closeLinks(); unbridge(); island = null; host = false; busy = false; carteles.clear(); members.clear(); ferrying = null
                 seenSince.clear(); seenLast.clear()
             } else {
@@ -163,6 +164,62 @@ class WifiIslands(
             }
             onWifi(on)
         }
+    }
+
+    /*
+     * ---------- experiment: my own local Wi-Fi (Camino y Carretera §6.12) ----------
+     * Field test 0.9.4 on a Moto E7 Plus: the app can start it by itself and the home Wi-Fi lets go, but Android names it
+     * at random and turns Wi-Fi Direct off while it is on. Not offered in the app; kept to try on other phones.
+     */
+
+    private var reservation: WifiManager.LocalOnlyHotspotReservation? = null
+    /** The local Wi-Fi I hold in "fuera de casa": its name and key, chosen by Android. */
+    @Volatile var awayNet: Pair<String, String>? = null; private set
+    @Volatile var awayError: String? = null; private set
+
+    /** Turns "fuera de casa" on or off: a local-only hotspot the app can start by itself, no Internet, no questions. */
+    fun setAway(on: Boolean) = handler.post {
+        if (!on) { stopAway(); return@post }
+        if (reservation != null) return@post
+        val w = wifi ?: return@post
+        runCatching {
+            w.startLocalOnlyHotspot(object : WifiManager.LocalOnlyHotspotCallback() {
+                override fun onStarted(r: WifiManager.LocalOnlyHotspotReservation) {
+                    reservation = r
+                    @Suppress("DEPRECATION")
+                    val net = if (Build.VERSION.SDK_INT >= 30) r.softApConfiguration.let { (it.ssid ?: "") to (it.passphrase ?: "") }
+                        else r.wifiConfiguration?.let { (it.SSID ?: "").trim('"') to (it.preSharedKey ?: "").trim('"') } ?: ("" to "")
+                    awayNet = net; awayError = null
+                    FieldLog.add("ISLA", "fuera de casa: armé mi Wi-Fi propio ${net.first}")
+                    publishCartel()
+                    handler.postDelayed({ logAwayState() }, 3_000)
+                }
+                override fun onStopped() { reservation = null; awayNet = null; FieldLog.add("ISLA", "fuera de casa: Android apagó mi Wi-Fi propio"); publishCartel() }
+                override fun onFailed(reason: Int) {
+                    reservation = null; awayNet = null
+                    awayError = when (reason) {
+                        ERROR_TETHERING_DISALLOWED -> "este celular no deja armar un Wi-Fi propio"
+                        ERROR_INCOMPATIBLE_MODE -> "apagá la Zona Wi-Fi para usar Fuera de casa"
+                        else -> "no se pudo armar el Wi-Fi propio (código $reason)"
+                    }
+                    FieldLog.add("ISLA", "fuera de casa: $awayError")
+                }
+            }, handler)
+        }.onFailure { awayError = "no se pudo armar el Wi-Fi propio: ${it.message}"; FieldLog.add("ISLA", "fuera de casa: ${it.message}") }
+    }
+
+    private fun stopAway() {
+        runCatching { reservation?.close() }
+        if (reservation != null) FieldLog.add("ISLA", "modo normal: apago mi Wi-Fi propio")
+        reservation = null; awayNet = null
+        publishCartel()
+    }
+
+    // What the field needs to know: does Wi-Fi Direct live on beside my own Wi-Fi, and did the home Wi-Fi let go?
+    private fun logAwayState() {
+        val ch = channel ?: return
+        @Suppress("DEPRECATION") val sta = wifi?.connectionInfo?.ssid
+        p2p?.requestGroupInfo(ch) { g -> FieldLog.add("ISLA", "fuera de casa: isla Wi-Fi Direct ${if (g != null) "viva (${g.networkName})" else "caída"} · Wi-Fi de casa: ${sta ?: "ninguno"}") }
     }
 
     /* ---------- carteles ---------- */
@@ -267,11 +324,13 @@ class WifiIslands(
     // Before founding an island, look around a while: one founds, the other (still looking) joins it. Each phone waits a
     // different time, by its id, so two phones that start together do not found at the same moment.
     // It starts again whenever the Wi-Fi comes back or my island falls (field test 0.9.1: after the Wi-Fi came back both
-    // phones founded at once and never met). A phone connected to a Wi-Fi network founds first: in the field it saw
-    // nobody, so waiting does not help it, while a free phone looks longer and joins it (Camino y Carretera §6.9).
+    // phones founded at once and never met, Camino y Carretera §6.9). A phone on a home Wi-Fi does not found first any
+    // more: it joins a contact's island by its name, because its home Wi-Fi drags any island it holds (§6.12).
     @Volatile private var startedAt = System.currentTimeMillis()
     private val spreadMs = me.take(4).toLong(16) % FOUND_SPREAD_MS
-    private fun lookFirstMs() = if (onWifiNetwork()) FOUND_CONNECTED_MS else FOUND_AFTER_MS + spreadMs
+    private fun lookFirstMs() = FOUND_AFTER_MS + spreadMs
+    /** The islands of my contacts (§6.12), from the service: where a phone on a home Wi-Fi goes looking by name. */
+    @Volatile var known: List<String> = emptyList()
 
     @Suppress("DEPRECATION")
     private fun onWifiNetwork() = runCatching { (wifi?.connectionInfo?.networkId ?: -1) != -1 }.getOrDefault(false)
@@ -284,14 +343,15 @@ class WifiIslands(
             val now = System.currentTimeMillis()
             carteles.values.removeAll { now - it.second > CARTEL_TTL_MS }
             tendPipes(now)
-            if (!busy && ferrying == null && !wifiOff) {
+            if (!busy && ferrying == null && !wifiOff && !tryRejoin()) {
                 readScan()
                 updateSeen(now)
                 checkAlive(now)
                 val a = Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn, bridgingTo, canBridge,
-                    HashMap(seenSince)),
+                    HashMap(seenSince), onWifiNetwork(), known, startedAt, hostSince),
                     carteles.values.map { it.first }, now, myCell, stuck)
                 if (a == IslandAction.Host && island == null && now - startedAt < lookFirstMs()) Unit // still looking around
+                else if (a is IslandAction.Join && blindPaused(a, now)) Unit // one blind try at a time, never in a loop
                 else act(a)
             }
             handler.postDelayed(this, DECIDE_MS)
@@ -329,6 +389,7 @@ class WifiIslands(
     private fun join(a: IslandAction.Join, then: (() -> Unit)? = null) {
         val ch = channel ?: return
         busy = true
+        piped = false
         FieldLog.add("ISLA", "me sumo a la isla ${a.island.take(6)}")
         p2p!!.removeGroup(ch, object : WifiP2pManager.ActionListener {
             override fun onSuccess() = connect()
@@ -337,8 +398,11 @@ class WifiIslands(
                 closeLinks(); host = false; members.clear()
                 val config = WifiP2pConfig.Builder().setNetworkName(a.ssid).setPassphrase(a.passphrase).build()
                 p2p.connect(ch, config, object : WifiP2pManager.ActionListener {
-                    override fun onSuccess() { island = a.island; busy = false; publishCartel(); handler.postDelayed(discoverLoop, 2_000); then?.invoke() }
-                    override fun onFailure(reason: Int) { busy = false; island = null; lastError = "no pude sumarme (código $reason)"; FieldLog.add("ISLA", "sumarme falló, código $reason") }
+                    override fun onSuccess() { island = a.island; joinedAt = System.currentTimeMillis(); busy = false; publishCartel(); handler.postDelayed(discoverLoop, 2_000); then?.invoke() }
+                    override fun onFailure(reason: Int) {
+                        busy = false; island = null; lastError = "no pude sumarme (código $reason)"; FieldLog.add("ISLA", "sumarme falló, código $reason")
+                        p2p.cancelConnect(ch, null) // leave nothing half-started for the next try
+                    }
                 })
             }
         })
@@ -414,7 +478,7 @@ class WifiIslands(
             val ch = channel ?: return
             p2p!!.requestConnectionInfo(ch) { info ->
                 if (info == null || !info.groupFormed) {
-                    if (!host && links.isNotEmpty()) { FieldLog.add("ISLA", "me quedé sin isla"); closeLinks(); if (ferrying == null) island = null }
+                    if (!host && island != null && !busy) memberLost("me quedé sin isla")
                     if (host) islandLost("Android desarmó mi isla")
                     return@requestConnectionInfo
                 }
@@ -446,6 +510,53 @@ class WifiIslands(
 
     @Volatile private var connecting = false
     private var lastRepair = 0L
+    private var joinedAt = 0L
+
+    // Field test 0.9.3 (Camino y Carretera §6.11): the host's island follows the channel of its home Wi-Fi; when that
+    // Wi-Fi changes network or channel, the whole island moves and its members fall off. A member that falls off looks
+    // for the same island first, by its name: Android searches every channel and finds it wherever it moved.
+    private var rejoin: String? = null
+    private var rejoinTries = 0
+    /** Whether my current membership ever opened a pipe with its host. */
+    @Volatile private var piped = false
+
+    private fun memberLost(why: String) {
+        if (ferrying != null || host) return
+        val was = island
+        closeLinks(); island = null
+        // Only an island I really was in is worth looking for again; a blind try that never opened a pipe is not (§6.12).
+        if (piped) {
+            FieldLog.add("ISLA", "$why${if (was != null) ": busco de nuevo la isla ${was.take(6)}" else ""}")
+            rejoin = was; rejoinTries = 0
+            startedAt = System.currentTimeMillis() // if it is not found, look around before founding
+        } else {
+            FieldLog.add("ISLA", "$why: la isla ${was?.take(6) ?: ""} no contestó")
+            channel?.let { ch -> p2p?.cancelConnect(ch, null) } // a try still pending would answer BUSY to the next one
+        }
+        piped = false
+    }
+
+    // A blind try (an island I cannot see) is made once per [Islands.BLIND_TRY_MS]: a failed one must not become a loop.
+    // Field test 0.9.4: retrying every 5 s only got BUSY back and upset the phone's Wi-Fi.
+    private var lastBlindAt = 0L
+    private fun blindPaused(a: IslandAction.Join, now: Long): Boolean {
+        val visible = carteles.values.any { it.first.host && it.first.island == a.island }
+        if (visible) return false
+        if (now - lastBlindAt < Islands.BLIND_TRY_MS) return true
+        lastBlindAt = now
+        return false
+    }
+
+    /** True if this tick went to looking for my lost island again. */
+    private fun tryRejoin(): Boolean {
+        val target = rejoin ?: return false
+        if (island != null || busy || ferrying != null) return false
+        if (rejoinTries >= REJOIN_TRIES) { FieldLog.add("ISLA", "no encontré la isla ${target.take(6)}: miro alrededor"); rejoin = null; return false }
+        rejoinTries++
+        val ssid = Islands.SSID_PREFIX + target
+        join(IslandAction.Join(target, ssid, Islands.passphraseFor(ssid)))
+        return true
+    }
 
     private fun connectTo(owner: InetAddress) {
         if (connecting) return
@@ -456,6 +567,7 @@ class WifiIslands(
                     val s = Socket()
                     s.connect(InetSocketAddress(owner, PORT), 4_000)
                     Link(s).apply { start(); if (ferrying != null) send(FERRY) }
+                    rejoin = null; piped = true
                     FieldLog.add("ISLA", "en la isla: caño abierto con el anfitrión")
                     return
                 }
@@ -479,7 +591,7 @@ class WifiIslands(
             if (info != null && info.groupFormed && !info.isGroupOwner && owner != null) {
                 FieldLog.add("ISLA", "sigo en la isla pero sin caño: lo vuelvo a abrir")
                 Thread { connectTo(owner) }.apply { isDaemon = true }.start()
-            }
+            } else if (System.currentTimeMillis() - joinedAt > JOIN_GRACE_MS) memberLost("no quedé adentro de la isla")
         }
     }
 
@@ -545,6 +657,7 @@ class WifiIslands(
         runCatching { context.unregisterReceiver(connectionReceiver) }
         runCatching { context.unregisterReceiver(scanReceiver) }
         runCatching { context.unregisterReceiver(stateReceiver) }
+        stopAway()
         closeLinks()
         runCatching { server?.close() }; server = null
         channel?.let { ch -> runCatching { p2p?.removeGroup(ch, null) }; publishedService?.let { runCatching { p2p?.removeLocalService(ch, it, null) } } }
@@ -659,7 +772,6 @@ class WifiIslands(
         const val DISCOVER_MS = 60_000L
         const val FOUND_AFTER_MS = 30_000L
         const val FOUND_SPREAD_MS = 30_000L
-        const val FOUND_CONNECTED_MS = 10_000L
         const val DECIDE_MS = 5_000L
         const val CARTEL_TTL_MS = 60_000L
         const val SEEN_GRACE_MS = 180_000L
@@ -672,6 +784,8 @@ class WifiIslands(
         const val LINK_BEAT_MS = 5_000L
         const val LINK_SILENT_MS = 20_000L
         const val REPAIR_MS = 10_000L
+        const val REJOIN_TRIES = 3
+        const val JOIN_GRACE_MS = 30_000L
         private val FULL = "CHFUL".toByteArray()
         private val SPEED = "CHSPD".toByteArray()
         private val SPEED_START = "CHSPS".toByteArray()

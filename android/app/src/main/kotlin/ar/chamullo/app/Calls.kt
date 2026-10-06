@@ -167,7 +167,7 @@ object Calls {
         val c = current ?: return
         val now = now()
         if (c.session.wantsRing(now)) send(c, CallMsg.RING, MediaRoute.ring(c.session.video, islands?.islandIp()))
-        if (c.session.state == CallSession.State.ACTIVE && now - c.lastPing >= CallSession.PING_MS) { c.lastPing = now; send(c, CallMsg.PING, c.route.pingPayload(now)) }
+        if (c.session.state == CallSession.State.ACTIVE && now - c.lastPing >= CallSession.PING_MS) { c.lastPing = now; send(c, CallMsg.PING, c.route.pingPayload(now, islands?.islandIp())) }
         c.session.tick(now)
         // Tell the other side too, so its phone stops ringing or calling.
         if (c.session.state == CallSession.State.ENDED) end(c, sendHangup = true)

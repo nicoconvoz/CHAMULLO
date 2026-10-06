@@ -153,6 +153,44 @@ Una isla **es** la red propia de CHAMULLO: un grupo Wi-Fi Direct (`DIRECT-CH-xxx
 | Reparar | Un miembro que sigue en el grupo Wi-Fi Direct pero no tiene caño con el anfitrión abre uno nuevo (como mucho cada `REPAIR_MS = 10 s`), sin esperar el aviso de Android |
 | Llamar | La llamada espera hasta 20 s un "está sonando" (antes 12) y, si no llega, dice "no contesta… probá de nuevo", sin afirmar que no está en la isla |
 
+### 6.11 La isla se muda con el Wi-Fi de su anfitrión (0.9.4)
+
+**Lo que pasó:** el celular del Capitán, anfitrión de la isla, se pasó de su red (canal 5) a otra (canal 1). Android registró `CTRL-EVENT-CHANNEL-SWITCH freq=2412`: **la isla entera se mudó de canal detrás del Wi-Fi**, porque el celular tiene una sola antena. Mito, miembro, se cayó; su app borró la isla y fundó otra al instante, y no se volvieron a encontrar.
+
+| Pieza | Regla |
+|---|---|
+| Volver a la misma isla | Un miembro que se cae, o que vuelve de un Wi-Fi apagado, primero busca **su** isla por el nombre (`DIRECT-CH-xxxxxx`) y la clave que sale del nombre. Android barre todos los canales y la encuentra aunque se haya mudado. Hasta `REJOIN_TRIES = 3` intentos |
+| Si no está | Recién entonces mira alrededor antes de fundar (§6.9) |
+| Sumarse a medias | Si un miembro se anotó para sumarse pero a los `JOIN_GRACE_MS = 30 s` no quedó adentro del grupo, cuenta como caído y vuelve a buscar |
+| Ya está | El caño abierto con el anfitrión da por terminada la búsqueda |
+
+- **Límite conocido:** un anfitrión conectado a un Wi-Fi arrastra su isla cada vez que ese Wi-Fi cambia de red o de canal. Es el costo de §6.9 (el conectado funda porque no ve a nadie). Los miembros ahora la siguen; con muchos miembros, conviene que el anfitrión sea un celular sin Wi-Fi de casa.
+
+### 6.11 La isla se muda con el Wi-Fi de su anfitrión (0.9.4)
+
+**Lo que pasó:** el celular del Capitán, anfitrión de la isla, se pasó de su red (canal 5) a otra (canal 1). Android registró `CTRL-EVENT-CHANNEL-SWITCH freq=2412`: **la isla entera se mudó de canal detrás del Wi-Fi**. Un celular con una sola antena solo puede estar en un canal a la vez, y el Wi-Fi de casa y el Wi-Fi Direct comparten esa antena. Mito, miembro, se cayó; su app borró la isla y fundó otra al instante.
+
+| Pieza | Regla |
+|---|---|
+| Volver a la misma isla | Un miembro que se cae, o que vuelve de un Wi-Fi apagado, primero busca **su** isla por el nombre (`DIRECT-CH-xxxxxx`) y la clave que sale del nombre. Android barre todos los canales y la encuentra aunque se haya mudado. Hasta `REJOIN_TRIES = 3` intentos |
+| Solo si estuvo de verdad | Se vuelve a buscar una isla si en ella llegó a abrirse el caño con el anfitrión; un intento a ciegas que no contestó no se repite |
+| Sumarse a medias | Si a los `JOIN_GRACE_MS = 30 s` de anotarse no quedó adentro del grupo, cuenta como caído |
+| Si no está | Recién entonces mira alrededor antes de fundar (§6.9) |
+
+### 6.12 El celular con Wi-Fi de casa no sostiene la isla (0.9.4)
+
+El que está colgado de un Wi-Fi de casa arrastra cualquier isla que sostenga cada vez que ese Wi-Fi cambia de red o de canal, y en el campo no veía a nadie. Por eso la isla la sostiene un celular libre:
+
+| Pieza | Regla |
+|---|---|
+| Buscar por nombre | Sin isla, un celular conectado a una red Wi-Fi no funda: se suma **a ciegas** a la isla de un contacto, por su nombre (`DIRECT-CH-` + los 6 primeros hex del id del contacto) y la clave que sale del nombre. No necesita ver su cartel. Prueba un contacto cada `BLIND_TRY_MS = 35 s` |
+| Si nadie contesta | A los `BLIND_GIVEUP_MS = 2 min` funda la suya, como antes |
+| Anfitrión solo | Si igual quedó de anfitrión, solo y con Wi-Fi de casa, cada `BLIND_RETRY_MS = 3 min` vuelve a probar las islas de sus contactos. Con miembros, nunca deja la isla |
+| El libre | Un celular sin Wi-Fi de casa funda como siempre (§6.9): su isla queda en un canal que no cambia |
+
+- Reemplaza la regla de 0.9.2 ("funda primero el conectado"), que hacía que la isla dependiera justo del que salta.
+- **Experimento descartado:** un Wi-Fi propio de la app (*hotspot solo local*). En el Moto E7 Plus la app lo prende sola y el Wi-Fi de casa se suelta, pero Android le pone un nombre al azar (`AndroidShare_4539`), apaga el Wi-Fi Direct mientras está prendido y los demás necesitarían un canal extra (Bluetooth) para saber cómo entrar. El código quedó en `WifiIslands.setAway`, sin botón en la app.
+
 ## 7. Llamadas y videollamadas en la isla (0.8.0)
 
 Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en celular. Por eso anda **solo dentro de la isla** (o por un puente fijo), donde todo está a uno o dos saltos por Wi-Fi Direct.
@@ -165,7 +203,13 @@ Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en
 | Atender | `ANSWER`, `REJECT`, `BUSY` (ya estoy en otra), `HANGUP` |
 | Voz | `AUDIO`: 20 ms de PCM 16 kHz mono de 16 bits (640 B, 256 kbit/s), sin códec, con el cancelador de eco y el supresor de ruido del celular. Del otro lado, a lo sumo 160 ms en cola: si se junta más, se tira lo viejo |
 | Video | `VIDEO`: H.264 640×480, 15 cuadros por segundo, 800 kbit/s, con el codificador y el decodificador del propio celular. Cada pedazo lleva banderas (configuración, cuadro clave, cámara apagada, "mandame un cuadro clave") y el giro de la cámara. La configuración viaja antes de cada cuadro clave |
-| Vida | `PING` cada 2 s. Sin voz ni señales en 15 s: "se cortó" |
+| Vida | `PING` cada 2 s. Sin voz ni señales en 25 s: "se cortó" (§7.2) |
+
+### 7.2 Un corte de segundos no es el final (0.9.4)
+
+- Una llamada se da por cortada recién a los `SILENT_MS = 25 s` sin voz ni señales (antes 15): un miembro que se cae porque la isla se mudó de canal vuelve en 10 a 20 s.
+- A los `RECONNECTING_MS = 3 s` sin nada, la pantalla dice **"Reconectando… la isla se está moviendo"**.
+- Cada `PING` lleva mi dirección actual en la isla después del byte de UDP: si al volver me tocó otra, la voz me encuentra igual.
 
 ### 7.1 La voz por su propio carril (0.9.2)
 

@@ -125,6 +125,9 @@ class CallSession(val id: Long, val peer: ByteArray, val outgoing: Boolean, val 
     }
 
     /** How long it talked, in milliseconds; 0 if it was never answered. */
+    /** Talking, but nothing heard for a few seconds: the island may be moving (§7.2). The screen says "reconectando". */
+    fun reconnecting(now: Long) = state == State.ACTIVE && now - lastHeard >= RECONNECTING_MS
+
     fun duration(now: Long = endedAt): Long = if (startedAt == 0L) 0 else (if (state == State.ENDED) endedAt else now) - startedAt
 
     private fun activate(now: Long) { state = State.ACTIVE; startedAt = now; lastHeard = now }
@@ -142,7 +145,9 @@ class CallSession(val id: Long, val peer: ByteArray, val outgoing: Boolean, val 
         const val REACH_MS = 20_000L
         const val RING_EVERY_MS = 2_000L
         const val RING_MS = 45_000L
-        const val SILENT_MS = 15_000L
+        /** 25 s, not 15: a member that falls off when the island moves channel is back in 10 to 20 s (§7.2). */
+        const val SILENT_MS = 25_000L
+        const val RECONNECTING_MS = 3_000L
         const val PING_MS = 2_000L
     }
 }
@@ -165,10 +170,14 @@ class MediaRoute {
 
     fun onUdpIn(now: Long) { lastUdpIn = now }
 
-    /** What my ping says: 1 if UDP media reached me in the last [UDP_FRESH_MS]. */
-    fun pingPayload(now: Long) = byteArrayOf(if (now - lastUdpIn <= UDP_FRESH_MS) 1 else 0)
+    /** What my ping says: 1 if UDP media reached me in the last [UDP_FRESH_MS], then my current address in the island. */
+    fun pingPayload(now: Long, ip: ByteArray? = null) = byteArrayOf(if (now - lastUdpIn <= UDP_FRESH_MS) 1 else 0) + (ip ?: ByteArray(0))
 
-    fun onPing(payload: ByteArray) { peerHearsUdp = payload.firstOrNull()?.toInt() == 1 }
+    /** The other side's ping: whether it hears my UDP, and its address now (it may change after it rejoins the island). */
+    fun onPing(payload: ByteArray) {
+        peerHearsUdp = payload.firstOrNull()?.toInt() == 1
+        address(payload, 1)?.let { peer = it }
+    }
 
     /** Whether a piece (known by its nonce) is new: the copy that comes the other way is dropped. */
     @Synchronized fun firstTime(nonce: ByteArray): Boolean {

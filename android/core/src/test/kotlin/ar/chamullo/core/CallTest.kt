@@ -153,4 +153,26 @@ class CallTest {
         assertTrue(!MediaRoute.isVideo(old))
         assertNull(MediaRoute.address(old, offset = 1))
     }
+
+    @Test
+    fun `my ping carries my current address, so the voice finds me again after I rejoin with a new one`() {
+        val r = MediaRoute()
+        r.peer = byteArrayOf(192.toByte(), 168.toByte(), 49, 10)
+        val newIp = byteArrayOf(192.toByte(), 168.toByte(), 49, 77)
+        r.onPing(MediaRoute().pingPayload(now = 0, ip = newIp))
+        assertArrayEquals(newIp, r.peer)
+        r.onPing(byteArrayOf(1))
+        assertArrayEquals(newIp, r.peer, "a ping without an address keeps the last one")
+    }
+
+    @Test
+    fun `a short cut is not the end - the call says it is reconnecting and waits`() {
+        val c = CallSession(1, beto.nodeId, outgoing = false, video = false, now = 0)
+        c.answer(0)
+        c.onMedia(1_000)
+        assertTrue(!c.reconnecting(1_000 + CallSession.RECONNECTING_MS - 1))
+        assertTrue(c.reconnecting(1_000 + CallSession.RECONNECTING_MS))
+        c.tick(1_000 + 20_000)
+        assertEquals(CallSession.State.ACTIVE, c.state, "20 s of silence: still on, the island may be coming back")
+    }
 }

@@ -142,7 +142,8 @@ class CallActivity : Activity() {
         status.text = when (c.session.state) {
             CallSession.State.CALLING -> "Llamando… (buscándolo en tu isla)"
             CallSession.State.RINGING -> if (c.session.outgoing) "Sonando…" else if (c.session.video) "📹 Videollamada entrante" else "📞 Llamada entrante"
-            CallSession.State.ACTIVE -> Calls.clock(c.session.duration(System.currentTimeMillis()))
+            CallSession.State.ACTIVE -> if (c.session.reconnecting(System.currentTimeMillis())) "Reconectando… la isla se está moviendo"
+                else Calls.clock(c.session.duration(System.currentTimeMillis()))
             CallSession.State.ENDED -> Calls.endText(c.session)
         }
     }
