@@ -195,21 +195,6 @@ class NodeTest {
     }
 
     @Test
-    fun `carretera - a stable neighbor gets my road key, once in a while, never before the road exists`() {
-        val air = Air("ana", "beto").apply { link("ana", "beto") }
-        air.run(2 * Node.BEACON_MS + 1_000) // ana hears two heartbeats: the camino is stable
-        assertTrue(air.events["beto"].orEmpty().none { it is NodeEvent.RoadInvited }, "no road yet, no invite")
-        air.node("ana").setRoad("DIRECT-CH-ana", "clave-1234567890")
-        air.run(2_000)
-        val invite = air.events.getValue("beto").filterIsInstance<NodeEvent.RoadInvited>().single()
-        assertEquals("DIRECT-CH-ana", invite.ssid)
-        assertEquals("clave-1234567890", invite.passphrase)
-        assertEquals("Ana", invite.name)
-        air.run(30_000)
-        assertEquals(1, air.events.getValue("beto").count { it is NodeEvent.RoadInvited }, "not again so soon")
-    }
-
-    @Test
     fun `carretera - a neighbor heard only once is not stable yet`() {
         val air = Air("ana", "beto").apply { link("ana", "beto") }
         air.node("ana").setRoad("DIRECT-CH-ana", "clave-1234567890")
@@ -234,5 +219,46 @@ class NodeTest {
         val ana = Node(Identity.generate("Ana"), MemoryStore()) { 0 }
         ana.onHello(ana.hello())
         assertTrue(ana.nearby().isEmpty())
+    }
+
+    // Two stable neighbors: whichever has the smaller id; a helper to name them in that order.
+    private fun pair(): Triple<Air, String, String> {
+        val air = Air("ana", "beto").apply { link("ana", "beto") }
+        val (low, high) = listOf("ana", "beto").sortedBy { air.node(it).identity.nodeId.toHex() }
+        return Triple(air, low, high)
+    }
+
+    @Test
+    fun `carretera - between two stable neighbors only one opens a road and invites, the other rides it`() {
+        val (air, low, high) = pair()
+        air.run(2 * Node.BEACON_MS + 1_000)
+        assertTrue(air.node(low).wantsRoad(), "the smaller id opens the road")
+        assertTrue(!air.node(high).wantsRoad(), "the other one does not need its own")
+        air.node(low).setRoad("DIRECT-CH-low", "clave-1234567890")
+        air.node(high).setRoad("DIRECT-CH-high", "clave-0987654321") // even if it had one, it must not invite
+        air.run(2_000)
+        val invite = air.events.getValue(high).filterIsInstance<NodeEvent.RoadInvited>().single()
+        assertEquals("DIRECT-CH-low", invite.ssid)
+        assertTrue(air.events[low].orEmpty().none { it is NodeEvent.RoadInvited })
+        air.run(30_000)
+        assertEquals(1, air.events.getValue(high).count { it is NodeEvent.RoadInvited }, "not again so soon")
+    }
+
+    @Test
+    fun `carretera - a busy rider opens its own road for the next one and invites it back`() {
+        var now = 0L
+        val me = Node(Identity.generate("Beto"), MemoryStore()) { now }
+        val other = Identity.generate("Caro")
+        me.setRiding(true)
+        val invite = RoadInvite.to(other, me.identity.nodeId, me.identity.boxPublic, "DIRECT-CH-caro", "clave-1234567890", now)
+        val events = me.onFrame(invite.encode())
+        assertTrue(events.none { it is NodeEvent.RoadInvited }, "already riding: do not try to ride a second road")
+        assertTrue(me.wantsRoad(), "open mine for the one who invited")
+        me.setRoad("DIRECT-CH-beto", "clave-0987654321")
+        me.tick()
+        val r = Reassembler() // a road key travels in fragments
+        val sent = me.drainOutbox().mapNotNull { r.accept(it) }.mapNotNull { Packet.parseOrNull(it) as? RoadInvite }
+        assertEquals(1, sent.size)
+        assertEquals("DIRECT-CH-beto", sent.single().open(Identity.fromSeed(other.seed, "Caro"))!!.ssid)
     }
 }

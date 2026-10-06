@@ -55,6 +55,9 @@ class Node(
     private var road: Road? = null
     private val nearby = LinkedHashMap<String, Nearby>()
     private val roadInvitedAt = HashMap<String, Long>()
+    private var riding = false
+    // Invites I could not take because I already ride a road: I open mine for them instead.
+    private val inviteBack = LinkedHashMap<String, Pair<ByteArray, ByteArray>>()
     private val plaza = ArrayList<PlazaEntry>().apply {
         for (l in store.loadPlaza()) add(PlazaEntry(l.id, l.name, l.text, l.ts, l.mine, LinkedHashSet(l.heardBy)))
     }
@@ -89,11 +92,12 @@ class Node(
         plazaRetries.values.removeAll { it.left == 0 }
         cardRetries.values.removeAll { it.left == 0 }
         road?.let { r ->
-            for (n in neighbors.values) {
-                val key = n.nodeId.toHex()
-                if (!n.stable || now - (roadInvitedAt[key] ?: Long.MIN_VALUE / 2) < ROAD_INVITE_MS) continue
+            val targets = neighbors.values.filter { it.stable && hosts(it) }.map { it.nodeId to it.beacon.boxPublic } + inviteBack.values
+            for ((nodeId, box) in targets) {
+                val key = nodeId.toHex()
+                if (now - (roadInvitedAt[key] ?: Long.MIN_VALUE / 2) < ROAD_INVITE_MS) continue
                 roadInvitedAt[key] = now
-                enqueue(RoadInvite.to(identity, n.nodeId, n.beacon.boxPublic, r.ssid, r.passphrase, now).encode())
+                enqueue(RoadInvite.to(identity, nodeId, box, r.ssid, r.passphrase, now).encode())
             }
         }
         if (newNeighbor) {
@@ -104,6 +108,17 @@ class Node(
 
     /** My Wi-Fi road is up: its key goes, sealed, to every stable neighbor (Camino y Carretera). */
     fun setRoad(ssid: String, passphrase: String) { road = Road(ssid, passphrase); roadInvitedAt.clear() }
+
+    fun closeRoad() { road = null }
+
+    /** Whether I am riding someone's road right now (the app knows; one ride at a time). */
+    fun setRiding(on: Boolean) { riding = on }
+
+    // Between two stable neighbors only one opens a road: the one with the smaller id. The other rides it.
+    private fun hosts(n: Neighbor) = identity.nodeId.toHex() < n.nodeId.toHex()
+
+    /** Do I need my own road? Only if a stable neighbor expects to ride mine, or someone I could not ride waits. */
+    fun wantsRoad(): Boolean = inviteBack.isNotEmpty() || neighbors.values.any { it.stable && hosts(it) }
 
     fun offerCard(neighbor: Neighbor) = offerTo(neighbor.nodeId, neighbor.beacon.boxPublic)
 
@@ -178,6 +193,7 @@ class Node(
 
     private fun onRoadInvite(i: RoadInvite): List<NodeEvent> {
         val r = i.open(identity) ?: return emptyList()
+        if (riding) { inviteBack[i.from.toHex()] = i.from to i.fromBox; return emptyList() } // busy rider: I open mine for them
         val name = neighbors[i.from.toHex()]?.name ?: store.contact(i.from)?.name ?: ""
         return listOf(NodeEvent.RoadInvited(i.from, name, r.ssid, r.passphrase))
     }

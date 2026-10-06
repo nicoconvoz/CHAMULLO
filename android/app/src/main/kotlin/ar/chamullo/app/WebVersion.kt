@@ -12,7 +12,7 @@ import java.net.URL
 object WebVersion {
     const val URL_VERSION = "https://nicoconvoz.github.io/chamullo-web/version.txt"
     const val DOWNLOAD_PAGE = "https://nicoconvoz.github.io/chamullo-web/"
-    const val CHECK_EVERY_MS = 6 * 3600_000L
+    const val CHECK_EVERY_MS = 30 * 60_000L
 
     @Volatile var latest: String? = null; private set
 

@@ -71,9 +71,23 @@ class WifiRoad(
     // Camino first: my road opens only when the camino has a stable neighbor (Camino y Carretera). An open road
     // takes antenna time from Bluetooth on the shared 2.4 GHz chip, so it must not be up for nothing.
     @Volatile private var opening = false
+    @Volatile private var lastBusyAt = System.currentTimeMillis()
+
+    /** An open road nobody rides gives the antenna back to the camino. */
+    fun closeIfIdle(idleMs: Long): Boolean {
+        if (links.isNotEmpty()) lastBusyAt = System.currentTimeMillis()
+        if (!roadUp || links.isNotEmpty() || System.currentTimeMillis() - lastBusyAt < idleMs) return false
+        handler.post {
+            channel?.let { ch -> runCatching { p2p?.removeGroup(ch, null) } }
+            roadUp = false; opening = false
+            FieldLog.add("RUTA", "nadie se subió a mi carretera: la cierro")
+        }
+        return true
+    }
     fun ensureOpen() = handler.post {
         if (!running || opening || roadUp) return@post
         opening = true
+        lastBusyAt = System.currentTimeMillis()
         FieldLog.add("RUTA", "hay un vecino estable: abro mi carretera")
         openRoad()
     }

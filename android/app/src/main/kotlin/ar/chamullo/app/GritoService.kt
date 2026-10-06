@@ -50,7 +50,9 @@ class GritoService : Service() {
                     n.tick()
                     val now = System.currentTimeMillis()
                     if (now - lastHello >= HELLO_MS) { lastHello = now; bluetooth.sayHello(n.hello()) }
-                    if (n.neighbors().any { it.stable }) road.ensureOpen()
+                    // Only one of two neighbors opens a road; a busy rider opens one for whoever it could not ride.
+                    n.setRiding(road.riding != null)
+                    if (n.wantsRoad()) road.ensureOpen() else if (road.closeIfIdle(ROAD_IDLE_MS)) n.closeRoad()
                     val on = radios.filter { it.active }
                     for (f in n.drainOutbox()) on.forEach { it.shout(f) }
                 }
@@ -130,5 +132,6 @@ class GritoService : Service() {
         const val TICK_MS = 200L
         const val ROAD_FRAME = 60_000
         const val HELLO_MS = 3_000L
+        const val ROAD_IDLE_MS = 2 * 60_000L
     }
 }

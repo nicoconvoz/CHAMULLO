@@ -1,6 +1,6 @@
 # CHAMULLO — Documentación técnica
 
-Versión del documento: 3 · Estado del código: app 0.2.2 (octubre 2026)
+Versión del documento: 4 · Estado del código: app 0.2.3 (octubre 2026)
 
 > Este documento describe **lo que está construido y funcionando hoy**. El diseño completo de la red
 > (identidad, sobre, recibos, economía, routing, interfaz de aire) está en [`docs/specs/`](specs/). Cuando el
@@ -154,8 +154,8 @@ cada trama como mensaje (≤ 255 bytes) a cada teléfono encontrado. Sin red ni 
 
 `WifiRoad.kt`, diseño en [spec 07](specs/07-camino-carretera.md).
 
-1. Cuando el camino tiene un **vecino estable**, el teléfono abre **su carretera**: un grupo Wi-Fi Direct con nombre fijo `DIRECT-CH-<id>` y clave derivada de su semilla. No antes: Bluetooth y Wi-Fi comparten antena y una carretera abierta de más le quita oído al grito.
-2. Cuando un vecino es **estable** (2 latidos escuchados), el nodo le manda la llave con `ROAD_INVITE`, sellada y firmada. Se repite como mucho cada 5 min.
+1. **Entre dos vecinos estables abre la carretera uno solo: el de id más chico**; el otro se sube. Un teléfono que ya viaja en una carretera y recibe otra invitación abre la suya para ese vecino ("pasajero ocupado"), y así la cadena se arma eslabón por eslabón. Una carretera vacía durante 2 minutos se cierra. El teléfono abre **su carretera**: un grupo Wi-Fi Direct con nombre fijo `DIRECT-CH-<id>` y clave derivada de su semilla. No antes: Bluetooth y Wi-Fi comparten antena y una carretera abierta de más le quita oído al grito.
+2. Cuando un vecino es **estable** (2 latidos escuchados) y le toca subirse, el nodo le manda la llave con `ROAD_INVITE`, sellada y firmada. Se repite como mucho cada 5 min.
 3. El vecino **se sube como cliente Wi-Fi común** (`WifiNetworkSpecifier`, red local sin internet) **sin cerrar su propia carretera**: así se forma la **cadena viva**.
 4. Por cada carretera corre un caño TCP (puerto **47474**) con tramas `[largo][bytes]` de hasta 1 MB. El nodo arma tramas de hasta **60 KB enteras**.
 5. Cada teléfono viaja en **una** carretera ajena a la vez y recibe a varios en la suya.
@@ -215,7 +215,7 @@ del otro, y se muestra un solo aviso por persona.
 ## 10. Actualizaciones y publicación
 
 - Página: **https://nicoconvoz.github.io/chamullo-web/** (repo `nicoconvoz/chamullo-web`, GitHub Pages).
-- La app lee `version.txt` al abrirse, al volver y cada 6 h. Si hay una versión nueva, muestra un aviso y una notificación (una por versión) que llevan a la página.
+- La app lee `version.txt` al abrirse, al volver y cada 30 min. Si hay una versión nueva, muestra un aviso y una notificación (una por versión) que llevan a la página.
 - Mismo criterio que ICEBREAK 0.10.13: **sin** `REQUEST_INSTALL_PACKAGES`.
 - Publicar: subir `versionCode` y `versionName` en `android/app/build.gradle.kts` y correr `scripts/publish-web.sh`.
 - Firma: por ahora, la clave de depuración local. Falta una clave de release propia.
@@ -244,6 +244,7 @@ La radio y las pantallas no tienen pruebas automáticas: se verifican **en campo
 | 0.1.8 | Comodines (FEC) y reintentos; devolución de tarjeta | Se perdían pedazos y tarjetas |
 | 0.1.9 | Caja negra, cola por cartas enteras, latido cada 15 s | La cola cortaba cartas por la mitad |
 | 0.2.0 | **Carretera**: Wi-Fi Direct en cadena viva | Transmitir mucho y rápido |
+| 0.2.3 | Una sola carretera por par de vecinos; pasajero ocupado; cierre de carreteras vacías; aviso de versión cada 30 min | El Capitán: "si uno abre, el otro se conecta; ¿para qué abrir las dos?" |
 | 0.2.2 | Varios megáfonos a la vez en chips viejos | Lo que gritaba un chip viejo llegaba "a veces": cada micro salía una vez o ninguna |
 | 0.2.1 | Saludo de un solo grito; la carretera abre solo con un vecino estable | "Vecinos: 0": la carretera abierta de entrada le robaba antena al grito |
 
