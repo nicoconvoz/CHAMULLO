@@ -21,7 +21,6 @@ class GritoService : Service() {
     private var radios: List<Radio> = emptyList()
     private val recent = LinkedHashMap<String, Long>()
     private var lastHello = 0L
-    private var lastKnown = 0L
     private var running = false
     private var locator: Locator? = null
     private var relay: ar.chamullo.core.NostrBridge? = null
@@ -97,8 +96,6 @@ class GritoService : Service() {
                     val on = radios.filter { it.active }
                     for (f in n.drainOutbox()) on.forEach { it.shout(f) }
                     islands.myCell = n.cell(); islands.stuck = n.stuckZone()
-                    // The islands of my contacts, where a phone on a home Wi-Fi goes looking by name (Camino y Carretera §6.12).
-                    if (now - lastKnown >= KNOWN_MS) { lastKnown = now; islands.known = n.store.contacts().map { ar.chamullo.core.Islands.islandId(it.nodeId.toHex()) } }
                     n.cell()?.let { c -> relay?.place(c) }
                     // The pueblo's ledger, once I know where I am and who founded the network (Economy & Governance §9-§10).
                     if (n.ledger == null && founder.length == 64) n.cell()?.let { c ->
@@ -201,7 +198,6 @@ class GritoService : Service() {
         const val TICK_MS = 200L
         const val ROAD_FRAME = 60_000
         const val HELLO_MS = 3_000L
-        const val KNOWN_MS = 30_000L
         const val ROAD_IDLE_MS = 2 * 60_000L
     }
 }

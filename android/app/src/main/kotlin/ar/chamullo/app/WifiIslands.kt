@@ -328,13 +328,11 @@ class WifiIslands(
     // Before founding an island, look around a while: one founds, the other (still looking) joins it. Each phone waits a
     // different time, by its id, so two phones that start together do not found at the same moment.
     // It starts again whenever the Wi-Fi comes back or my island falls (field test 0.9.1: after the Wi-Fi came back both
-    // phones founded at once and never met, Camino y Carretera §6.9). A phone on a home Wi-Fi does not found first any
-    // more: it joins a contact's island by its name, because its home Wi-Fi drags any island it holds (§6.12).
+    // phones founded at once and never met, Camino y Carretera §6.9). A phone on a home Wi-Fi founds almost at once: it
+    // sees nobody, and in the field the free ones saw it and joined it (§6.12).
     @Volatile private var startedAt = System.currentTimeMillis()
     private val spreadMs = me.take(4).toLong(16) % FOUND_SPREAD_MS
-    private fun lookFirstMs() = FOUND_AFTER_MS + spreadMs
-    /** The islands of my contacts (§6.12), from the service: where a phone on a home Wi-Fi goes looking by name. */
-    @Volatile var known: List<String> = emptyList()
+    private fun lookFirstMs() = if (onWifiNetwork()) FOUND_CONNECTED_MS else FOUND_AFTER_MS + spreadMs
 
     @Suppress("DEPRECATION")
     private fun onWifiNetwork() = runCatching { (wifi?.connectionInfo?.networkId ?: -1) != -1 }.getOrDefault(false)
@@ -368,10 +366,9 @@ class WifiIslands(
                 updateSeen(now)
                 checkAlive(now)
                 val a = Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn, bridgingTo, canBridge,
-                    HashMap(seenSince), onWifiNetwork(), known, startedAt, hostSince),
+                    HashMap(seenSince), onWifiNetwork()),
                     carteles.values.map { it.first }, now, myCell, stuck)
                 if (a == IslandAction.Host && island == null && now - startedAt < lookFirstMs()) Unit // still looking around
-                else if (a is IslandAction.Join && blindPaused(a, now)) Unit // one blind try at a time, never in a loop
                 else act(a)
             }
         }
@@ -543,14 +540,9 @@ class WifiIslands(
         if (ferrying != null || host) return
         val was = island
         closeLinks(); island = null
-        // Only an island I really was in is worth looking for again; a blind try that never opened a pipe is not (§6.12).
-        // And not one held on a home Wi-Fi: a free phone founds the steady island at once, and that one comes to it (§6.13).
-        val hostOnWifi = was?.let { hostOf(it)?.onWifi } == true
-        if (piped && hostOnWifi && !onWifiNetwork()) {
-            FieldLog.add("ISLA", "$why: la isla la tenía un celular con Wi-Fi de casa; armo la mía, que no se mueve")
-            startedAt = System.currentTimeMillis() - lookFirstMs() // found now if no free island is around
-            rejoin = null
-        } else if (piped) {
+        // Only an island I really was in is worth looking for again (§6.11): when its host's home Wi-Fi moves it to another
+        // channel, this is how the members follow it.
+        if (piped) {
             FieldLog.add("ISLA", "$why${if (was != null) ": busco de nuevo la isla ${was.take(6)}" else ""}")
             rejoin = was; rejoinTries = 0
             startedAt = System.currentTimeMillis() // if it is not found, look around before founding
@@ -559,17 +551,6 @@ class WifiIslands(
             channel?.let { ch -> p2p?.cancelConnect(ch, null) } // a try still pending would answer BUSY to the next one
         }
         piped = false
-    }
-
-    // A blind try (an island I cannot see) is made once per [Islands.BLIND_TRY_MS]: a failed one must not become a loop.
-    // Field test 0.9.4: retrying every 5 s only got BUSY back and upset the phone's Wi-Fi.
-    private var lastBlindAt = 0L
-    private fun blindPaused(a: IslandAction.Join, now: Long): Boolean {
-        val visible = carteles.values.any { it.first.host && it.first.island == a.island }
-        if (visible) return false
-        if (now - lastBlindAt < Islands.BLIND_TRY_MS) return true
-        lastBlindAt = now
-        return false
     }
 
     /** True if this tick went to looking for my lost island again. */
@@ -797,6 +778,7 @@ class WifiIslands(
         const val DISCOVER_MS = 30_000L
         const val FOUND_AFTER_MS = 8_000L
         const val FOUND_SPREAD_MS = 7_000L
+        const val FOUND_CONNECTED_MS = 3_000L
         const val DECIDE_MS = 5_000L
         const val CARTEL_TTL_MS = 60_000L
         const val SEEN_GRACE_MS = 180_000L

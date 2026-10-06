@@ -177,32 +177,29 @@ Una isla **es** la red propia de CHAMULLO: un grupo Wi-Fi Direct (`DIRECT-CH-xxx
 | Sumarse a medias | Si a los `JOIN_GRACE_MS = 30 s` de anotarse no quedó adentro del grupo, cuenta como caído |
 | Si no está | Recién entonces mira alrededor antes de fundar (§6.9) |
 
-### 6.12 El celular con Wi-Fi de casa no sostiene la isla (0.9.4)
+### 6.12 El celular con Wi-Fi de casa sostiene la isla, los libres van a él (0.9.6)
 
-El que está colgado de un Wi-Fi de casa arrastra cualquier isla que sostenga cada vez que ese Wi-Fi cambia de red o de canal, y en el campo no veía a nadie. Por eso la isla la sostiene un celular libre:
+**Historia, para no repetirla:**
+- **Lo que anduvo (0.9.1 a 0.9.3):** el Moto del Capitán, colgado de su Wi-Fi de casa, sostenía la isla; el A06 de Mito, libre, la veía y se sumaba. Pasó tres veces sin problemas (12:32, 12:40, 12:58). El Moto, en cambio, nunca vio a nadie mientras estaba en su red.
+- **Lo que falló:** cuando el Wi-Fi de casa del anfitrión cambiaba de red, la isla se mudaba de canal y los miembros se caían. Eso lo resuelve "volver a la misma isla" (§6.11).
+- **El error (0.9.4 y 0.9.5):** se dio vuelta la regla, para que el de Wi-Fi de casa no sostuviera la isla y fuera a ciegas a la de un contacto. En el campo, el Moto soltaba su isla cada pocos minutos para buscar una que no existía, y no se encontraron más. Se deshizo en 0.9.6.
 
 | Pieza | Regla |
 |---|---|
-| Buscar por nombre | Sin isla, un celular conectado a una red Wi-Fi no funda: se suma **a ciegas** a la isla de un contacto, por su nombre (`DIRECT-CH-` + los 6 primeros hex del id del contacto) y la clave que sale del nombre. No necesita ver su cartel. Prueba un contacto cada `BLIND_TRY_MS = 35 s` |
-| Si nadie contesta | A los `BLIND_GIVEUP_MS = 2 min` funda la suya, como antes |
-| Anfitrión solo | Si igual quedó de anfitrión, solo y con Wi-Fi de casa, cada `BLIND_RETRY_MS = 3 min` vuelve a probar las islas de sus contactos. Con miembros, nunca deja la isla |
-| El libre | Un celular sin Wi-Fi de casa funda como siempre (§6.9): su isla queda en un canal que no cambia |
+| El de Wi-Fi de casa funda | Sin isla y sin ver ninguna, funda a los `FOUND_CONNECTED_MS = 3 s`: no ve a nadie, así que esperar no le sirve, y los libres sí lo ven |
+| Los libres van a él | Sin isla, un libre se suma a la isla más grande con lugar, sea de quien sea. Anfitrión solo, si ve la isla sola de uno con Wi-Fi de casa, se muda **en el acto**, sin mirar los ids |
+| El de Wi-Fi de casa se queda | Anfitrión solo, no se muda a la isla de un libre: casi nunca la ve, y la suya es adonde van los demás |
+| Si su Wi-Fi cambia de red | La isla se muda de canal y los miembros la vuelven a buscar por nombre (§6.11) |
 
-- Reemplaza la regla de 0.9.2 ("funda primero el conectado"), que hacía que la isla dependiera justo del que salta.
 - **Experimento descartado:** un Wi-Fi propio de la app (*hotspot solo local*). En el Moto E7 Plus la app lo prende sola y el Wi-Fi de casa se suelta, pero Android le pone un nombre al azar (`AndroidShare_4539`), apaga el Wi-Fi Direct mientras está prendido y los demás necesitarían un canal extra (Bluetooth) para saber cómo entrar. El código quedó en `WifiIslands.setAway`, sin botón en la app.
 
-### 6.13 El radar: el cartel dice quién sostiene la isla (0.9.5)
-
-**Lo que pasó con 0.9.4:** el celular con Wi-Fi de casa soltó su isla para buscar la de Mito, y Mito, que antes estaba en la isla del Capitán, salió a buscar esa. Cada uno buscaba la isla del otro y ninguno la tenía. Además, mientras uno se sumaba, la regla del puente vio un cartel viejo y mandó fundar cada 5 s.
+### 6.13 El radar (0.9.5, corregido en 0.9.6)
 
 | Pieza | Regla |
 |---|---|
 | El cartel lo dice | `w = 1`: mi celular está colgado de un Wi-Fi de casa. Se vuelve a colgar el cartel apenas cambia |
-| El libre sostiene | Sin isla, un celular libre se suma a la isla de otro libre; si solo hay islas solas de celulares con Wi-Fi de casa, **funda la suya**. Solo se suma a una de esas si ya tiene gente |
-| El de Wi-Fi de casa se muda | Primero a la isla de un libre (la vea o la busque por nombre, §6.12). Anfitrión solo, ve la isla de un libre: se muda en el acto, sin mirar los ids. Un libre nunca se muda a la isla sola de uno con Wi-Fi de casa |
-| No volver a esa | Si un libre se cae de una isla que tenía uno con Wi-Fi de casa, no la vuelve a buscar: funda la suya en el acto, y el otro viene |
 | Radar | Un cartel nuevo o cambiado se decide en 300 ms, sin esperar la vuelta de 5 s |
-| Tiempos | Mirar antes de fundar: 8 a 15 s (antes 30 a 60). Buscar carteles: cada 30 s (antes 60). Esperas para mudarse: 20 s si el cartel dice que no me ve, 30 s si solo la veo en la lista (antes 90 y 120) |
+| Tiempos | Mirar antes de fundar: 8 a 15 s el libre, 3 s el de Wi-Fi de casa. Buscar carteles: cada 30 s. Esperas para mudarse: 20 s si el cartel dice que no me ve, 30 s si solo la veo en la lista |
 | Sumándose | Mientras un celular se está sumando (hasta que abre el caño o pasan 30 s) no se decide nada más |
 
 ## 7. Llamadas y videollamadas en la isla (0.8.0)

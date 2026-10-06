@@ -268,47 +268,7 @@ class IslandsTest {
         assertEquals("6e6375", (Islands.decide(mito, lonely(mito, mapOf("6e6375" to 0L)), listOf(listed), now = Islands.SCAN_WAIT_MS) as IslandAction.Join).island)
     }
 
-    /* ---------- the phone on a home Wi-Fi does not hold the island (field test 0.9.3, Camino y Carretera §6.12) ---------- */
-
-    private val known = listOf("48ab23", "abcdef")
-    private fun onWifi(island: String? = null, host: Boolean = false, members: List<String> = emptyList(), looking: Long = 0, hostSince: Long = 0) =
-        IslandState(island, host, members, onWifiNetwork = true, known = known, lookingSince = looking, hostSince = hostSince)
-
-    @Test
-    fun `a phone on a home Wi-Fi joins a contact's island by its name instead of founding one, even without seeing it`() {
-        val a = Islands.decide(capitan, onWifi(), emptyList(), now = 0)
-        assertEquals(IslandAction.Join("48ab23", "DIRECT-CH-48ab23", Islands.passphraseFor("DIRECT-CH-48ab23")), a)
-        val next = Islands.decide(capitan, onWifi(), emptyList(), now = Islands.BLIND_TRY_MS)
-        assertEquals("abcdef", (next as IslandAction.Join).island, "and tries the next contact's island after a while")
-    }
-
-    @Test
-    fun `an island it can see comes before a blind try`() {
-        val a = Islands.decide(capitan, onWifi(), listOf(host("bbbbbb", listOf("m1"))), now = 0)
-        assertEquals("bbbbbb", (a as IslandAction.Join).island)
-    }
-
-    @Test
-    fun `if no contact's island answers, the phone on a home Wi-Fi founds its own after a while`() {
-        assertEquals(IslandAction.Host, Islands.decide(capitan, onWifi(looking = 0), emptyList(), now = Islands.BLIND_GIVEUP_MS))
-    }
-
-    @Test
-    fun `a free phone founds as always, and without contacts so does the one on a home Wi-Fi`() {
-        assertEquals(IslandAction.Host, Islands.decide(mito, IslandState(null, false, emptyList()), emptyList(), now = 0))
-        assertEquals(IslandAction.Host, Islands.decide(capitan, IslandState(null, false, emptyList(), onWifiNetwork = true), emptyList(), now = 0))
-    }
-
-    @Test
-    fun `a lonely host on a home Wi-Fi tries again to leave the island to a free phone - one with members never`() {
-        val lonely = onWifi(island = "6e6375", host = true, hostSince = 0)
-        assertEquals(IslandAction.Stay, Islands.decide(capitan, lonely, emptyList(), now = Islands.BLIND_RETRY_MS - 1))
-        assertEquals("48ab23", (Islands.decide(capitan, lonely, emptyList(), now = Islands.BLIND_RETRY_MS) as IslandAction.Join).island)
-        val withMembers = onWifi(island = "6e6375", host = true, members = listOf("m1"), hostSince = 0)
-        assertEquals(IslandAction.Stay, Islands.decide(capitan, withMembers, emptyList(), now = Islands.BLIND_RETRY_MS * 5))
-    }
-
-    /* ---------- the cartel says "I am on a home Wi-Fi": the free phone holds the island (field test 0.9.4) ---------- */
+    /* ---------- the phone on a home Wi-Fi holds the island, the free ones come to it (field tests 0.9.1-0.9.5) ---------- */
 
     private fun lonelyHost(id: String, onWifi: Boolean, members: List<String> = emptyList()) =
         Cartel(Islands.islandId(id), "H", Islands.islandId(id), Islands.ssidOf(id), Islands.passphraseFor(Islands.ssidOf(id)), host = true, roster = members, onWifi = onWifi)
@@ -320,27 +280,22 @@ class IslandsTest {
     }
 
     @Test
-    fun `a free phone does not join a lonely island held by a phone on a home Wi-Fi - it founds the steady one`() {
-        assertEquals(IslandAction.Host, Islands.decide(mito, IslandState(null, false, emptyList()), listOf(lonelyHost(capitan, onWifi = true)), now = 0))
-        val withMembers = lonelyHost(capitan, onWifi = true, members = listOf("m1"))
-        assertEquals("6e6375", (Islands.decide(mito, IslandState(null, false, emptyList()), listOf(withMembers), now = 0) as IslandAction.Join).island,
-            "but it does not split an island that already has people")
+    fun `a phone on a home Wi-Fi that sees nobody founds - it is deaf, the others find it`() {
+        assertEquals(IslandAction.Host, Islands.decide(capitan, IslandState(null, false, emptyList(), onWifiNetwork = true), emptyList(), now = 0))
     }
 
     @Test
-    fun `a phone on a home Wi-Fi goes to the free phone's island before any other`() {
-        val a = Islands.decide(capitan, onWifi(), listOf(lonelyHost("aaaaaa0000", onWifi = true, members = listOf("x")), lonelyHost(mito, onWifi = false)), now = 0)
-        assertEquals("48ab23", (a as IslandAction.Join).island)
+    fun `a free phone joins the island held on a home Wi-Fi - that is what worked in the field`() {
+        val a = Islands.decide(mito, IslandState(null, false, emptyList()), listOf(lonelyHost(capitan, onWifi = true)), now = 0)
+        assertEquals("6e6375", (a as IslandAction.Join).island)
     }
 
     @Test
-    fun `two lonely hosts - the one on a home Wi-Fi moves to the free one, whatever the ids`() {
-        val capitanAlone = onWifi(island = "6e6375", host = true, hostSince = 0)
-        assertEquals("48ab23", (Islands.decide(capitan, capitanAlone, listOf(lonelyHost(mito, onWifi = false)), now = 0) as IslandAction.Join).island)
+    fun `two lonely hosts - the free one moves to the one on a home Wi-Fi, whatever the ids`() {
         val mitoAlone = IslandState("48ab23", true, emptyList())
-        val bigFree = "ffffff0000000000"
-        assertEquals(IslandAction.Stay, Islands.decide(bigFree, IslandState("ffffff", true, emptyList()), listOf(lonelyHost(capitan, onWifi = true)), now = 10 * Islands.SCAN_WAIT_MS),
-            "a free host never moves to a lonely island on a home Wi-Fi, not even by the id rule")
-        assertEquals(IslandAction.Stay, Islands.decide(mito, mitoAlone, listOf(lonelyHost(capitan, onWifi = true)), now = 0))
+        assertEquals("6e6375", (Islands.decide(mito, mitoAlone, listOf(lonelyHost(capitan, onWifi = true)), now = 0) as IslandAction.Join).island)
+        val capitanAlone = IslandState("6e6375", true, emptyList(), onWifiNetwork = true)
+        assertEquals(IslandAction.Stay, Islands.decide(capitan, capitanAlone, listOf(lonelyHost(mito, onWifi = false)), now = 10 * Islands.SCAN_WAIT_MS),
+            "the one on a home Wi-Fi stays put: it usually cannot see, and its island is where the others go")
     }
 }

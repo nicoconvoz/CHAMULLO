@@ -59,11 +59,10 @@ data class IslandState(
     /** Since when I keep seeing each island (§6.7): how long a lonely island has had to come to me. */
     val seenSince: Map<String, Long> = emptyMap(),
     /**
-     * §6.12: I am connected to a Wi-Fi network (home, work). Its channel drags any island I hold, and in the field such
-     * a phone saw nobody; so I join a contact's island by its name instead of holding one. [known]: the islands of my
-     * contacts (their id's first six hex digits), [lookingSince]: since when I have no island, [hostSince]: since when I hold mine.
+     * §6.12: I am connected to a Wi-Fi network (home, work). In the field such a phone saw nobody, while the free ones saw
+     * it and joined its island without trouble; so it holds the island and the free ones come to it.
      */
-    val onWifiNetwork: Boolean = false, val known: List<String> = emptyList(), val lookingSince: Long = 0, val hostSince: Long = 0
+    val onWifiNetwork: Boolean = false
 )
 
 sealed interface IslandAction {
@@ -89,11 +88,6 @@ object Islands {
     // longer wait for an island known only from the Wi-Fi list, whose cartel says nothing.
     const val ASYM_WAIT_MS = 20_000L
     const val SCAN_WAIT_MS = 30_000L
-    // §6.12: a phone on a home Wi-Fi tries each contact's island by name for a while, then founds its own; holding one
-    // alone, it tries again from time to time to leave the island to a free phone.
-    const val BLIND_TRY_MS = 35_000L
-    const val BLIND_GIVEUP_MS = 120_000L
-    const val BLIND_RETRY_MS = 180_000L
 
     fun turnOf(now: Long) = now / FERRY_TURN_MS
 
@@ -121,15 +115,6 @@ object Islands {
      * [myCell] and [stuck]: where I am and the destination zone of a letter I hold that nobody on my island gets closer
      * (Discovery & Routing §10.6). With them, I may be the ferry of need.
      */
-    /** A contact's island, by name: the key comes from the name, so it can be joined without seeing its cartel. */
-    private fun blind(me: String, state: IslandState, elapsed: Long): IslandAction.Join? {
-        val targets = state.known.filter { it != islandId(me) && it != state.island }.distinct()
-        if (targets.isEmpty()) return null
-        val target = targets[((elapsed / BLIND_TRY_MS) % targets.size).toInt()]
-        val ssid = ssidOf(target)
-        return IslandAction.Join(target, ssid, passphraseFor(ssid))
-    }
-
     fun decide(me: String, state: IslandState, carteles: List<Cartel>, now: Long, myCell: Zone? = null, stuck: Zone? = null): IslandAction {
         val hosts = carteles.filter { it.host && it.island != state.island && it.ssid.isNotEmpty() }
         // People of another island whose host nobody here can see: the border between two islands.
@@ -138,18 +123,8 @@ object Islands {
         val withRoom = hosts.filter { it.roster.size < MAX_MEMBERS - FERRY_SEATS }
         val best = withRoom.maxWithOrNull(compareBy<Cartel> { it.roster.size }.thenByDescending { it.island })
 
-        // §6.13: the island is held by a free phone. Among the islands with room, those held by a free phone come first.
-        val bestFree = withRoom.filter { !it.onWifi }.maxWithOrNull(compareBy<Cartel> { it.roster.size }.thenByDescending { it.island })
-
-        // Not on any island: join the biggest one with room; on a home Wi-Fi, a contact's island by its name; or found my own.
-        if (state.island == null) {
-            bestFree?.let { return IslandAction.Join(it.island, it.ssid, it.passphrase) }
-            // A free phone founds the steady island instead of joining a lonely one held on a home Wi-Fi (it would drag it).
-            if (!state.onWifiNetwork) return best?.takeIf { it.roster.isNotEmpty() }?.let { IslandAction.Join(it.island, it.ssid, it.passphrase) } ?: IslandAction.Host
-            best?.let { return IslandAction.Join(it.island, it.ssid, it.passphrase) }
-            if (state.onWifiNetwork && now - state.lookingSince < BLIND_GIVEUP_MS) blind(me, state, now - state.lookingSince)?.let { return it }
-            return IslandAction.Host
-        }
+        // Not on any island: join the biggest one with room, or found my own.
+        if (state.island == null) return best?.let { IslandAction.Join(it.island, it.ssid, it.passphrase) } ?: IslandAction.Host
 
         // The ferry of need: I hold letters nobody here gets closer, so I sail myself toward the island that does, once
         // per turn. A host only if it is alone: it never leaves its members without the air.
@@ -163,17 +138,15 @@ object Islands {
         }
 
         if (state.host) {
-            // §6.12: alone on my island while on a home Wi-Fi, I try a contact's island now and then: a free phone holds it better.
-            val retry = now - state.hostSince - BLIND_RETRY_MS
-            if (state.members.isEmpty() && state.onWifiNetwork && best == null && strangers.isEmpty() && retry >= 0) blind(me, state, retry)?.let { return it }
             // A lonely host merges into a neighbor: a bigger island, or another lonely one with a smaller id. But the one
             // who sees moves (§6.7): if the other cannot see me it will never come, so after a while I go, whatever the ids.
             if (state.members.isNotEmpty() || best == null) return IslandAction.Stay
             if (strangers.isNotEmpty()) return IslandAction.Stay // a bridge keeps its post at the border
-            val target = bestFree ?: best
-            // §6.13: on a home Wi-Fi I go to a free phone's island; a free phone never moves to a lonely one on a home Wi-Fi.
-            if (state.onWifiNetwork && !target.onWifi) return IslandAction.Join(target.island, target.ssid, target.passphrase)
-            if (!state.onWifiNetwork && target.onWifi && target.roster.isEmpty()) return IslandAction.Stay
+            val target = best
+            // §6.13: a free lonely host moves to the island held on a home Wi-Fi (that one usually cannot see it); the one on
+            // a home Wi-Fi stays put, whatever the ids.
+            if (!state.onWifiNetwork && target.onWifi) return IslandAction.Join(target.island, target.ssid, target.passphrase)
+            if (state.onWifiNetwork && !target.onWifi) return IslandAction.Stay
             val waited = now - (state.seenSince[target.island] ?: now)
             val blind = target.sees?.let { state.island !in it && waited >= ASYM_WAIT_MS } ?: (waited >= SCAN_WAIT_MS)
             val merge = target.roster.isNotEmpty() || target.island < me || blind
