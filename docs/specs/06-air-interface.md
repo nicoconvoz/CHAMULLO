@@ -182,3 +182,21 @@ Los resultados reemplazan los supuestos del simulador.
 3. **Turnos más finos:** con una supertrama de 1 s, un salto cuesta de media unos 500 ms de espera. ¿Hay forma confiable de bajar la granularidad?
 4. **Coexistencia:** los gritos comparten 2,4 GHz con Bluetooth y Wi-Fi de todo el entorno. Hay que medir el impacto en ciudades densas.
 5. **UUID:** registrar un UUID de servicio de 16 bits ante el Bluetooth SIG ahorraría 14 bytes por grito.
+
+## 12. El "LoRa de mentira": Bluetooth LE de largo alcance (0.10.0)
+
+**Idea del Capitán:** usar las antenas que ya trae el celular como un LoRa casero. Un celular no puede hacer LoRa de verdad: LoRa es una forma de modular que vive en el chip (y en otra banda, 915 MHz en Argentina), y ninguna app puede reprogramar la radio de Wi-Fi o Bluetooth. Pero Bluetooth 5 trae su primo: **LE Coded PHY**, que codifica y repite cada bit (S=8, 125 kbit/s) y llega unas cuatro veces más lejos que el Bluetooth común. CHAMULLO ya grita en ese modo cuando el chip lo tiene (`GritoRadio`, modo `LONG`).
+
+**Prueba de largo alcance (Diagnóstico):** para saber cuánto llega de verdad en celulares reales.
+
+| Pieza | Regla |
+|---|---|
+| Grito de prueba | `CHR` + 3 bytes del id + número de 8 bytes = 14 bytes, uno por segundo. Con largo alcance va como dato de servicio en un anuncio extendido Coded (primario y secundario); sin largo alcance, como dato de fabricante en un anuncio común (31 bytes en total) |
+| Escucha | En todas las PHY que tenga el chip. Cuenta los números que llegaron sobre los que se gritaron desde el primero que oyó, la última señal (dBm) y si llegó en largo alcance |
+| Aparte | No se mezcla con el grito de las cartas: tiene su propio UUID |
+| Permisos | El Bluetooth y sus permisos se piden recién al empezar la prueba |
+
+- El núcleo está en `Range.kt` (con pruebas en `RangeTest.kt`); la radio de la prueba, en `RangeProbe`.
+- **Qué llevaría:** con las cifras de alcance medidas, el largo alcance puede llevar el radar (latidos y carteles) y cartas cortas entre islas. La voz no: no le da el caudal.
+- **Lo que sí es LoRa:** una plaquita LoRa externa (Meshtastic: Heltec, LilyGO, RAK) conectada al celular por Bluetooth llega de 2 a 10 km, solo para mensajes. Queda como siguiente paso.
+

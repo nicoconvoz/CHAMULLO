@@ -18,6 +18,11 @@ import ar.chamullo.core.toHex
 
 /** Numbers for the field tests of Air Interface §10: what the radio can do and what it is doing. */
 class DiagActivity : Activity() {
+    companion object {
+        /** Lives on while walking away, even if this screen closes. */
+        private var range: RangeProbe? = null
+    }
+
     private lateinit var radioInfo: TextView
     private lateinit var nodeInfo: TextView
     private lateinit var logView: TextView
@@ -25,6 +30,7 @@ class DiagActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var bridgeInfo: TextView
     private lateinit var ledgerInfo: TextView
+    private lateinit var rangeInfo: TextView
     private val tick = object : Runnable { override fun run() { refresh(); handler.postDelayed(this, 1000) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,6 +48,12 @@ class DiagActivity : Activity() {
                 startForegroundService(Intent(this@DiagActivity, GritoService::class.java))
                 recreate()
             })
+            // Air Interface §12: how far the long-range Bluetooth (the phone's cousin of LoRa) really reaches.
+            addView(title("Prueba de largo alcance (Bluetooth)"))
+            addView(text("Un celular grita un número por segundo; el otro escucha y cuenta cuántos le llegan. Alejate caminando y mirá el porcentaje y la señal.", 13f, Ui.MUTED))
+            rangeInfo = text("", 14f).also { addView(card { addView(it) }) }
+            addView(button("Gritar números", primary = false) { withBluetooth { probe()?.let { p -> if (p.shouting) p.stopShouting() else p.startShouting() } } })
+            addView(button("Escuchar y contar", primary = false) { withBluetooth { probe()?.let { p -> if (p.listening) p.stopListening() else p.startListening() } } })
             addView(title("Puente por Internet"))
             addView(text("Donde las islas no llegan (un salto grande), tu Internet puede llevar la carta al otro lado. Usa tus datos: queda apagado si no lo prendés.", 13f, Ui.MUTED))
             addView(button(if (Settings.lendInternet(this@DiagActivity)) "Dejar de prestar Internet" else "Prestar Internet como puente", primary = false) {
@@ -64,7 +76,41 @@ class DiagActivity : Activity() {
     override fun onResume() { super.onResume(); handler.post(tick) }
     override fun onPause() { handler.removeCallbacks(tick); super.onPause() }
 
+    private fun probe(): RangeProbe? = range ?: Vault(this).identity()?.let { RangeProbe(applicationContext, it.nodeId).also { p -> range = p } }
+
+    // Bluetooth on and, on Android 12+, its permissions: asked when the test starts, never before.
+    private fun withBluetooth(then: () -> Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            val need = listOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_ADVERTISE, android.Manifest.permission.BLUETOOTH_CONNECT)
+                .filter { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+            if (need.isNotEmpty()) { requestPermissions(need.toTypedArray(), 21); return }
+        }
+        val adapter = getSystemService(android.bluetooth.BluetoothManager::class.java)?.adapter
+        if (adapter != null && !adapter.isEnabled) {
+            runCatching { @Suppress("DEPRECATION") startActivity(Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_ENABLE)) }
+            return
+        }
+        then()
+    }
+
+    private fun rangeText(): String {
+        val p = range ?: return "Apagada. ${RangeProbe.describe(this)}"
+        val lines = mutableListOf("Este celular ${p.capability()}.")
+        if (p.shouting) lines += "📣 Gritando: ${p.sent} números mandados"
+        if (p.listening) {
+            val all = p.stats.all()
+            if (all.isEmpty()) lines += "👂 Escuchando… todavía no llegó nada"
+            for ((id, r) in all) {
+                val ago = (System.currentTimeMillis() - r.lastAt) / 1000
+                lines += "👂 De $id: llegaron ${r.received} de ${r.expected} (${r.percent} %) · señal ${r.lastRssi} dBm · ${if (r.coded) "largo alcance" else "Bluetooth común"}${if (ago > 3) " · hace ${ago} s que no llega nada" else ""}"
+            }
+        }
+        p.error?.let { lines += "⚠ $it" }
+        return lines.joinToString("\n")
+    }
+
     private fun refresh() {
+        rangeInfo.text = rangeText()
         Hub.ask({ n -> Triple(n.identity.nodeId.toHex(), n.ledger, n.available()) }) { (me, l, lucas) ->
             val founder = "Fundador de la red: ${Settings.FOUNDER.take(8)}${if (me == Settings.FOUNDER) " (sos vos)" else ""}"
             ledgerInfo.text = if (l == null) "Sin libreta todavía: espera la ubicación.\n$founder\nMi clave: $me"
