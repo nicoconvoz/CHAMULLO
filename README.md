@@ -1,6 +1,6 @@
 # CHAMULLO
 
-[![DOI](https://zenodo.org/badge/1406372843.svg)](https://zenodo.org/badge/latestdoi/1406372843)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.23191782-1682D4.svg)](https://doi.org/10.5281/zenodo.23191782)
 [![Release](https://img.shields.io/github/v/release/nicoconvoz/CHAMULLO?label=Release&color=111111)](https://github.com/nicoconvoz/CHAMULLO/releases/latest)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Licencia comercial](https://img.shields.io/badge/Licencia-comercial-1F9D43.svg)](LICENCIA-COMERCIAL.md)
@@ -73,4 +73,4 @@ Copyright (C) 2026 **Jesús Nicolás Astorga** y **RESOURCES OPEN DOORS S.A.S**
 - **Especificaciones y documentación** (`docs/`): [Creative Commons Attribution 4.0 International](docs/LICENSE).
 - Las versiones hasta la 0.8.2 se publicaron bajo Apache 2.0; desde la 0.9.0 rige la doble licencia. Detalles en [NOTICE](NOTICE).
 - Para colaborar hay que aceptar el acuerdo de [CONTRIBUTING.md](CONTRIBUTING.md).
-- Para citar el proyecto: [CITATION.cff](CITATION.cff).
+- Para citar el proyecto: [CITATION.cff](CITATION.cff) · DOI de todas las versiones: https://doi.org/10.5281/zenodo.23191782 (la 0.9.0: https://doi.org/10.5281/zenodo.23191783).

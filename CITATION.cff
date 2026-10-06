@@ -14,6 +14,7 @@ authors:
   - name: "RESOURCES OPEN DOORS S.A.S"
 license: AGPL-3.0-or-later
 repository-code: "https://github.com/nicoconvoz/CHAMULLO"
+doi: "10.5281/zenodo.23191782"
 url: "https://nicoconvoz.github.io/chamullo-web/"
 version: "v0.9.0"
 keywords:
