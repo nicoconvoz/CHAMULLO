@@ -82,6 +82,8 @@ class WifiIslands(
     @Volatile var ferrying: String? = null; private set
     private var home: IslandAction.Join? = null
     private var busy = false
+    private var hostSince = 0L
+    private var lastAliveCheck = 0L
     private var publishedService: WifiP2pDnsSdServiceInfo? = null
 
     override val label = "Isla Wi-Fi"
@@ -276,6 +278,7 @@ class WifiIslands(
             if (!busy && ferrying == null && !wifiOff) {
                 readScan()
                 updateSeen(now)
+                checkAlive(now)
                 val a = Islands.decide(me, IslandState(island, host, if (host) members.values.toList() else rosterOfMyIsland(), ferriedTurn, bridgingTo, canBridge,
                     HashMap(seenSince)),
                     carteles.values.map { it.first }, now, myCell, stuck)
@@ -305,7 +308,7 @@ class WifiIslands(
         val config = WifiP2pConfig.Builder().setNetworkName(ssid).setPassphrase(passphrase).enablePersistentMode(false).build()
         p2p!!.createGroup(ch, config, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
-                busy = false; host = true; island = myIsland
+                busy = false; host = true; island = myIsland; hostSince = System.currentTimeMillis()
                 FieldLog.add("ISLA", "fundé mi isla: $ssid")
                 startServer(); publishCartel()
                 handler.postDelayed(discoverLoop, 2_000) // forming a group stops the search on many phones: start it again
@@ -403,6 +406,7 @@ class WifiIslands(
             p2p!!.requestConnectionInfo(ch) { info ->
                 if (info == null || !info.groupFormed) {
                     if (!host && links.isNotEmpty()) { FieldLog.add("ISLA", "me quedé sin isla"); closeLinks(); if (ferrying == null) island = null }
+                    if (host) islandLost("Android desarmó mi isla")
                     return@requestConnectionInfo
                 }
                 if (!info.isGroupOwner && links.isEmpty()) {
@@ -411,6 +415,23 @@ class WifiIslands(
                 }
             }
         }
+    }
+
+    // Field test 0.9.0: Android took down a lonely island after 15 minutes and the app kept believing it was its host,
+    // so nobody could ever find it. When the island is gone, forget it: the next decision founds it again or joins one.
+    private fun islandLost(why: String) {
+        if (!host || busy || System.currentTimeMillis() - hostSince < HOST_GRACE_MS) return
+        FieldLog.add("ISLA", "$why: la vuelvo a armar o me sumo a otra")
+        closeLinks(); members.clear(); host = false; island = null
+        publishCartel()
+    }
+
+    // Belt and braces: every so often ask Android whether my island still exists, in case the notice never came.
+    private fun checkAlive(now: Long) {
+        if (!host || busy || now - lastAliveCheck < ALIVE_CHECK_MS) return
+        lastAliveCheck = now
+        val ch = channel ?: return
+        p2p?.requestGroupInfo(ch) { group -> if (group == null || !group.isGroupOwner) islandLost("mi isla ya no existe") }
     }
 
     private fun connectTo(owner: InetAddress) {
@@ -596,6 +617,8 @@ class WifiIslands(
         const val DECIDE_MS = 5_000L
         const val CARTEL_TTL_MS = 60_000L
         const val SEEN_GRACE_MS = 180_000L
+        const val ALIVE_CHECK_MS = 30_000L
+        const val HOST_GRACE_MS = 15_000L
         const val FERRY_STAY_MS = 20_000L
         const val HANDSHAKE_MS = 10_000L
         private val FERRY = "CHFRY".toByteArray()

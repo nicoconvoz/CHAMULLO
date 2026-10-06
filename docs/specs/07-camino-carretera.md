@@ -126,6 +126,14 @@ Una isla **es** la red propia de CHAMULLO: un grupo Wi-Fi Direct (`DIRECT-CH-xxx
 | Sin cartel | Si solo la veo en la lista de Wi-Fi y en `SCAN_WAIT_MS = 120 s` no vino, voy yo |
 | Si los dos se ven | Sigue la regla de siempre: se muda solo el de id más grande |
 
+### 6.8 Una isla sola se cae a los 15 minutos (0.9.1)
+
+**Lo que pasó:** el celular del Capitán fundó su isla a las 12:03 y a las 12:18 Android la desarmó, porque nadie se había sumado. La app siguió creyéndose anfitriona: no la volvió a armar ni se sumó a otra, y el otro celular buscó una isla que ya no existía.
+
+- Cuando Android avisa que se cayó el grupo (`WIFI_P2P_CONNECTION_CHANGED` sin grupo formado), el anfitrión la olvida y la próxima decisión la vuelve a fundar o se suma a otra.
+- Por si el aviso no llega, cada `ALIVE_CHECK_MS = 30 s` el anfitrión pregunta si su grupo sigue existiendo (`requestGroupInfo`).
+- Los primeros `HOST_GRACE_MS = 15 s` después de fundar no cuentan: el grupo todavía se está armando.
+
 ## 7. Llamadas y videollamadas en la isla (0.8.0)
 
 Una llamada va **en vivo**: no puede esperar a que una carta salte de celular en celular. Por eso anda **solo dentro de la isla** (o por un puente fijo), donde todo está a uno o dos saltos por Wi-Fi Direct.
