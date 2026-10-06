@@ -5,14 +5,15 @@
     <!-- Android 8–11: Bluetooth scanning needs these. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-    <!-- Android 8–12: Wi-Fi Aware discovery needs location permission (Bluetooth scanning too, up to 11). -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
+    <!-- Hearing el grito: Android only delivers beacon-like advertisements to apps that hold location permission
+         (with neverForLocation it filters them out). CHAMULLO never reads the location. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- The Wi-Fi shout: Wi-Fi Aware, phone to phone, without joining any network. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" tools:targetApi="tiramisu" />
-    <!-- Android 12+: el grito listens and shouts; it never derives location from the radio. -->
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" tools:targetApi="s" />
+    <!-- Android 12+: no neverForLocation here on purpose, see ACCESS_FINE_LOCATION above. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

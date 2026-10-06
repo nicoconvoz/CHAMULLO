@@ -90,7 +90,9 @@ class MainActivity : Activity() {
 
     private fun refresh() {
         val radios = Hub.radios
-        status.text = if (radios.isEmpty()) "El grito está apagado: falta dar permisos." else radios.joinToString("\n") { r ->
+        val locationOff = !(getSystemService(android.location.LocationManager::class.java)?.isLocationEnabled ?: true)
+        val warning = if (locationOff) "\n⚠ Prendé la Ubicación: Android la exige para escuchar gritos. CHAMULLO no la lee." else ""
+        status.text = warning.trimStart() + (if (warning.isEmpty()) "" else "\n") + if (radios.isEmpty()) "El grito está apagado: falta dar permisos." else radios.joinToString("\n") { r ->
             when {
                 !r.supported -> "${r.label}: este celular no lo tiene."
                 r.active -> "${r.label}: gritando ✓" + if (r.peers > 0) " (${r.peers} cerca)" else ""
@@ -145,7 +147,7 @@ class MainActivity : Activity() {
     /* ---------- permissions and start ---------- */
     private fun needed(): Array<String> = buildList {
         if (Build.VERSION.SDK_INT >= 31) { add(Manifest.permission.BLUETOOTH_SCAN); add(Manifest.permission.BLUETOOTH_ADVERTISE); add(Manifest.permission.BLUETOOTH_CONNECT) }
-        if (Build.VERSION.SDK_INT <= 32) add(Manifest.permission.ACCESS_FINE_LOCATION) // Wi-Fi Aware (and Bluetooth before 12)
+        add(Manifest.permission.ACCESS_FINE_LOCATION) // Android hands beacon-like shouts only to apps with it; never read
         if (Build.VERSION.SDK_INT >= 33) { add(Manifest.permission.NEARBY_WIFI_DEVICES); add(Manifest.permission.POST_NOTIFICATIONS) }
     }.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }.toTypedArray()
 
@@ -156,7 +158,8 @@ class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        // The grito starts with whatever antenna got permission; the status line says which ones work.
+        // The grito restarts with whatever antenna got permission; the status line says which ones work.
+        stopService(Intent(this, GritoService::class.java))
         startGrito()
     }
 
